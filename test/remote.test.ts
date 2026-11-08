@@ -1,0 +1,80 @@
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { mkdtempSync, mkdirSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { Context } from '@deepseek-ai/cordis'
+import Loader from '@deepseek-ai/cordis-plugin-loader'
+import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
+import Gateway from '@deepseek-ai/dsh-api-gateway'
+import RemoteAccess from '@deepseek-ai/dsh-api-remote-access'
+import * as ClientGateway from '@deepseek-ai/dsh-api-gateway/client'
+import { installConnection } from '@deepseek-ai/dsh-client-connection/client'
+import { Peer } from '@deepseek-ai/dsh-client-connection'
+import { SessionId } from '@deepseek-ai/dsh-session'
+import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
+import * as temporary from 'dsh-temporary-messages'
+import * as plugin from '../src/index.ts'
+import { remoteContribution } from '../src/remote-contract.ts'
+import { mountWorkspaces } from './workspaces.ts'
+import { mountPluginManagement } from './plugins.ts'
+import type { Scope } from '../src/shared.ts'
+
+test('官方 Client Remote → Host Gateway：工作区与会话配置、继承、转发原插件预览', { timeout: 15000 }, async () => {
+  mkdirSync('work', { recursive: true })
+  const host = new Context()
+  const client = new Context()
+  try {
+    await mountAgentLoopTestDependencies(host)
+    await mountWorkspaces(host)
+    const workspace = await host.workspaceRegistry.create(resolve('work'))
+    await host.plugin(Loader)
+    host.loader.import = async () => temporary
+    await host.loader.root.update([{ id: 'temporary-messages', name: 'dsh-temporary-messages', config: {} }])
+    await host.loader.await()
+    mountPluginManagement(host)
+    await host.plugin(TypertRegistry)
+    await host.plugin(RemoteAccess)
+    await host.plugin(Gateway)
+    await mountAgentLoopTestHarness(host)
+    await host.agents.create({ sessionId: SessionId('rpc-session'), meta: { cwd: workspace.path } })
+    await workspace.attachSession(SessionId('rpc-session'))
+    await host.plugin(plugin, { dataFile: resolve(mkdtempSync('work/remote-'), 'config.json') })
+    const peer = new Peer(host, { principal: { kind: 'owner' }, interactions: 'none' })
+    await client.plugin(TypertRegistry)
+    installConnection(client, { interactions: 'none', transport: { rpc: {
+      async call(_channel, endpoint, payload, signal) {
+        const [namespace, method] = endpoint.split('/')
+        return { ok: true, value: await host.typertGateway.invoke({
+          namespace, method, args: (payload as { args: Record<string, unknown> }).args, peer, signal,
+        }) }
+      },
+      async *open() {},
+    } } })
+    await client.plugin(ClientGateway)
+    await client.remote.$mount(remoteContribution)
+    const api = client.remote.tieredPluginMenu
+    const wsScope: Scope = { level: 'workspace', id: String(workspace.id) }
+    const scope: Scope = { level: 'session', id: 'rpc-session' }
+    const context = await api.context(scope.id)
+    assert.ok(context.ok)
+    assert.equal(context.value.workspaceId, workspace.id)
+    const unconfirmed = await api.configure(scope, 'temporary-messages', true, { template: 'UNCONFIRMED' }, false)
+    assert.equal(unconfirmed.ok, false)
+    if (!unconfirmed.ok) assert.match(unconfirmed.error.message, /确认/)
+    assert.ok((await api.configure(wsScope, 'temporary-messages', true, { template: 'WORKSPACE RPC' }, true)).ok)
+    assert.ok((await api.configure(scope, 'temporary-messages', true, { template: 'RPC' }, true)).ok)
+    const rows = await api.list(scope)
+    assert.ok(rows.ok)
+    assert.equal(rows.value[0]!.active, true)
+    assert.equal(rows.value[0]!.verified, false)
+    assert.equal(rows.value[0]!.config.template, 'RPC')
+    assert.equal(rows.value[0]!.package, 'dsh-temporary-messages')
+    assert.equal(rows.value[0]!.description, '给 DSH 提供会过期的上下文消息和可执行表达式模板')
+    assert.deepEqual(await api.invoke(scope, scope.id, 'temporary-messages', 'preview', [null, '{{ session.id }}']), { ok: true, value: 'rpc-session' })
+    assert.ok((await api.inherit(scope, 'temporary-messages')).ok)
+    const inherited = await api.list(scope)
+    assert.ok(inherited.ok)
+    assert.equal(inherited.value[0]!.own, false)
+    assert.equal(inherited.value[0]!.config.template, 'WORKSPACE RPC')
+  } finally { await client.fiber.dispose(); await host.fiber.dispose() }
+})
