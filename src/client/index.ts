@@ -38,29 +38,47 @@ export async function apply(ctx: Context): Promise<void> {
     let discover = async () => {}
     child.inject(['loader', 'configForms', 'locale'], async mounted => {
       let pending = Promise.resolve()
+      const modules: any = mounted.get('modules')
       const sync = async () => {
-      const result = await api.list({ level: 'client', id: '' })
-      if (!result.ok) throw new Error(result.error.message)
-      for (const row of result.value.filter(row => row.settings === 'registered')) {
-        if (row.package === remoteContribution.package) continue
-        const existing = controllers.get(row.package)
-        if (existing) { await existing.refresh(); continue }
-        // The native module graph loads the original client and its CSS whenever a host entry runs.
-        if (![...mounted.loader.entries()].some(entry => entry.options.name === row.package)) continue
-        const original = mounted.loader.unwrapExports(await mounted.loader.import(row.package))
-        const controller = new ContextClient(mounted, api, original, row.id, row.package)
-        controllers.set(row.package, controller)
-        for (const listener of listeners) listener()
-        mounted.effect(() => () => controller.dispose())
-        mounted.effect(() => mounted.slots.inject('tiered-plugin-menu.active-session', () => mounted.slots.register({
-          name: 'tiered-plugin-menu.active-session', id: `tiered-observer:${row.id}`, order: -100,
-          inject: () => ({ controller }),
-        }, ActiveSession)))
-        await controller.refresh()
-        mounted.effect(() => mounted.configForms.get(row.configNamespace ?? row.id).subscribe(() => { void controller.refresh().catch(error => mounted.logger.error(error)) }))
-      }
+        // 模块更新会先回收旧样式，再加载新工厂；等这一步结束后再接管前端。
+        if (modules?.entries.state.getSnapshot().syncing) return
+        const result = await api.list({ level: 'client', id: '' })
+        if (!result.ok) throw new Error(result.error.message)
+        const entries = [...mounted.loader.entries()]
+        for (const [name, controller] of controllers) {
+          if (entries.some(entry => entry.options.name === name)) continue
+          if (await controller.setPlugin(undefined)) for (const listener of listeners) listener()
+        }
+        for (const row of result.value.filter(row => row.settings === 'registered')) {
+          if (row.package === remoteContribution.package) continue
+          const entry = entries.find(entry => entry.options.name === row.package)
+          if (!entry) continue
+          // 普通 Loader 没有模块图通知；首次加载时仍通过 import 等待入口就绪。
+          const namespace = entry.moduleNamespace ?? (!modules ? await mounted.loader.import(row.package) : undefined)
+          if (!namespace) continue
+          const original = mounted.loader.unwrapExports(namespace)
+          const existing = controllers.get(row.package)
+          if (existing) {
+            if (await existing.setPlugin(original)) for (const listener of listeners) listener()
+            await existing.refresh()
+            continue
+          }
+          const controller = new ContextClient(mounted, api, original, row.id, row.package)
+          controllers.set(row.package, controller)
+          for (const listener of listeners) listener()
+          mounted.effect(() => () => controller.dispose())
+          mounted.effect(() => mounted.slots.inject('tiered-plugin-menu.active-session', () => mounted.slots.register({
+            name: 'tiered-plugin-menu.active-session', id: `tiered-observer:${row.id}`, order: -100,
+            inject: () => ({ controller }),
+          }, ActiveSession)))
+          await controller.refresh()
+          mounted.effect(() => mounted.configForms.get(row.configNamespace ?? row.id).subscribe(() => { void controller.refresh().catch(error => mounted.logger.error(error)) }))
+        }
       }
       discover = () => pending = pending.then(sync, sync)
+      if (modules) mounted.effect(() => modules.entries.state.subscribe(() => {
+        if (!modules.entries.state.getSnapshot().syncing) void discover().catch(error => mounted.logger.error(error))
+      }))
       mounted.on('loader/patch-context', async (entry, next) => {
         await next()
         if (entry.options.name !== remoteContribution.package) queueMicrotask(() => { void discover().catch(error => mounted.logger.error(error)) })
@@ -68,16 +86,20 @@ export async function apply(ctx: Context): Promise<void> {
       await discover()
     })
     function Settings({ row, scope }: { row: PluginRow; scope: Scope }): ReactElement {
-      const [controller, setController] = useState(() => controllers.get(row.package))
+      const binding = () => {
+        const controller = controllers.get(row.package)
+        return { controller, revision: controller?.revision ?? 0 }
+      }
+      const [{ controller, revision }, setBinding] = useState(binding)
       useEffect(() => {
         let live = true
-        const update = () => { if (live) setController(controllers.get(row.package)) }
+        const update = () => { if (live) setBinding(binding()) }
         listeners.add(update)
         void discover().then(update)
         return () => { live = false; listeners.delete(update) }
       }, [row.id, row.config])
       const fallback = createElement(NativeSettings, { api, row, scope, ui, onSaved: discover })
-      return controller ? createElement(RegisteredSettings, { controller, row, scope, fallback }) : fallback
+      return controller ? createElement(RegisteredSettings, { key: revision, controller, row, scope, fallback }) : fallback
     }
     const ui = {
       Artwork: PluginArtworkDefault,

@@ -4,14 +4,14 @@ English | [简体中文](README.zh-CN.md)
 
 Configure DeepSeek Harness plugins at three levels: **client → workspace → session**. The nearest explicit setting wins. Sessions in one workspace share its plugin instance; an explicitly enabled session has its own instance and configuration.
 
-Version 0.2.0 supports package/component controls and dependency confirmation through shared DSH mechanisms, without adapters named after individual plugins. Tested with **DSH 0.2.2-rc.1** and Node.js 24. It does not modify DSH or third-party packages.
+Version 0.2.1 supports package/component controls and dependency confirmation through shared DSH mechanisms, without adapters named after individual plugins. Tested with **DSH 0.2.2-rc.1** and Node.js 24. It does not modify DSH or third-party packages.
 
 ## Install
 
 Download the prebuilt `.tgz` from [Releases](https://github.com/kazari-qwp/dsh-tiered-plugin-menu/releases), then add it in DSH's plugin page or run:
 
 ```sh
-dsh plugin --profile desktop add ./dsh-tiered-plugin-menu-0.2.0.tgz
+dsh plugin --profile desktop add ./dsh-tiered-plugin-menu-0.2.1.tgz
 ```
 
 For Web, use your profile name (usually `web`). Restart DSH if hot reload is disabled. No companion plugin is required.
@@ -23,10 +23,11 @@ The release includes compiled host/browser code, the bundle patch and licenses. 
 - The plugin icon beside **Workspaces** opens client settings. Icons on workspace/session rows open that scope's settings.
 - The outer list shows **one row per package**. Its **Inherit | Enable | Disable** buttons apply to every component in the package.
 - Click a package to open its component list. Control components individually there; a mixed package displays **partially enabled**.
-- **Settings** expands the original plugin configuration card when available, with a JSON editor as fallback.
+- **Settings** expands the original plugin configuration cards when available, with a JSON editor as fallback. Cards from both Settings and plugin details are shown separately, divided by a line.
 - Disabling a scope blocks the inherited instance. An explicitly enabled child can still override a disabled parent.
 - Client scope uses the original DSH instance and native switch. Lower scopes create separate instances. Leaving a view does not stop background agents.
 - Choosing another session changes the active frontend binding; visiting Insights or Settings keeps that binding.
+- Updating an installed plugin replaces its scoped frontend and open configuration cards after DSH finishes reloading its module and CSS, keeping the selected session and its settings.
 
 Example: client configuration A, workspace B, session C. That session uses C, inheriting sessions in its workspace use B, and other workspaces inherit A.
 
@@ -48,6 +49,8 @@ Confirmation applies to switches operated through this menu; DSH's own plugin pa
 Installed packages are discovered automatically. Unverified packages appear below a separator at lower scopes and require confirmation. Successful startup does not mark them verified.
 
 The implementation isolates provided services per scope and routes shared DSH registries such as tools, prompts, commands, projections and HTTP handlers. Lower instances are real Loader entries, so DSH can load the **installed package's original frontend and CSS**, even when its client-level instance is disabled. The menu embeds no third-party frontend copies.
+
+The 0.2.1 update fix was reproduced against the released 0.2.0 menu and verified with unmodified dsh-context 0.82.2 → 0.83.0 frontend bundles, including Insights rendering, CSS replacement, retained session settings and temporary module removal/re-addition. [Update regression details](docs/CLIENT_UPDATES.md).
 
 The isolated matrix covers ten packages. Temporary messages, dsh-context and notifications pass **54 functional switch combinations** across four sessions and two workspaces. Seven other samples were checked independently for lifecycle, separate configuration and frontend module availability; Clock's actual configuration component also passes two-session save checks. [Results, versions and reproduction](docs/COMPATIBILITY.md).
 
@@ -81,7 +84,7 @@ npm run check
 npm pack
 ```
 
-The checkout is self-contained. `vendor/` holds an unchanged MIT test fixture; no private repository access is needed. `check` covers type checking, building and 21 tests with real DSH services/plugins and React/jsdom. It uses neither browser automation nor paid model requests.
+The checkout is self-contained. `vendor/` holds an unchanged MIT test fixture; no private repository access is needed. `check` covers type checking, building and 23 tests with real DSH services/plugins and React/jsdom. It uses neither browser automation nor paid model requests.
 
 The broader third-party matrix runs in a disposable offline VM; see [reproduction instructions](docs/COMPATIBILITY.md#reproduce). No sample packages are installed into a personal DSH profile by these instructions.
 

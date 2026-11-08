@@ -34,6 +34,37 @@ function locale(ctx: Context) {
   } as never)
 }
 
+test('settings and detail cards render together, separated, against the selected form', async () => {
+  const ctx = new Context()
+  locale(ctx)
+  let view: ReactTestRenderer | undefined
+  const saved: unknown[] = []
+  const form = sessionForm({ text: 'SESSION' }, async value => { saved.push(value) })
+  const plugin = { inject: ['slots'], apply(child: Context) {
+    for (const [slot, key, title] of [
+      ['settings.section', '', 'settings'], ['plugins.bundle.config', 'sample-package', 'bundle'],
+      ['plugins.row.config', 'sample-package#component-a', 'component'], ['settings.general.item', '', 'general'],
+      ['plugins.row.config', 'sample-package#component-b', 'other-component'],
+      ['plugins.bundle.config', 'another-package', 'other-package'], ['conversation.view', '', 'not-settings'],
+    ]) child.slots.inject(slot as any, () => child.slots.register({ name: slot, key, id: title } as any,
+      ({ form }: any) => createElement('button', { onClick: () => form.set('text', title) }, `${title}:${form.state.value.text}`)))
+  } }
+  try {
+    const capture = await captureRegisteredSettings(ctx, plugin, 'component-a', form, undefined, 'sample-package')
+    await act(async () => { view = create(createElement(capture.Page)) })
+    assert.deepEqual(view!.root.findAllByType('button').map(button => button.children[0]),
+      ['component:SESSION', 'bundle:SESSION', 'settings:SESSION', 'general:SESSION'])
+    assert.equal(view!.root.findAllByType('hr').length, 3)
+    await act(async () => { await view!.root.findAllByType('button')[2]!.props.onClick() })
+    assert.deepEqual(saved, [{ text: 'settings' }])
+    assert.ok(view!.root.findAllByType('button').every(button => String(button.children[0]).endsWith(':settings')))
+    await capture.dispose()
+  } finally {
+    await act(async () => view?.unmount())
+    await ctx.fiber.dispose()
+  }
+})
+
 test('原版 dsh-context 配置卡：精确复用配置插槽，两份表单独立保存，不执行其它注册', async () => {
   const dom = new JSDOM('<!doctype html><html><head></head><body></body></html>')
   Object.assign(globalThis, { window: dom.window, document: dom.window.document })

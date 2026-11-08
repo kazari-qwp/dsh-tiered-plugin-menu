@@ -11,6 +11,7 @@ import { scopePluginFetch } from './scoped-fetch.ts'
 
 /** 后端实例按作用域长期存活；客户端把当前会话的原生面板绑定到它的配置表。 */
 export class ContextClient {
+  revision = 0
   private sessionId: string | null = null
   private mounted?: Fiber
   private native?: { entry: any; isolation: Record<string, symbol>; disabled: boolean | null }
@@ -25,7 +26,7 @@ export class ContextClient {
   private cards = new Map<string, Promise<{ Page: ComponentType; dispose(): unknown }>>()
   private fetch = scopePluginFetch()
 
-  constructor(private ctx: Context, private api: MenuRemote, private plugin: Plugin, private namespace: string, private packageName = namespace) {
+  constructor(private ctx: Context, private api: MenuRemote, private plugin: Plugin | undefined, private namespace: string, private packageName = namespace) {
     ctx.on('loader/patch-context', async (entry, next) => {
       if (this.managed && !this.stopped && entry.options.name === this.packageName) {
         this.rememberNative(entry)
@@ -50,6 +51,31 @@ export class ContextClient {
     return this.pending
   }
 
+  async setPlugin(plugin: Plugin | undefined): Promise<boolean> {
+    let changed = false
+    const run = async () => {
+      if (this.stopped || this.plugin === plugin) return
+      await this.clearClient()
+      this.plugin = plugin
+      this.revision++
+      changed = true
+      await this.sync()
+    }
+    this.pending = this.pending.then(run, run)
+    await this.pending
+    return changed
+  }
+
+  private async clearClient() {
+    await this.mounted?.dispose()
+    this.mounted = undefined
+    this.removeCard?.()
+    this.removeCard = undefined
+    for (const card of this.cards.values()) await (await card).dispose()
+    this.cards.clear()
+    this.current = ''
+  }
+
   private form(row: PluginRow, scope: Scope) {
     const key = `${scopeKey(scope)}/${row.id}`
     this.formRows.set(key, row)
@@ -67,6 +93,7 @@ export class ContextClient {
   }
 
   async settings(row: PluginRow, scope: Scope): Promise<ComponentType> {
+    if (!this.plugin) throw new Error('插件前端正在重新加载')
     const current = await this.api.list(scope)
     if (!current.ok) throw new Error(current.error.message)
     row = current.value.flatMap(item => item.components ?? [item]).find(item => item.id === row.id) ?? row
@@ -84,6 +111,7 @@ export class ContextClient {
   }
 
   private async sync() {
+    if (!this.plugin) return
     const client = await this.row(clientScope)
     if (client) this.form(client, clientScope)
     const row = await this.row(this.sessionId ? { level: 'session', id: this.sessionId } : clientScope)
@@ -112,6 +140,7 @@ export class ContextClient {
     this.mounted = undefined
     if (!row.enabled && !row.partial) { this.current = key; return }
     const componentRows = row.components ?? [row]
+    const plugin = this.plugin
     const form = this.form(row, row.source)
     let isolated = this.ctx.isolate('configForms').isolate('slots').isolate('remote')
     isolated = isolateProvidedServices(isolated, Object.create(isolated[Context.isolate]))
@@ -122,7 +151,7 @@ export class ContextClient {
       }, whileServed: (_ids: string[], mount: () => () => void) => mount() })
       child.provide('remote', scopedRemote(child, this.api, componentRows[0]!, row.source))
       new PanelSlots(child, this.ctx)
-      await child.plugin(this.plugin)
+      await child.plugin(plugin)
     })
     this.current = key
   }
@@ -131,9 +160,7 @@ export class ContextClient {
     this.stopped = true
     this.fetch.dispose()
     await this.pending.catch(() => {})
-    await this.mounted?.dispose()
-    this.removeCard?.()
-    for (const card of this.cards.values()) await (await card).dispose()
+    await this.clearClient()
     if (this.native && [...this.ctx.loader.entries()].includes(this.native.entry)) {
       const { entry, isolation, disabled } = this.native
       await entry.update({ disabled: true })
