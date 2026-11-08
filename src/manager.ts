@@ -4,6 +4,7 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
 import type {} from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-workspace'
+import type {} from '@deepseek-ai/dsh-config-editor'
 import { ConfigStore } from './store.ts'
 import { installedPlugins, type InstalledPlugin } from './catalog.ts'
 import { attachRoute, installRouting, routing } from './routing.ts'
@@ -172,9 +173,14 @@ export class PluginManager {
         await this.refresh()
       }
       for (const entry of this.entries(id)) {
-        // 原生客户端实例由 DSH 管理；只有已复用的配置表会从这里保存配置。
-        if (adapter.uiService || adapter.scopedRegistries) await entry.update({ config: await this.normalize(id, config) })
+        const normalized = enabled && (adapter.uiService || adapter.scopedRegistries)
+          ? await this.normalize(id, config) : undefined
         this.checkChange(await this.ctx.pluginManager.setPluginEnabled(entry.id as never, enabled))
+        // 原生客户端实例由 DSH 管理；只有已复用的配置表会从这里保存配置。
+        if (normalized) {
+          // 开关会重新读取 profile；配置也走持久化编辑，不能只改当前内存入口。
+          await this.ctx.configEditor.edit(this.entries(id).find(current => current.id === entry.id)!, () => normalized)
+        }
       }
       await this.services.get(id)?.refresh()
       return

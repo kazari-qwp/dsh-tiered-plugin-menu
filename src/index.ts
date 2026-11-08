@@ -9,7 +9,7 @@ import { remoteContribution } from './remote-contract.ts'
 import type { Scope, PluginConfig } from './shared.ts'
 
 export { PluginManager } from './manager.ts'
-export const inject = ['agents', 'loader', 'typert', 'workspaceRegistry', 'pluginManager', 'profileContext']
+export const inject = ['agents', 'loader', 'typert', 'workspaceRegistry', 'pluginManager', 'profileContext', 'configEditor']
 export const Config = z.object({ dataFile: z.string().default(dshHomePath('plugins', 'tiered-plugin-menu.json')) })
 
 declare module '@deepseek-ai/cordis' { interface Context { tieredPlugins: PluginManager } }

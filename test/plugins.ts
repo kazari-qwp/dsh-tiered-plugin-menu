@@ -9,6 +9,9 @@ export function mountPluginManagement(ctx: Context, directory = resolve('.')) {
   const selected = new Map<string, boolean>()
   const profile = { dir: directory, installAnchor: join(directory, 'package.json') }
   ctx.provide('profileContext', profile as Context['profileContext'])
+  ctx.provide('configEditor', {
+    edit: async (entry: any, change: any) => { await entry.update({ config: change(entry.options.config ?? {}, {}) }) },
+  } as Context['configEditor'])
   const calls: { package?: string; entry?: string; enabled: boolean }[] = []
   ctx.provide('pluginManager', {
     async listBundles(): Promise<BundleInfo[]> {
