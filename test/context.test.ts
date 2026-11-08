@@ -16,6 +16,7 @@ import { mountWorkspaces } from './workspaces.ts'
 import { mountPluginManagement } from './plugins.ts'
 
 test('原版 dsh-context：客户端、两工作区和会话同时启用，提示词、统计、接口按生效实例路由', async () => {
+  mkdirSync('work', { recursive: true })
   const root = resolve(mkdtempSync('work/context-test-'))
   const ctx = new Context()
   const requests = new Map<string, any>()
