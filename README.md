@@ -2,9 +2,21 @@
 
 English | [简体中文](README.zh-CN.md)
 
-Configure DeepSeek Harness plugins at three levels: **client → workspace → session**. The nearest explicit setting wins. Sessions in one workspace share its plugin instance; an explicitly enabled session has its own instance and configuration.
+**Enable or disable DSH plugins independently for each workspace and each session, with different settings for each.**
 
-Version 0.2.1 supports package/component controls and dependency confirmation through shared DSH mechanisms, without adapters named after individual plugins. Tested with **DSH 0.2.2-rc.1** and Node.js 24. It does not modify DSH or third-party packages.
+For example, enable a plugin only in your coding workspace and keep it off elsewhere. Use configuration A in one session and configuration B in another. Open the menu from the small plugin buttons in the sidebar, then expand **Settings** to use the plugin's original configuration UI.
+
+Settings inherit through **client → workspace → session**. Keep the parent's settings by default, or override them for a workspace or an individual session.
+
+## Where to find the buttons
+
+![Sidebar screenshot: the client plugin button sits beside the Workspaces heading, above the workspace and session rows](docs/images/sidebar-buttons.png)
+
+- **Client plugins**: the **plug icon** beside the **Workspaces** heading sets the default plugins and configuration for the client.
+- **Workspace plugins**: hover over a workspace row, then click its plug icon.
+- **Session plugins**: hover over a session row, then click its plug icon.
+
+Workspace and session buttons appear on hover, so they are hidden on the unhovered rows in this screenshot.
 
 ## Install
 
@@ -45,6 +57,8 @@ Before changing switches, the menu calculates the complete affected set:
 Confirmation applies to switches operated through this menu; DSH's own plugin page remains native.
 
 ## Compatibility
+
+Current version: **0.2.1**. Tested with **DSH 0.2.2-rc.1** and Node.js 24. Package/component controls and dependency confirmation use shared DSH mechanisms, without adapters named after individual plugins or changes to DSH and third-party source code.
 
 Installed packages are discovered automatically. Unverified packages appear below a separator at lower scopes and require confirmation. Successful startup does not mark them verified.
 

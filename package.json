@@ -6,6 +6,7 @@
   "license": "MIT",
   "files": [
     "dist",
+    "docs/images",
     "cordis.patch.yml",
     "README.md",
     "LICENSE",
