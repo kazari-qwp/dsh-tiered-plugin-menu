@@ -31,6 +31,14 @@ The service/route errors above were not reproduced by native single-instance tog
 
 以上同名服务/路由冲突在不装菜单的原生单实例开关对照中没有复现，因此归为菜单下级复制的兼容性限制，不推给原插件。按要求不处理固定 TCP 端口兼容。
 
+### Single-plugin reproduction / 单插件复现（2026-11-09）
+
+The seven limited samples were retested in separate fresh processes and profiles. Each profile loaded only DSH's base/web bundles, the sample, and (for the scoped run) this menu. No other third-party plugin was loaded. All seven native controls passed three off/on cycles. The same service/HTTP conflicts, absent lower-scope frontend modules, and multi-entry rejection reproduced with the menu. Other third-party plugins are therefore not required to trigger these specific failures.
+
+七个未兼容样本又分别在全新进程、全新 profile 中复测。每次只加载 DSH 基础/Web 包、该样本，以及下级试验所需的菜单，不加载其他第三方插件。七个原生对照均通过三次开关；加入菜单后，相同的服务/HTTP 冲突、下级前端模块缺失和多入口限制仍然复现。因此，这些具体问题不需要其他第三方插件参与即可触发，属于菜单的实例隔离与适配缺口。
+
+Compact results: [isolated-scope-results.json](isolated-scope-results.json). After the dependencies and isolation described below are prepared, run `node scripts/compatibility/isolated-scopes.mjs` to reproduce.
+
 ## Functional matrix / 功能矩阵
 
 Two workspaces, four live Agents. For each of temporary-messages, dsh-context and notification: client **on/off** × workspace **inherit/on/off** × session **inherit/on/off** = **18 cases**; **54 total**, all pass with all ten samples installed. Each case checks the targeted session, a sibling session, and both sessions in another workspace.
