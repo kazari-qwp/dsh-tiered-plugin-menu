@@ -1,0 +1,12 @@
+{
+  "dsh-context": "0.82.2",
+  "dsh-temporary-messages": "0.1.10",
+  "@fooxe/dsh-memory": "0.13.10",
+  "dsh-tacit": "0.7.0",
+  "dsh-prompt-setting": "0.2.6",
+  "dsh-notification": "0.1.2",
+  "@deepcodec/dsh-clock": "1.0.0",
+  "@cerbur/clutch-dsh-title": "0.1.7",
+  "billion-context": "0.1.213",
+  "dsh-prompt-history": "1.11.2"
+}

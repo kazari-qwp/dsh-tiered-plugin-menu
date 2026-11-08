@@ -1,0 +1,775 @@
+{
+  "date": "2026-11-08",
+  "dsh": "0.2.2-rc.1",
+  "menu": "0.1.11",
+  "node": "24.22.2",
+  "results": [
+    {
+      "case": "client-mix",
+      "ok": true,
+      "exit": 0,
+      "startup": [
+        {
+          "id": "include:dsh-context",
+          "name": "dsh-context",
+          "state": 2,
+          "disabled": false
+        },
+        {
+          "id": "include:temporary-messages",
+          "name": "dsh-temporary-messages",
+          "state": 2,
+          "disabled": false
+        },
+        {
+          "id": "include:dsh-memory",
+          "name": "@fooxe/dsh-memory",
+          "state": 2,
+          "disabled": false
+        },
+        {
+          "id": "include:tacit",
+          "name": "dsh-tacit",
+          "state": 2,
+          "disabled": false
+        },
+        {
+          "id": "include:prompt-setting",
+          "name": "dsh-prompt-setting",
+          "state": 2,
+          "disabled": false
+        },
+        {
+          "id": "include:notify",
+          "name": "dsh-notification",
+          "state": 2,
+          "disabled": false
+        },
+        {
+          "id": "include:dsh-clock",
+          "name": "@deepcodec/dsh-clock",
+          "state": 2,
+          "disabled": false
+        },
+        {
+          "id": "include:clutch-dsh-title",
+          "name": "@cerbur/clutch-dsh-title",
+          "state": 2,
+          "disabled": false
+        },
+        {
+          "id": "include:bili-native",
+          "name": "billion-context",
+          "state": 2,
+          "disabled": false
+        },
+        {
+          "id": "include:dsh-prompt-history",
+          "name": "dsh-prompt-history",
+          "state": 2,
+          "disabled": false
+        }
+      ],
+      "persistence": null,
+      "functions": [],
+      "scoped": [],
+      "controls": []
+    },
+    {
+      "case": "functional-mix",
+      "ok": true,
+      "exit": 0,
+      "startup": [
+        {
+          "id": "include:dsh-context",
+          "name": "dsh-context",
+          "state": 2,
+          "disabled": false
+        },
+        {
+          "id": "include:temporary-messages",
+          "name": "dsh-temporary-messages",
+          "state": 2,
+          "disabled": false
+        },
+        {
+          "id": "include:dsh-memory",
+          "name": "@fooxe/dsh-memory",
+          "state": 2,
+          "disabled": false
+        },
+        {
+          "id": "include:tacit",
+          "name": "dsh-tacit",
+          "state": 2,
+          "disabled": false
+        },
+        {
+          "id": "include:prompt-setting",
+          "name": "dsh-prompt-setting",
+          "state": 2,
+          "disabled": false
+        },
+        {
+          "id": "include:notify",
+          "name": "dsh-notification",
+          "state": 2,
+          "disabled": false
+        },
+        {
+          "id": "include:dsh-clock",
+          "name": "@deepcodec/dsh-clock",
+          "state": 2,
+          "disabled": false
+        },
+        {
+          "id": "include:clutch-dsh-title",
+          "name": "@cerbur/clutch-dsh-title",
+          "state": 2,
+          "disabled": false
+        },
+        {
+          "id": "include:bili-native",
+          "name": "billion-context",
+          "state": 2,
+          "disabled": false
+        },
+        {
+          "id": "include:dsh-prompt-history",
+          "name": "dsh-prompt-history",
+          "state": 2,
+          "disabled": false
+        }
+      ],
+      "persistence": [
+        {
+          "name": "dsh-temporary-messages",
+          "ok": true
+        },
+        {
+          "name": "dsh-context",
+          "ok": true
+        }
+      ],
+      "functions": [
+        {
+          "name": "dsh-temporary-messages",
+          "passed": 18,
+          "total": 18
+        },
+        {
+          "name": "dsh-context",
+          "passed": 18,
+          "total": 18
+        },
+        {
+          "name": "dsh-notification",
+          "passed": 18,
+          "total": 18
+        }
+      ],
+      "scoped": [],
+      "controls": []
+    },
+    {
+      "case": "native-@cerbur-clutch-dsh-title",
+      "ok": true,
+      "exit": 0,
+      "startup": [
+        {
+          "id": "include:clutch-dsh-title",
+          "name": "@cerbur/clutch-dsh-title",
+          "state": 2,
+          "disabled": false
+        }
+      ],
+      "persistence": null,
+      "functions": [],
+      "scoped": [],
+      "controls": []
+    },
+    {
+      "case": "native-@deepcodec-dsh-clock",
+      "ok": true,
+      "exit": 0,
+      "startup": [
+        {
+          "id": "include:dsh-clock",
+          "name": "@deepcodec/dsh-clock",
+          "state": 2,
+          "disabled": false
+        }
+      ],
+      "persistence": null,
+      "functions": [],
+      "scoped": [],
+      "controls": []
+    },
+    {
+      "case": "native-@fooxe-dsh-memory",
+      "ok": true,
+      "exit": 0,
+      "startup": [
+        {
+          "id": "include:dsh-memory",
+          "name": "@fooxe/dsh-memory",
+          "state": 2,
+          "disabled": false
+        }
+      ],
+      "persistence": null,
+      "functions": [],
+      "scoped": [],
+      "controls": []
+    },
+    {
+      "case": "native-billion-context",
+      "ok": true,
+      "exit": 0,
+      "startup": [
+        {
+          "id": "include:bili-native",
+          "name": "billion-context",
+          "state": 2,
+          "disabled": false
+        }
+      ],
+      "persistence": null,
+      "functions": [],
+      "scoped": [],
+      "controls": []
+    },
+    {
+      "case": "native-controls",
+      "ok": true,
+      "exit": 0,
+      "startup": [
+        {
+          "id": "include:dsh-context",
+          "name": "dsh-context",
+          "state": 2,
+          "disabled": false
+        },
+        {
+          "id": "include:temporary-messages",
+          "name": "dsh-temporary-messages",
+          "state": 2,
+          "disabled": false
+        },
+        {
+          "id": "include:dsh-memory",
+          "name": "@fooxe/dsh-memory",
+          "state": 2,
+          "disabled": false
+        },
+        {
+          "id": "include:tacit",
+          "name": "dsh-tacit",
+          "state": 2,
+          "disabled": false
+        },
+        {
+          "id": "include:prompt-setting",
+          "name": "dsh-prompt-setting",
+          "state": 2,
+          "disabled": false
+        },
+        {
+          "id": "include:notify",
+          "name": "dsh-notification",
+          "state": 2,
+          "disabled": false
+        },
+        {
+          "id": "include:dsh-clock",
+          "name": "@deepcodec/dsh-clock",
+          "state": 2,
+          "disabled": false
+        },
+        {
+          "id": "include:clutch-dsh-title",
+          "name": "@cerbur/clutch-dsh-title",
+          "state": 2,
+          "disabled": false
+        },
+        {
+          "id": "include:bili-native",
+          "name": "billion-context",
+          "state": 2,
+          "disabled": false
+        },
+        {
+          "id": "include:dsh-prompt-history",
+          "name": "dsh-prompt-history",
+          "state": 2,
+          "disabled": false
+        }
+      ],
+      "persistence": null,
+      "functions": [],
+      "scoped": [],
+      "controls": [
+        {
+          "name": "dsh-context",
+          "passed": 3,
+          "total": 3
+        },
+        {
+          "name": "dsh-temporary-messages",
+          "passed": 3,
+          "total": 3
+        },
+        {
+          "name": "@fooxe/dsh-memory",
+          "passed": 3,
+          "total": 3
+        },
+        {
+          "name": "dsh-tacit",
+          "passed": 3,
+          "total": 3
+        },
+        {
+          "name": "dsh-prompt-setting",
+          "passed": 3,
+          "total": 3
+        },
+        {
+          "name": "dsh-notification",
+          "passed": 3,
+          "total": 3
+        },
+        {
+          "name": "@deepcodec/dsh-clock",
+          "passed": 3,
+          "total": 3
+        },
+        {
+          "name": "@cerbur/clutch-dsh-title",
+          "passed": 3,
+          "total": 3
+        },
+        {
+          "name": "billion-context",
+          "passed": 3,
+          "total": 3
+        },
+        {
+          "name": "dsh-prompt-history",
+          "passed": 3,
+          "total": 3
+        }
+      ]
+    },
+    {
+      "case": "native-dsh-context",
+      "ok": true,
+      "exit": 0,
+      "startup": [
+        {
+          "id": "include:dsh-context",
+          "name": "dsh-context",
+          "state": 2,
+          "disabled": false
+        }
+      ],
+      "persistence": null,
+      "functions": [],
+      "scoped": [],
+      "controls": []
+    },
+    {
+      "case": "native-dsh-notification",
+      "ok": true,
+      "exit": 0,
+      "startup": [
+        {
+          "id": "include:notify",
+          "name": "dsh-notification",
+          "state": 2,
+          "disabled": false
+        }
+      ],
+      "persistence": null,
+      "functions": [],
+      "scoped": [],
+      "controls": []
+    },
+    {
+      "case": "native-dsh-prompt-history",
+      "ok": true,
+      "exit": 0,
+      "startup": [
+        {
+          "id": "include:dsh-prompt-history",
+          "name": "dsh-prompt-history",
+          "state": 2,
+          "disabled": false
+        }
+      ],
+      "persistence": null,
+      "functions": [],
+      "scoped": [],
+      "controls": []
+    },
+    {
+      "case": "native-dsh-prompt-setting",
+      "ok": true,
+      "exit": 0,
+      "startup": [
+        {
+          "id": "include:prompt-setting",
+          "name": "dsh-prompt-setting",
+          "state": 2,
+          "disabled": false
+        }
+      ],
+      "persistence": null,
+      "functions": [],
+      "scoped": [],
+      "controls": []
+    },
+    {
+      "case": "native-dsh-tacit",
+      "ok": true,
+      "exit": 0,
+      "startup": [
+        {
+          "id": "include:tacit",
+          "name": "dsh-tacit",
+          "state": 2,
+          "disabled": false
+        }
+      ],
+      "persistence": null,
+      "functions": [],
+      "scoped": [],
+      "controls": []
+    },
+    {
+      "case": "native-dsh-temporary-messages",
+      "ok": true,
+      "exit": 0,
+      "startup": [
+        {
+          "id": "include:temporary-messages",
+          "name": "dsh-temporary-messages",
+          "state": 2,
+          "disabled": false
+        }
+      ],
+      "persistence": null,
+      "functions": [],
+      "scoped": [],
+      "controls": []
+    },
+    {
+      "case": "native-mix",
+      "ok": true,
+      "exit": 0,
+      "startup": [
+        {
+          "id": "include:dsh-context",
+          "name": "dsh-context",
+          "state": 2,
+          "disabled": false
+        },
+        {
+          "id": "include:temporary-messages",
+          "name": "dsh-temporary-messages",
+          "state": 2,
+          "disabled": false
+        },
+        {
+          "id": "include:dsh-memory",
+          "name": "@fooxe/dsh-memory",
+          "state": 2,
+          "disabled": false
+        },
+        {
+          "id": "include:tacit",
+          "name": "dsh-tacit",
+          "state": 2,
+          "disabled": false
+        },
+        {
+          "id": "include:prompt-setting",
+          "name": "dsh-prompt-setting",
+          "state": 2,
+          "disabled": false
+        },
+        {
+          "id": "include:notify",
+          "name": "dsh-notification",
+          "state": 2,
+          "disabled": false
+        },
+        {
+          "id": "include:dsh-clock",
+          "name": "@deepcodec/dsh-clock",
+          "state": 2,
+          "disabled": false
+        },
+        {
+          "id": "include:clutch-dsh-title",
+          "name": "@cerbur/clutch-dsh-title",
+          "state": 2,
+          "disabled": false
+        },
+        {
+          "id": "include:bili-native",
+          "name": "billion-context",
+          "state": 2,
+          "disabled": false
+        },
+        {
+          "id": "include:dsh-prompt-history",
+          "name": "dsh-prompt-history",
+          "state": 2,
+          "disabled": false
+        }
+      ],
+      "persistence": null,
+      "functions": [],
+      "scoped": [],
+      "controls": []
+    },
+    {
+      "case": "scoped-mix",
+      "ok": true,
+      "exit": 0,
+      "startup": [
+        {
+          "id": "include:dsh-context",
+          "name": "dsh-context",
+          "state": 2,
+          "disabled": false
+        },
+        {
+          "id": "include:temporary-messages",
+          "name": "dsh-temporary-messages",
+          "state": 2,
+          "disabled": false
+        },
+        {
+          "id": "include:dsh-memory",
+          "name": "@fooxe/dsh-memory",
+          "state": 2,
+          "disabled": false
+        },
+        {
+          "id": "include:tacit",
+          "name": "dsh-tacit",
+          "state": 2,
+          "disabled": false
+        },
+        {
+          "id": "include:prompt-setting",
+          "name": "dsh-prompt-setting",
+          "state": 2,
+          "disabled": false
+        },
+        {
+          "id": "include:notify",
+          "name": "dsh-notification",
+          "state": 2,
+          "disabled": false
+        },
+        {
+          "id": "include:dsh-clock",
+          "name": "@deepcodec/dsh-clock",
+          "state": 2,
+          "disabled": false
+        },
+        {
+          "id": "include:clutch-dsh-title",
+          "name": "@cerbur/clutch-dsh-title",
+          "state": 2,
+          "disabled": false
+        },
+        {
+          "id": "include:bili-native",
+          "name": "billion-context",
+          "state": 2,
+          "disabled": false
+        },
+        {
+          "id": "include:dsh-prompt-history",
+          "name": "dsh-prompt-history",
+          "state": 2,
+          "disabled": false
+        }
+      ],
+      "persistence": null,
+      "functions": [],
+      "scoped": [
+        {
+          "name": "dsh-context",
+          "finalState": 2,
+          "actions": 13,
+          "failures": []
+        },
+        {
+          "name": "dsh-temporary-messages",
+          "finalState": 2,
+          "actions": 13,
+          "failures": []
+        },
+        {
+          "name": "@fooxe/dsh-memory",
+          "finalState": 2,
+          "actions": 12,
+          "failures": [
+            {
+              "case": "workspace-one-on/global-off",
+              "error": "Error: webserver: duplicate exact route \"/dsh-memory/api/v1/list\""
+            },
+            {
+              "case": "workspace-two-on",
+              "error": "Error: webserver: duplicate exact route \"/dsh-memory/api/v1/list\""
+            },
+            {
+              "case": "session-A-on",
+              "error": "Error: webserver: duplicate exact route \"/dsh-memory/api/v1/list\""
+            },
+            {
+              "case": "session-B-on",
+              "error": "Error: webserver: duplicate exact route \"/dsh-memory/api/v1/list\""
+            },
+            {
+              "case": "session-A-on/parent-off",
+              "error": "Error: prompt section \"dsh-memory:auto\" is already registered (for a per-agent override, register through that agent's `agent.ctx` instead)"
+            }
+          ]
+        },
+        {
+          "name": "dsh-tacit",
+          "finalState": 3,
+          "actions": 13,
+          "failures": [
+            {
+              "case": "workspace-two-on",
+              "error": "Error: service \"tacit\" has been registered at <tacit>"
+            },
+            {
+              "case": "session-A-on",
+              "error": "Error: service \"tacit\" has been registered at <tacit>"
+            },
+            {
+              "case": "session-B-on",
+              "error": "Error: service \"tacit\" has been registered at <tacit>"
+            },
+            {
+              "case": "client-on-with-lower",
+              "error": "Error: dsh: warning: 1 entry did not activate"
+            },
+            {
+              "case": "restore-global",
+              "error": "Error: dsh: warning: 1 entry did not activate"
+            }
+          ]
+        },
+        {
+          "name": "dsh-prompt-setting",
+          "finalState": 2,
+          "actions": 13,
+          "failures": []
+        },
+        {
+          "name": "dsh-notification",
+          "finalState": 2,
+          "actions": 13,
+          "failures": []
+        },
+        {
+          "name": "@deepcodec/dsh-clock",
+          "finalState": 2,
+          "actions": 13,
+          "failures": []
+        },
+        {
+          "name": "@cerbur/clutch-dsh-title",
+          "finalState": 3,
+          "actions": 13,
+          "failures": [
+            {
+              "case": "workspace-two-on",
+              "error": "Error: service \"titleRemote\" has been registered at <clutch-dsh-title>"
+            },
+            {
+              "case": "session-A-on",
+              "error": "Error: service \"titleRemote\" has been registered at <clutch-dsh-title>"
+            },
+            {
+              "case": "session-B-on",
+              "error": "Error: service \"titleRemote\" has been registered at <clutch-dsh-title>"
+            },
+            {
+              "case": "client-on-with-lower",
+              "error": "Error: dsh: warning: 1 entry did not activate"
+            },
+            {
+              "case": "restore-global",
+              "error": "Error: dsh: warning: 1 entry did not activate"
+            }
+          ]
+        },
+        {
+          "name": "billion-context",
+          "finalState": 2,
+          "actions": 12,
+          "failures": [
+            {
+              "case": "workspace-one-on/global-off",
+              "error": "Error: 此插件包不是单入口插件，当前还不能创建独立实例"
+            },
+            {
+              "case": "workspace-two-on",
+              "error": "Error: 此插件包不是单入口插件，当前还不能创建独立实例"
+            },
+            {
+              "case": "session-A-on",
+              "error": "Error: 此插件包不是单入口插件，当前还不能创建独立实例"
+            },
+            {
+              "case": "session-B-on",
+              "error": "Error: 此插件包不是单入口插件，当前还不能创建独立实例"
+            },
+            {
+              "case": "session-A-off",
+              "error": "Error: 此插件包不是单入口插件，当前还不能创建独立实例"
+            },
+            {
+              "case": "workspace-one-off",
+              "error": "Error: 此插件包不是单入口插件，当前还不能创建独立实例"
+            },
+            {
+              "case": "session-A-on/parent-off",
+              "error": "Error: 此插件包不是单入口插件，当前还不能创建独立实例"
+            }
+          ]
+        },
+        {
+          "name": "dsh-prompt-history",
+          "finalState": 2,
+          "actions": 13,
+          "failures": [
+            {
+              "case": "workspace-two-on",
+              "error": "Error: service \"promptSuggest\" has been registered at <PromptSuggestService>"
+            },
+            {
+              "case": "session-A-on",
+              "error": "Error: service \"promptSuggest\" has been registered at <PromptSuggestService>"
+            },
+            {
+              "case": "session-B-on",
+              "error": "Error: service \"promptSuggest\" has been registered at <PromptSuggestService>"
+            }
+          ]
+        }
+      ],
+      "controls": []
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 {
   "name": "dsh-tiered-plugin-menu",
-  "version": "0.1.10",
-  "description": "分级插件菜单：客户端、工作区与会话分层配置和实例隔离",
+  "version": "0.1.11",
+  "description": "Per-client, workspace and session plugin configuration for DeepSeek Harness",
   "type": "module",
   "license": "MIT",
   "files": [
@@ -9,7 +9,8 @@
     "cordis.patch.yml",
     "README.md",
     "LICENSE",
-    "THIRD_PARTY_NOTICES.txt"
+    "THIRD_PARTY_NOTICES.txt",
+    "README.zh-CN.md"
   ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -89,7 +90,7 @@
     "@types/react-dom": "18.3.7",
     "@types/react-test-renderer": "18.3.1",
     "dsh-context": "0.82.2",
-    "dsh-temporary-messages": "file:../dsh-temporary-messages/dsh-temporary-messages-0.1.10.tgz",
+    "dsh-temporary-messages": "file:vendor/dsh-temporary-messages-0.1.10.tgz",
     "jsdom": "31.0.0",
     "react": "18.3.1",
     "react-dom": "18.3.1",
@@ -97,7 +98,8 @@
     "tsdown": "0.23.7",
     "tsx": "4.23.15",
     "typescript": "7.0.2",
-    "zod": "4.4.3"
+    "zod": "4.4.3",
+    "@deepseek-ai/dsh-config-editor": "0.2.2-rc.1"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "4.1.0",
@@ -113,6 +115,22 @@
     "@deepseek-ai/dsh-typert-registry": "0.2.2-rc.1",
     "@deepseek-ai/dsh-workspace": "0.2.2-rc.1",
     "@deepseek-ai/schemastery": "3.19.0",
-    "dsh-temporary-messages": ">=0.1.10"
+    "@deepseek-ai/dsh-config-editor": "0.2.2-rc.1"
+  },
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "dsh",
+    "plugins",
+    "workspace",
+    "session"
+  ],
+  "repository": {
+    "url": "git+https://github.com/kazari-qwp/dsh-tiered-plugin-menu.git",
+    "type": "git"
+  },
+  "homepage": "https://github.com/kazari-qwp/dsh-tiered-plugin-menu#readme",
+  "bugs": {
+    "url": "https://github.com/kazari-qwp/dsh-tiered-plugin-menu/issues"
   }
 }
