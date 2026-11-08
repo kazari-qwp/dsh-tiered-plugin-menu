@@ -2,55 +2,64 @@
 
 English | [简体中文](README.zh-CN.md)
 
-Configure DeepSeek Harness plugins at three levels: **client → workspace → session**. The nearest explicit setting wins. Workspace instances are shared by their sessions; session instances have their own configuration and lifecycle.
+Configure DeepSeek Harness plugins at three levels: **client → workspace → session**. The nearest explicit setting wins. Sessions in one workspace share its plugin instance; an explicitly enabled session has its own instance and configuration.
 
-This is an early implementation, tested with **DSH 0.2.2-rc.1** and Node.js 24. It does not modify DSH or the managed plugins. It is **not a security sandbox** for plugins.
+Version 0.2.0 supports package/component controls and dependency confirmation through shared DSH mechanisms, without adapters named after individual plugins. Tested with **DSH 0.2.2-rc.1** and Node.js 24. It does not modify DSH or third-party packages.
 
 ## Install
 
 Download the prebuilt `.tgz` from [Releases](https://github.com/kazari-qwp/dsh-tiered-plugin-menu/releases), then add it in DSH's plugin page or run:
 
 ```sh
-dsh plugin --profile desktop add ./dsh-tiered-plugin-menu-0.1.11.tgz
+dsh plugin --profile desktop add ./dsh-tiered-plugin-menu-0.2.0.tgz
 ```
 
-For the Web application, substitute your profile name (usually `web`). Restart DSH if hot reload is disabled. Installing the companion temporary-messages plugin is optional.
+For Web, use your profile name (usually `web`). Restart DSH if hot reload is disabled. No companion plugin is required.
 
-The release tarball contains the compiled host and browser code, bundle patch and licenses. It needs no install-time build script. The GitHub source checkout must be built before it can be loaded; the release tarball is the supported distribution method. See the [official DSH packaging guide](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/develop/basic/publish.md).
+The release includes compiled host/browser code, the bundle patch and licenses. It needs no install-time build script. A GitHub source checkout must be built first; use the release tarball for installation. This follows the [official DSH packaging guide](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/develop/basic/publish.md).
 
 ## Use
 
-- The plugin icon beside the sidebar's **Workspaces** heading opens client settings.
-- Icons on workspace and session rows open settings for that specific scope.
-- Each row offers **Inherit | Enable | Disable**. Click **Settings** to expand its configuration, or click the plugin name to open DSH's native details page.
-- Disabling a scope blocks its inherited instance. Explicitly enabling a child still overrides a disabled parent.
-- Client scope uses the original DSH instance and native switch. Lower scopes create additional instances. Closing a view does not stop background agents.
-- Switching to another session changes the active panel binding. Visiting Insights or Settings preserves the current binding.
+- The plugin icon beside **Workspaces** opens client settings. Icons on workspace/session rows open that scope's settings.
+- The outer list shows **one row per package**. Its **Inherit | Enable | Disable** buttons apply to every component in the package.
+- Click a package to open its component list. Control components individually there; a mixed package displays **partially enabled**.
+- **Settings** expands the original plugin configuration card when available, with a JSON editor as fallback.
+- Disabling a scope blocks the inherited instance. An explicitly enabled child can still override a disabled parent.
+- Client scope uses the original DSH instance and native switch. Lower scopes create separate instances. Leaving a view does not stop background agents.
+- Choosing another session changes the active frontend binding; visiting Insights or Settings keeps that binding.
 
-Example: client config A, workspace config B, session config C. That session uses C, other inheriting sessions in its workspace use B, and other workspaces inherit A.
+Example: client configuration A, workspace B, session C. That session uses C, inheriting sessions in its workspace use B, and other workspaces inherit A.
 
-Configurations are stored in `$DSH_HOME/plugins/tiered-plugin-menu.json`; the menu's `dataFile` option can override this path. Client settings are saved through DSH's native profile configuration editor.
+Scope settings live in `$DSH_HOME/plugins/tiered-plugin-menu.json`; the menu's `dataFile` option overrides that location. Client settings are persisted through DSH's native profile editor. Existing package-level settings migrate to component keys.
+
+## Dependencies
+
+Before changing switches, the menu calculates the complete affected set:
+
+- Enabling a component lists any disabled dependencies and offers **Enable automatically / Cancel**.
+- Disabling a provider lists enabled dependents and offers **Disable automatically / Cancel**. This includes descendant sessions that inherit the provider.
+- A missing/uninstalled dependency produces an error and changes no switches. Nothing is installed automatically.
+- Sharing a package is not itself a dependency. The outer package buttons deliberately operate the whole package; individual controls use declared DSH services and observed runtime dependencies.
+
+Confirmation applies to switches operated through this menu; DSH's own plugin page remains native.
 
 ## Compatibility
 
-Every installed plugin is discovered at client level. Lower-scope compatibility is not inferred from successful startup. Unverified plugins appear below a separator and require a second confirmation before activation.
+Installed packages are discovered automatically. Unverified packages appear below a separator at lower scopes and require confirmation. Successful startup does not mark them verified.
 
-| Plugin | Tested lower-scope behavior |
-| --- | --- |
-| dsh-temporary-messages 0.1.10 | Real Agent input tail, independent settings, inheritance, lifecycle and original settings UI |
-| dsh-context 0.82.2 | Scoped prompts, projections and HTTP requests; original settings, context and Insights components |
-| dsh-notification 0.1.2 | Event routing and loopback webhook delivery; browser/OS notifications not verified |
-| Other sampled plugins | Several incompatibilities remain; see the report below |
+The implementation isolates provided services per scope and routes shared DSH registries such as tools, prompts, commands, projections and HTTP handlers. Lower instances are real Loader entries, so DSH can load the **installed package's original frontend and CSS**, even when its client-level instance is disabled. The menu embeds no third-party frontend copies.
 
-The sandbox matrix tested ten packages, including popular and small projects. All ten started individually and together, with and without the menu. Three functional samples passed all **54 switch combinations** across four sessions and two workspaces. The other samples revealed shared service/HTTP registrations, missing lower-scope frontend modules, and unsupported multi-entry bundles. These are **not** claimed to be compatible. [Full results and reproduction](docs/COMPATIBILITY.md).
+The isolated matrix covers ten packages. Temporary messages, dsh-context and notifications pass **54 functional switch combinations** across four sessions and two workspaces. Seven other samples were checked independently for lifecycle, separate configuration and frontend module availability; Clock's actual configuration component also passes two-session save checks. [Results, versions and reproduction](docs/COMPATIBILITY.md).
 
-Known limits include multi-entry bundles, arbitrary third-party frontend/settings integration, plugin-owned global storage and global service registries. Fixed-port plugins are outside the compatibility scope. Failed experiments with unadapted plugins can require a DSH restart to restore their native registrations.
+A second batch adds eight packages: Better Sidebar, Agent Teams, another memory plugin, Force Compact, Bill, Auto Mode, Workbench and Simplify. Their mixed lower-scope run passes **110/110 lifecycle/configuration cases**. It exposed and fixed a parse-only projection schema incompatibility in this menu. Workbench also reproduces a native route-cleanup failure without the menu. [Second-batch details](docs/SECOND_BATCH.md).
 
-The original client components of temporary-messages and dsh-context are embedded for use when their global backend is disabled. Other plugins receive a JSON configuration editor at lower scopes; this does not automatically scope their frontend or private storage.
+`@fooxe/dsh-memory` has a reproducible native HTTP-route cleanup problem without this menu. Starting with its native instance disabled avoids that leftover registration in the tested lower-scope cases. This menu does not repair upstream native registrations.
+
+This is configuration/lifecycle isolation, **not a security sandbox**. Plugin-owned global files, module variables and hardcoded TCP ports are not virtualized. Not every third-party tool, UI action or remote endpoint has been exercised; custom frontends that bypass the tested DSH interfaces may need further work.
 
 ## Compatibility declaration
 
-A plugin may declare which lower scopes its author has verified:
+Plugin authors can declare verified lower scopes in their `package.json`:
 
 ```json
 {
@@ -62,7 +71,7 @@ A plugin may declare which lower scopes its author has verified:
 }
 ```
 
-This is a convention of this menu, not an official DSH certification. Missing metadata means unverified, including for our own companion plugin. The menu never writes a verification declaration on another plugin's behalf.
+This is this menu's convention, not official DSH certification. Missing metadata means unverified, including for our companion plugin. The menu never writes verification metadata for another package.
 
 ## Development
 
@@ -72,12 +81,12 @@ npm run check
 npm pack
 ```
 
-The build is self-contained. `vendor/` holds the unchanged MIT companion-plugin fixture needed by the build and tests. No private repository access is required. `check` covers type checking, packaging and 15 focused tests with real DSH services/plugins and React/jsdom, without browser automation or paid model requests.
+The checkout is self-contained. `vendor/` holds an unchanged MIT test fixture; no private repository access is needed. `check` covers type checking, building and 21 tests with real DSH services/plugins and React/jsdom. It uses neither browser automation nor paid model requests.
 
-The larger third-party matrix runs separately in a disposable isolated VM. See [the compatibility instructions](docs/COMPATIBILITY.md#reproduce). Do not run downloaded third-party code in your personal DSH profile merely to reproduce this matrix.
+The broader third-party matrix runs in a disposable offline VM; see [reproduction instructions](docs/COMPATIBILITY.md#reproduce). No sample packages are installed into a personal DSH profile by these instructions.
 
-Core files: `src/manager.ts` (instances and inheritance), `src/routing.ts` (event routing), `src/scoped-services.ts` (adapted registries), `src/catalog.ts` (discovery), `src/client/` (menus and component adapters).
+Core files: `src/manager.ts` (instances and scope inheritance), `src/dependencies.ts` (dependency plans), `src/runtime-tree.ts` (Loader entries), `src/isolation.ts` (private services), `src/scoped-services.ts` (shared registries), and `src/client/` (menus and original client bindings).
 
 ## License
 
-[MIT](LICENSE): commercial use, modification and redistribution are permitted with the license notice retained. Bundled third-party components retain their MIT/Apache-2.0 notices in [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt).
+[MIT](LICENSE): commercial use, modification and redistribution are permitted with the license notice retained. Bundled validation code and source test fixtures retain their notices in [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt).

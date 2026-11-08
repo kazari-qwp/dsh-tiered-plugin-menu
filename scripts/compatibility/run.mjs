@@ -17,7 +17,7 @@ const cases = [
   { name: 'functional-mix', args: ['--functional', ...names, 'dsh-tiered-plugin-menu'] },
 ]
 let failed = false
-for (const item of cases) {
+for (const item of cases.filter(item => process.argv.length === 2 || process.argv.slice(2).includes(item.name))) {
   const reportName = item.name + '-last.json'
   const last = path.resolve('work', reportName)
   fs.rmSync(last, { force: true })

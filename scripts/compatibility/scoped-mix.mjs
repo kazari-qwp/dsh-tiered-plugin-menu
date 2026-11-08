@@ -12,6 +12,12 @@ function configFor(name, marker) {
   if (name === 'dsh-notification') return { desktop: false, browser: false, minTurnDurationMs: 0, title: `NOTIFY_${marker}` }
   if (name === '@deepcodec/dsh-clock') return { mode: marker === 'A' ? 'date' : 'time', showSeconds: marker !== 'A' }
   if (name === '@cerbur/clutch-dsh-title') return { template: `TITLE_${marker}`, fields: {}, preset: 'default' }
+  if (name === 'dsh-better-sidebar') return { listLimit: marker === 'A' ? 50 : 80, tasksViewMode: marker === 'A' ? 'tree' : 'graph' }
+  if (name === '@nanmicoder/dsh-agent-teams') return { maxMembers: marker === 'A' ? 2 : 4, stateDir: `.team-test-${marker}` }
+  if (name === '@furongjun1999/dsh-memory') return { identity: `MEMORY_${marker}`, memory: { autoRecallLimit: marker === 'A' ? 2 : 6 } }
+  if (name === '@falling-ts/dsh-force-compact') return { autoThresholdTokens: marker === 'A' ? 40000 : 60000, retainLatestTokens: marker === 'A' ? 8000 : 12000 }
+  if (name === 'dsh-bill') return { maxRecords: marker === 'A' ? 100 : 200 }
+  if (name === '@log.li/dsh-automode') return { timeoutMs: marker === 'A' ? 3000 : 5000 }
   return {}
 }
 
@@ -60,7 +66,7 @@ export async function scopedMix(ctx, report, names, home, save) {
       result.packageOffPlan = await manager.plan(client, packageRow.id, 'off')
     }
     const id = row.id
-    const entry = [...ctx.loader.entries()].find(entry => entry.options.name === name)
+    const entry = [...ctx.loader.entries()].find(entry => entry.options.id === row.configNamespace)
     const originalConfig = entry?.options.config
     const act = async (label, action) => {
       const record = { label }
@@ -88,6 +94,13 @@ export async function scopedMix(ctx, report, names, home, save) {
     await act('workspace-two-on', () => manager.configure(w2, id, true, configFor(name, 'B'), true))
     await act('session-A-on', () => manager.configure(sa, id, true, configFor(name, 'A'), true))
     await act('session-B-on', () => manager.configure(sb, id, true, configFor(name, 'B'), true))
+    if (Object.keys(configFor(name, 'A')).length) await act('different-session-configs', async () => {
+      const a = (await manager.rows(sa)).flatMap(row => row.components ?? [row]).find(row => row.id === id)
+      const b = (await manager.rows(sb)).flatMap(row => row.components ?? [row]).find(row => row.id === id)
+      if (JSON.stringify(a.config) === JSON.stringify(b.config)) throw new Error('Session configurations unexpectedly match')
+      if (manager.instance(sa, id)?.plugin === manager.instance(sb, id)?.plugin) throw new Error('Session instances unexpectedly match')
+      result.separateConfigurations = { A: a.config, B: b.config }
+    })
     await act('session-A-off', () => manager.configure(sa, id, false, {}))
     await act('session-A-inherit', () => manager.inherit(sa, id))
     await act('client-on-with-lower', () => manager.configure(client, id, true, configFor(name, 'CLIENT')))

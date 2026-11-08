@@ -1,0 +1,10 @@
+{
+  "dsh-better-sidebar": "0.30.1",
+  "@nanmicoder/dsh-agent-teams": "0.1.29",
+  "@furongjun1999/dsh-memory": "0.9.23",
+  "@falling-ts/dsh-force-compact": "0.9.1",
+  "dsh-bill": "0.23.1",
+  "@log.li/dsh-automode": "0.18.0",
+  "dsh-workbench": "0.16.1",
+  "@michengai/dsh-simplify": "1.0.7"
+}

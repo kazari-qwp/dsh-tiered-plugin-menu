@@ -240,13 +240,13 @@ export class ScopedServices {
         // 保持重启后的缓存版本稳定；归属或配置变化的缓存才需要重算。
         stateVersion: 1_000_000 + example.stateVersion,
         stateSchema: z.object({ sessionId: z.string(), owner: z.string().nullable(), config: z.string(), value: z.unknown() })
-          .superRefine((state, validation) => {
+          .transform(state => {
             const entry = this.pick(group.entries, state.sessionId)
             if (state.owner !== (entry ? scopeKey(entry.owner.scope) : null)
-              || state.config !== (entry?.owner.configKey() ?? '')
-              || (entry && !entry.value.stateSchema.safeParse(state.value).success)) {
-              validation.addIssue({ code: 'custom', message: '作用域或配置已变化，请从会话日志重新计算' })
+              || state.config !== (entry?.owner.configKey() ?? '')) {
+              throw new Error('作用域或配置已变化，请从会话日志重新计算')
             }
+            return { ...state, value: entry ? entry.value.stateSchema.parse(state.value) : state.value }
           }),
         init: (header, inherited) => {
           const entry = this.pick(group.entries, String(header.id))
@@ -261,7 +261,7 @@ export class ScopedServices {
           return value === state.value ? state : { ...state, value }
         },
         wire: example.wire && {
-          ...example.wire, viewSchema: example.wire.viewSchema.nullable(),
+          ...example.wire, viewSchema: z.unknown().transform(value => value === null ? null : example.wire!.viewSchema.parse(value)),
           view: (state: ProjectionState) => {
             const entry = this.pick(group.entries, state.sessionId)
             return entry && state.owner === scopeKey(entry.owner.scope) ? entry.value.wire!.view(state.value) : null

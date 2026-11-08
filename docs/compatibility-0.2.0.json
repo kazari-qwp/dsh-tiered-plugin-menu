@@ -1,0 +1,2599 @@
+{
+  "date": "2026-11-09",
+  "menuVersion": "0.2.0",
+  "dshVersion": "0.2.2-rc.1",
+  "nodeVersion": "24.22.2",
+  "core": {
+    "passed": 21,
+    "total": 21
+  },
+  "samples": {
+    "dsh-context": "0.82.2",
+    "dsh-temporary-messages": "0.1.10",
+    "@fooxe/dsh-memory": "0.13.10",
+    "dsh-tacit": "0.7.0",
+    "dsh-prompt-setting": "0.2.6",
+    "dsh-notification": "0.1.2",
+    "@deepcodec/dsh-clock": "1.0.0",
+    "@cerbur/clutch-dsh-title": "0.1.7",
+    "billion-context": "0.1.213",
+    "dsh-prompt-history": "1.11.2"
+  },
+  "clientMix": {
+    "allSampleHostEntriesActive": true,
+    "ok": true,
+    "exit": 0
+  },
+  "functional": [
+    {
+      "name": "dsh-temporary-messages",
+      "cases": [
+        {
+          "globalOn": false,
+          "workspace": "inherit",
+          "session": "inherit",
+          "expected": [
+            null,
+            null,
+            null,
+            null
+          ],
+          "observed": [
+            null,
+            null,
+            null,
+            null
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": false,
+          "workspace": "inherit",
+          "session": "on",
+          "expected": [
+            "SESSION",
+            null,
+            null,
+            null
+          ],
+          "observed": [
+            "SESSION",
+            null,
+            null,
+            null
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": false,
+          "workspace": "inherit",
+          "session": "off",
+          "expected": [
+            null,
+            null,
+            null,
+            null
+          ],
+          "observed": [
+            null,
+            null,
+            null,
+            null
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": false,
+          "workspace": "on",
+          "session": "inherit",
+          "expected": [
+            "WORKSPACE",
+            "WORKSPACE",
+            null,
+            null
+          ],
+          "observed": [
+            "WORKSPACE",
+            "WORKSPACE",
+            null,
+            null
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": false,
+          "workspace": "on",
+          "session": "on",
+          "expected": [
+            "SESSION",
+            "WORKSPACE",
+            null,
+            null
+          ],
+          "observed": [
+            "SESSION",
+            "WORKSPACE",
+            null,
+            null
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": false,
+          "workspace": "on",
+          "session": "off",
+          "expected": [
+            null,
+            "WORKSPACE",
+            null,
+            null
+          ],
+          "observed": [
+            null,
+            "WORKSPACE",
+            null,
+            null
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": false,
+          "workspace": "off",
+          "session": "inherit",
+          "expected": [
+            null,
+            null,
+            null,
+            null
+          ],
+          "observed": [
+            null,
+            null,
+            null,
+            null
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": false,
+          "workspace": "off",
+          "session": "on",
+          "expected": [
+            "SESSION",
+            null,
+            null,
+            null
+          ],
+          "observed": [
+            "SESSION",
+            null,
+            null,
+            null
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": false,
+          "workspace": "off",
+          "session": "off",
+          "expected": [
+            null,
+            null,
+            null,
+            null
+          ],
+          "observed": [
+            null,
+            null,
+            null,
+            null
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": true,
+          "workspace": "inherit",
+          "session": "inherit",
+          "expected": [
+            "CLIENT",
+            "CLIENT",
+            "CLIENT",
+            "CLIENT"
+          ],
+          "observed": [
+            "CLIENT",
+            "CLIENT",
+            "CLIENT",
+            "CLIENT"
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": true,
+          "workspace": "inherit",
+          "session": "on",
+          "expected": [
+            "SESSION",
+            "CLIENT",
+            "CLIENT",
+            "CLIENT"
+          ],
+          "observed": [
+            "SESSION",
+            "CLIENT",
+            "CLIENT",
+            "CLIENT"
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": true,
+          "workspace": "inherit",
+          "session": "off",
+          "expected": [
+            null,
+            "CLIENT",
+            "CLIENT",
+            "CLIENT"
+          ],
+          "observed": [
+            null,
+            "CLIENT",
+            "CLIENT",
+            "CLIENT"
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": true,
+          "workspace": "on",
+          "session": "inherit",
+          "expected": [
+            "WORKSPACE",
+            "WORKSPACE",
+            "CLIENT",
+            "CLIENT"
+          ],
+          "observed": [
+            "WORKSPACE",
+            "WORKSPACE",
+            "CLIENT",
+            "CLIENT"
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": true,
+          "workspace": "on",
+          "session": "on",
+          "expected": [
+            "SESSION",
+            "WORKSPACE",
+            "CLIENT",
+            "CLIENT"
+          ],
+          "observed": [
+            "SESSION",
+            "WORKSPACE",
+            "CLIENT",
+            "CLIENT"
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": true,
+          "workspace": "on",
+          "session": "off",
+          "expected": [
+            null,
+            "WORKSPACE",
+            "CLIENT",
+            "CLIENT"
+          ],
+          "observed": [
+            null,
+            "WORKSPACE",
+            "CLIENT",
+            "CLIENT"
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": true,
+          "workspace": "off",
+          "session": "inherit",
+          "expected": [
+            null,
+            null,
+            "CLIENT",
+            "CLIENT"
+          ],
+          "observed": [
+            null,
+            null,
+            "CLIENT",
+            "CLIENT"
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": true,
+          "workspace": "off",
+          "session": "on",
+          "expected": [
+            "SESSION",
+            null,
+            "CLIENT",
+            "CLIENT"
+          ],
+          "observed": [
+            "SESSION",
+            null,
+            "CLIENT",
+            "CLIENT"
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": true,
+          "workspace": "off",
+          "session": "off",
+          "expected": [
+            null,
+            null,
+            "CLIENT",
+            "CLIENT"
+          ],
+          "observed": [
+            null,
+            null,
+            "CLIENT",
+            "CLIENT"
+          ],
+          "ok": true
+        }
+      ]
+    },
+    {
+      "name": "dsh-context",
+      "cases": [
+        {
+          "globalOn": false,
+          "workspace": "inherit",
+          "session": "inherit",
+          "expected": [
+            null,
+            null,
+            null,
+            null
+          ],
+          "observed": [
+            null,
+            null,
+            null,
+            null
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": false,
+          "workspace": "inherit",
+          "session": "on",
+          "expected": [
+            "SESSION",
+            null,
+            null,
+            null
+          ],
+          "observed": [
+            "SESSION",
+            null,
+            null,
+            null
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": false,
+          "workspace": "inherit",
+          "session": "off",
+          "expected": [
+            null,
+            null,
+            null,
+            null
+          ],
+          "observed": [
+            null,
+            null,
+            null,
+            null
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": false,
+          "workspace": "on",
+          "session": "inherit",
+          "expected": [
+            "WORKSPACE",
+            "WORKSPACE",
+            null,
+            null
+          ],
+          "observed": [
+            "WORKSPACE",
+            "WORKSPACE",
+            null,
+            null
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": false,
+          "workspace": "on",
+          "session": "on",
+          "expected": [
+            "SESSION",
+            "WORKSPACE",
+            null,
+            null
+          ],
+          "observed": [
+            "SESSION",
+            "WORKSPACE",
+            null,
+            null
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": false,
+          "workspace": "on",
+          "session": "off",
+          "expected": [
+            null,
+            "WORKSPACE",
+            null,
+            null
+          ],
+          "observed": [
+            null,
+            "WORKSPACE",
+            null,
+            null
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": false,
+          "workspace": "off",
+          "session": "inherit",
+          "expected": [
+            null,
+            null,
+            null,
+            null
+          ],
+          "observed": [
+            null,
+            null,
+            null,
+            null
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": false,
+          "workspace": "off",
+          "session": "on",
+          "expected": [
+            "SESSION",
+            null,
+            null,
+            null
+          ],
+          "observed": [
+            "SESSION",
+            null,
+            null,
+            null
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": false,
+          "workspace": "off",
+          "session": "off",
+          "expected": [
+            null,
+            null,
+            null,
+            null
+          ],
+          "observed": [
+            null,
+            null,
+            null,
+            null
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": true,
+          "workspace": "inherit",
+          "session": "inherit",
+          "expected": [
+            "CLIENT",
+            "CLIENT",
+            "CLIENT",
+            "CLIENT"
+          ],
+          "observed": [
+            "CLIENT",
+            "CLIENT",
+            "CLIENT",
+            "CLIENT"
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": true,
+          "workspace": "inherit",
+          "session": "on",
+          "expected": [
+            "SESSION",
+            "CLIENT",
+            "CLIENT",
+            "CLIENT"
+          ],
+          "observed": [
+            "SESSION",
+            "CLIENT",
+            "CLIENT",
+            "CLIENT"
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": true,
+          "workspace": "inherit",
+          "session": "off",
+          "expected": [
+            null,
+            "CLIENT",
+            "CLIENT",
+            "CLIENT"
+          ],
+          "observed": [
+            null,
+            "CLIENT",
+            "CLIENT",
+            "CLIENT"
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": true,
+          "workspace": "on",
+          "session": "inherit",
+          "expected": [
+            "WORKSPACE",
+            "WORKSPACE",
+            "CLIENT",
+            "CLIENT"
+          ],
+          "observed": [
+            "WORKSPACE",
+            "WORKSPACE",
+            "CLIENT",
+            "CLIENT"
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": true,
+          "workspace": "on",
+          "session": "on",
+          "expected": [
+            "SESSION",
+            "WORKSPACE",
+            "CLIENT",
+            "CLIENT"
+          ],
+          "observed": [
+            "SESSION",
+            "WORKSPACE",
+            "CLIENT",
+            "CLIENT"
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": true,
+          "workspace": "on",
+          "session": "off",
+          "expected": [
+            null,
+            "WORKSPACE",
+            "CLIENT",
+            "CLIENT"
+          ],
+          "observed": [
+            null,
+            "WORKSPACE",
+            "CLIENT",
+            "CLIENT"
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": true,
+          "workspace": "off",
+          "session": "inherit",
+          "expected": [
+            null,
+            null,
+            "CLIENT",
+            "CLIENT"
+          ],
+          "observed": [
+            null,
+            null,
+            "CLIENT",
+            "CLIENT"
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": true,
+          "workspace": "off",
+          "session": "on",
+          "expected": [
+            "SESSION",
+            null,
+            "CLIENT",
+            "CLIENT"
+          ],
+          "observed": [
+            "SESSION",
+            null,
+            "CLIENT",
+            "CLIENT"
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": true,
+          "workspace": "off",
+          "session": "off",
+          "expected": [
+            null,
+            null,
+            "CLIENT",
+            "CLIENT"
+          ],
+          "observed": [
+            null,
+            null,
+            "CLIENT",
+            "CLIENT"
+          ],
+          "ok": true
+        }
+      ]
+    },
+    {
+      "name": "dsh-notification",
+      "cases": [
+        {
+          "globalOn": false,
+          "workspace": "inherit",
+          "session": "inherit",
+          "expected": [
+            null,
+            null,
+            null,
+            null
+          ],
+          "observed": [
+            null,
+            null,
+            null,
+            null
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": false,
+          "workspace": "inherit",
+          "session": "on",
+          "expected": [
+            "SESSION",
+            null,
+            null,
+            null
+          ],
+          "observed": [
+            "SESSION",
+            null,
+            null,
+            null
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": false,
+          "workspace": "inherit",
+          "session": "off",
+          "expected": [
+            null,
+            null,
+            null,
+            null
+          ],
+          "observed": [
+            null,
+            null,
+            null,
+            null
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": false,
+          "workspace": "on",
+          "session": "inherit",
+          "expected": [
+            "WORKSPACE",
+            "WORKSPACE",
+            null,
+            null
+          ],
+          "observed": [
+            "WORKSPACE",
+            "WORKSPACE",
+            null,
+            null
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": false,
+          "workspace": "on",
+          "session": "on",
+          "expected": [
+            "SESSION",
+            "WORKSPACE",
+            null,
+            null
+          ],
+          "observed": [
+            "SESSION",
+            "WORKSPACE",
+            null,
+            null
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": false,
+          "workspace": "on",
+          "session": "off",
+          "expected": [
+            null,
+            "WORKSPACE",
+            null,
+            null
+          ],
+          "observed": [
+            null,
+            "WORKSPACE",
+            null,
+            null
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": false,
+          "workspace": "off",
+          "session": "inherit",
+          "expected": [
+            null,
+            null,
+            null,
+            null
+          ],
+          "observed": [
+            null,
+            null,
+            null,
+            null
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": false,
+          "workspace": "off",
+          "session": "on",
+          "expected": [
+            "SESSION",
+            null,
+            null,
+            null
+          ],
+          "observed": [
+            "SESSION",
+            null,
+            null,
+            null
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": false,
+          "workspace": "off",
+          "session": "off",
+          "expected": [
+            null,
+            null,
+            null,
+            null
+          ],
+          "observed": [
+            null,
+            null,
+            null,
+            null
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": true,
+          "workspace": "inherit",
+          "session": "inherit",
+          "expected": [
+            "CLIENT",
+            "CLIENT",
+            "CLIENT",
+            "CLIENT"
+          ],
+          "observed": [
+            "CLIENT",
+            "CLIENT",
+            "CLIENT",
+            "CLIENT"
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": true,
+          "workspace": "inherit",
+          "session": "on",
+          "expected": [
+            "SESSION",
+            "CLIENT",
+            "CLIENT",
+            "CLIENT"
+          ],
+          "observed": [
+            "SESSION",
+            "CLIENT",
+            "CLIENT",
+            "CLIENT"
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": true,
+          "workspace": "inherit",
+          "session": "off",
+          "expected": [
+            null,
+            "CLIENT",
+            "CLIENT",
+            "CLIENT"
+          ],
+          "observed": [
+            null,
+            "CLIENT",
+            "CLIENT",
+            "CLIENT"
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": true,
+          "workspace": "on",
+          "session": "inherit",
+          "expected": [
+            "WORKSPACE",
+            "WORKSPACE",
+            "CLIENT",
+            "CLIENT"
+          ],
+          "observed": [
+            "WORKSPACE",
+            "WORKSPACE",
+            "CLIENT",
+            "CLIENT"
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": true,
+          "workspace": "on",
+          "session": "on",
+          "expected": [
+            "SESSION",
+            "WORKSPACE",
+            "CLIENT",
+            "CLIENT"
+          ],
+          "observed": [
+            "SESSION",
+            "WORKSPACE",
+            "CLIENT",
+            "CLIENT"
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": true,
+          "workspace": "on",
+          "session": "off",
+          "expected": [
+            null,
+            "WORKSPACE",
+            "CLIENT",
+            "CLIENT"
+          ],
+          "observed": [
+            null,
+            "WORKSPACE",
+            "CLIENT",
+            "CLIENT"
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": true,
+          "workspace": "off",
+          "session": "inherit",
+          "expected": [
+            null,
+            null,
+            "CLIENT",
+            "CLIENT"
+          ],
+          "observed": [
+            null,
+            null,
+            "CLIENT",
+            "CLIENT"
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": true,
+          "workspace": "off",
+          "session": "on",
+          "expected": [
+            "SESSION",
+            null,
+            "CLIENT",
+            "CLIENT"
+          ],
+          "observed": [
+            "SESSION",
+            null,
+            "CLIENT",
+            "CLIENT"
+          ],
+          "ok": true
+        },
+        {
+          "globalOn": true,
+          "workspace": "off",
+          "session": "off",
+          "expected": [
+            null,
+            null,
+            "CLIENT",
+            "CLIENT"
+          ],
+          "observed": [
+            null,
+            null,
+            "CLIENT",
+            "CLIENT"
+          ],
+          "ok": true
+        }
+      ]
+    }
+  ],
+  "persistence": [
+    {
+      "name": "dsh-temporary-messages",
+      "ok": true
+    },
+    {
+      "name": "dsh-context",
+      "ok": true
+    }
+  ],
+  "modelRequests": 72,
+  "mixedScopes": [
+    {
+      "cases": [
+        {
+          "label": "client-off",
+          "ok": true
+        },
+        {
+          "label": "workspace-one-on/global-off",
+          "ok": true
+        },
+        {
+          "label": "inspect-outside-scope",
+          "ok": true
+        },
+        {
+          "label": "workspace-two-on",
+          "ok": true
+        },
+        {
+          "label": "session-A-on",
+          "ok": true
+        },
+        {
+          "label": "session-B-on",
+          "ok": true
+        },
+        {
+          "label": "session-A-off",
+          "ok": true
+        },
+        {
+          "label": "session-A-inherit",
+          "ok": true
+        },
+        {
+          "label": "client-on-with-lower",
+          "ok": true
+        },
+        {
+          "label": "workspace-one-off",
+          "ok": true
+        },
+        {
+          "label": "session-A-on/parent-off",
+          "ok": true
+        },
+        {
+          "label": "cleanup-lower",
+          "ok": true
+        },
+        {
+          "label": "restore-global",
+          "ok": true
+        }
+      ],
+      "name": "dsh-context",
+      "frontendInGraph": true
+    },
+    {
+      "cases": [
+        {
+          "label": "client-off",
+          "ok": true
+        },
+        {
+          "label": "workspace-one-on/global-off",
+          "ok": true
+        },
+        {
+          "label": "inspect-outside-scope",
+          "ok": true
+        },
+        {
+          "label": "workspace-two-on",
+          "ok": true
+        },
+        {
+          "label": "session-A-on",
+          "ok": true
+        },
+        {
+          "label": "session-B-on",
+          "ok": true
+        },
+        {
+          "label": "session-A-off",
+          "ok": true
+        },
+        {
+          "label": "session-A-inherit",
+          "ok": true
+        },
+        {
+          "label": "client-on-with-lower",
+          "ok": true
+        },
+        {
+          "label": "workspace-one-off",
+          "ok": true
+        },
+        {
+          "label": "session-A-on/parent-off",
+          "ok": true
+        },
+        {
+          "label": "cleanup-lower",
+          "ok": true
+        },
+        {
+          "label": "restore-global",
+          "ok": true
+        }
+      ],
+      "name": "dsh-temporary-messages",
+      "frontendInGraph": true
+    },
+    {
+      "cases": [
+        {
+          "label": "client-off",
+          "ok": true
+        },
+        {
+          "label": "workspace-one-on/global-off",
+          "ok": false,
+          "error": "Error: webserver: duplicate exact route \"/dsh-memory/api/v1/list\""
+        },
+        {
+          "label": "workspace-two-on",
+          "ok": false,
+          "error": "Error: webserver: duplicate exact route \"/dsh-memory/api/v1/list\""
+        },
+        {
+          "label": "session-A-on",
+          "ok": false,
+          "error": "Error: webserver: duplicate exact route \"/dsh-memory/api/v1/list\""
+        },
+        {
+          "label": "session-B-on",
+          "ok": false,
+          "error": "Error: webserver: duplicate exact route \"/dsh-memory/api/v1/list\""
+        },
+        {
+          "label": "session-A-off",
+          "ok": true
+        },
+        {
+          "label": "session-A-inherit",
+          "ok": true
+        },
+        {
+          "label": "client-on-with-lower",
+          "ok": true
+        },
+        {
+          "label": "workspace-one-off",
+          "ok": true
+        },
+        {
+          "label": "session-A-on/parent-off",
+          "ok": false,
+          "error": "Error: webserver: duplicate exact route \"/dsh-memory/api/v1/list\""
+        },
+        {
+          "label": "cleanup-lower",
+          "ok": true
+        },
+        {
+          "label": "restore-global",
+          "ok": true
+        }
+      ],
+      "name": "@fooxe/dsh-memory",
+      "frontendInGraph": false
+    },
+    {
+      "cases": [
+        {
+          "label": "client-off",
+          "ok": true
+        },
+        {
+          "label": "workspace-one-on/global-off",
+          "ok": true
+        },
+        {
+          "label": "inspect-outside-scope",
+          "ok": true
+        },
+        {
+          "label": "workspace-two-on",
+          "ok": true
+        },
+        {
+          "label": "session-A-on",
+          "ok": true
+        },
+        {
+          "label": "session-B-on",
+          "ok": true
+        },
+        {
+          "label": "session-A-off",
+          "ok": true
+        },
+        {
+          "label": "session-A-inherit",
+          "ok": true
+        },
+        {
+          "label": "client-on-with-lower",
+          "ok": true
+        },
+        {
+          "label": "workspace-one-off",
+          "ok": true
+        },
+        {
+          "label": "session-A-on/parent-off",
+          "ok": true
+        },
+        {
+          "label": "cleanup-lower",
+          "ok": true
+        },
+        {
+          "label": "restore-global",
+          "ok": true
+        }
+      ],
+      "name": "dsh-tacit",
+      "frontendInGraph": true
+    },
+    {
+      "cases": [
+        {
+          "label": "client-off",
+          "ok": true
+        },
+        {
+          "label": "workspace-one-on/global-off",
+          "ok": true
+        },
+        {
+          "label": "inspect-outside-scope",
+          "ok": true
+        },
+        {
+          "label": "workspace-two-on",
+          "ok": true
+        },
+        {
+          "label": "session-A-on",
+          "ok": true
+        },
+        {
+          "label": "session-B-on",
+          "ok": true
+        },
+        {
+          "label": "session-A-off",
+          "ok": true
+        },
+        {
+          "label": "session-A-inherit",
+          "ok": true
+        },
+        {
+          "label": "client-on-with-lower",
+          "ok": true
+        },
+        {
+          "label": "workspace-one-off",
+          "ok": true
+        },
+        {
+          "label": "session-A-on/parent-off",
+          "ok": true
+        },
+        {
+          "label": "cleanup-lower",
+          "ok": true
+        },
+        {
+          "label": "restore-global",
+          "ok": true
+        }
+      ],
+      "name": "dsh-prompt-setting",
+      "frontendInGraph": true
+    },
+    {
+      "cases": [
+        {
+          "label": "client-off",
+          "ok": true
+        },
+        {
+          "label": "workspace-one-on/global-off",
+          "ok": true
+        },
+        {
+          "label": "inspect-outside-scope",
+          "ok": true
+        },
+        {
+          "label": "workspace-two-on",
+          "ok": true
+        },
+        {
+          "label": "session-A-on",
+          "ok": true
+        },
+        {
+          "label": "session-B-on",
+          "ok": true
+        },
+        {
+          "label": "session-A-off",
+          "ok": true
+        },
+        {
+          "label": "session-A-inherit",
+          "ok": true
+        },
+        {
+          "label": "client-on-with-lower",
+          "ok": true
+        },
+        {
+          "label": "workspace-one-off",
+          "ok": true
+        },
+        {
+          "label": "session-A-on/parent-off",
+          "ok": true
+        },
+        {
+          "label": "cleanup-lower",
+          "ok": true
+        },
+        {
+          "label": "restore-global",
+          "ok": true
+        }
+      ],
+      "name": "dsh-notification",
+      "frontendInGraph": true
+    },
+    {
+      "cases": [
+        {
+          "label": "client-off",
+          "ok": true
+        },
+        {
+          "label": "workspace-one-on/global-off",
+          "ok": true
+        },
+        {
+          "label": "inspect-outside-scope",
+          "ok": true
+        },
+        {
+          "label": "workspace-two-on",
+          "ok": true
+        },
+        {
+          "label": "session-A-on",
+          "ok": true
+        },
+        {
+          "label": "session-B-on",
+          "ok": true
+        },
+        {
+          "label": "session-A-off",
+          "ok": true
+        },
+        {
+          "label": "session-A-inherit",
+          "ok": true
+        },
+        {
+          "label": "client-on-with-lower",
+          "ok": true
+        },
+        {
+          "label": "workspace-one-off",
+          "ok": true
+        },
+        {
+          "label": "session-A-on/parent-off",
+          "ok": true
+        },
+        {
+          "label": "cleanup-lower",
+          "ok": true
+        },
+        {
+          "label": "restore-global",
+          "ok": true
+        }
+      ],
+      "name": "@deepcodec/dsh-clock",
+      "frontendInGraph": true
+    },
+    {
+      "cases": [
+        {
+          "label": "client-off",
+          "ok": true
+        },
+        {
+          "label": "workspace-one-on/global-off",
+          "ok": true
+        },
+        {
+          "label": "inspect-outside-scope",
+          "ok": true
+        },
+        {
+          "label": "workspace-two-on",
+          "ok": true
+        },
+        {
+          "label": "session-A-on",
+          "ok": true
+        },
+        {
+          "label": "session-B-on",
+          "ok": true
+        },
+        {
+          "label": "session-A-off",
+          "ok": true
+        },
+        {
+          "label": "session-A-inherit",
+          "ok": true
+        },
+        {
+          "label": "client-on-with-lower",
+          "ok": true
+        },
+        {
+          "label": "workspace-one-off",
+          "ok": true
+        },
+        {
+          "label": "session-A-on/parent-off",
+          "ok": true
+        },
+        {
+          "label": "cleanup-lower",
+          "ok": true
+        },
+        {
+          "label": "restore-global",
+          "ok": true
+        }
+      ],
+      "name": "@cerbur/clutch-dsh-title",
+      "frontendInGraph": true
+    },
+    {
+      "cases": [
+        {
+          "label": "client-off",
+          "ok": true
+        },
+        {
+          "label": "workspace-one-on/global-off",
+          "ok": true
+        },
+        {
+          "label": "inspect-outside-scope",
+          "ok": true
+        },
+        {
+          "label": "workspace-two-on",
+          "ok": true
+        },
+        {
+          "label": "session-A-on",
+          "ok": true
+        },
+        {
+          "label": "session-B-on",
+          "ok": true
+        },
+        {
+          "label": "session-A-off",
+          "ok": true
+        },
+        {
+          "label": "session-A-inherit",
+          "ok": true
+        },
+        {
+          "label": "client-on-with-lower",
+          "ok": true
+        },
+        {
+          "label": "workspace-one-off",
+          "ok": true
+        },
+        {
+          "label": "session-A-on/parent-off",
+          "ok": true
+        },
+        {
+          "label": "cleanup-lower",
+          "ok": true
+        },
+        {
+          "label": "restore-global",
+          "ok": true
+        },
+        {
+          "label": "whole-package-workspace",
+          "ok": true
+        }
+      ],
+      "name": "billion-context",
+      "frontendInGraph": true
+    },
+    {
+      "cases": [
+        {
+          "label": "client-off",
+          "ok": true
+        },
+        {
+          "label": "workspace-one-on/global-off",
+          "ok": true
+        },
+        {
+          "label": "inspect-outside-scope",
+          "ok": true
+        },
+        {
+          "label": "workspace-two-on",
+          "ok": true
+        },
+        {
+          "label": "session-A-on",
+          "ok": true
+        },
+        {
+          "label": "session-B-on",
+          "ok": true
+        },
+        {
+          "label": "session-A-off",
+          "ok": true
+        },
+        {
+          "label": "session-A-inherit",
+          "ok": true
+        },
+        {
+          "label": "client-on-with-lower",
+          "ok": true
+        },
+        {
+          "label": "workspace-one-off",
+          "ok": true
+        },
+        {
+          "label": "session-A-on/parent-off",
+          "ok": true
+        },
+        {
+          "label": "cleanup-lower",
+          "ok": true
+        },
+        {
+          "label": "restore-global",
+          "ok": true
+        }
+      ],
+      "name": "dsh-prompt-history",
+      "frontendInGraph": true
+    }
+  ],
+  "isolated": [
+    {
+      "afterNativeActivation": {
+        "frontendInGraph": false,
+        "cases": [
+          {
+            "label": "client-off",
+            "ok": true
+          },
+          {
+            "label": "workspace-one-on/global-off",
+            "ok": false,
+            "error": "Error: webserver: duplicate exact route \"/dsh-memory/api/v1/list\""
+          },
+          {
+            "label": "workspace-two-on",
+            "ok": false,
+            "error": "Error: webserver: duplicate exact route \"/dsh-memory/api/v1/list\""
+          },
+          {
+            "label": "session-A-on",
+            "ok": false,
+            "error": "Error: webserver: duplicate exact route \"/dsh-memory/api/v1/list\""
+          },
+          {
+            "label": "session-B-on",
+            "ok": false,
+            "error": "Error: webserver: duplicate exact route \"/dsh-memory/api/v1/list\""
+          },
+          {
+            "label": "session-A-off",
+            "ok": true
+          },
+          {
+            "label": "session-A-inherit",
+            "ok": true
+          },
+          {
+            "label": "client-on-with-lower",
+            "ok": true
+          },
+          {
+            "label": "workspace-one-off",
+            "ok": true
+          },
+          {
+            "label": "session-A-on/parent-off",
+            "ok": false,
+            "error": "Error: webserver: duplicate exact route \"/dsh-memory/api/v1/list\""
+          },
+          {
+            "label": "cleanup-lower",
+            "ok": true
+          },
+          {
+            "label": "restore-global",
+            "ok": true
+          }
+        ]
+      },
+      "nativeStartsDisabled": {
+        "frontendInGraph": true,
+        "cases": [
+          {
+            "label": "client-off",
+            "ok": true
+          },
+          {
+            "label": "workspace-one-on/global-off",
+            "ok": true
+          },
+          {
+            "label": "inspect-outside-scope",
+            "ok": true
+          },
+          {
+            "label": "workspace-two-on",
+            "ok": true
+          },
+          {
+            "label": "session-A-on",
+            "ok": true
+          },
+          {
+            "label": "session-B-on",
+            "ok": true
+          },
+          {
+            "label": "session-A-off",
+            "ok": true
+          },
+          {
+            "label": "session-A-inherit",
+            "ok": true
+          },
+          {
+            "label": "client-on-with-lower",
+            "ok": true
+          },
+          {
+            "label": "workspace-one-off",
+            "ok": true
+          },
+          {
+            "label": "session-A-on/parent-off",
+            "ok": true
+          },
+          {
+            "label": "cleanup-lower",
+            "ok": true
+          },
+          {
+            "label": "restore-global",
+            "ok": true
+          }
+        ]
+      },
+      "name": "@fooxe/dsh-memory",
+      "nativeControls": [
+        {
+          "cycle": 0,
+          "ok": false,
+          "childErrors": [
+            "Error: webserver: duplicate exact route \"/dsh-memory/api/v1/list\""
+          ]
+        },
+        {
+          "cycle": 1,
+          "ok": false,
+          "childErrors": [
+            "Error: webserver: duplicate exact route \"/dsh-memory/api/v1/list\""
+          ]
+        },
+        {
+          "cycle": 2,
+          "ok": false,
+          "childErrors": [
+            "Error: webserver: duplicate exact route \"/dsh-memory/api/v1/list\""
+          ]
+        }
+      ]
+    },
+    {
+      "afterNativeActivation": {
+        "frontendInGraph": true,
+        "cases": [
+          {
+            "label": "client-off",
+            "ok": true
+          },
+          {
+            "label": "workspace-one-on/global-off",
+            "ok": true
+          },
+          {
+            "label": "inspect-outside-scope",
+            "ok": true
+          },
+          {
+            "label": "workspace-two-on",
+            "ok": true
+          },
+          {
+            "label": "session-A-on",
+            "ok": true
+          },
+          {
+            "label": "session-B-on",
+            "ok": true
+          },
+          {
+            "label": "session-A-off",
+            "ok": true
+          },
+          {
+            "label": "session-A-inherit",
+            "ok": true
+          },
+          {
+            "label": "client-on-with-lower",
+            "ok": true
+          },
+          {
+            "label": "workspace-one-off",
+            "ok": true
+          },
+          {
+            "label": "session-A-on/parent-off",
+            "ok": true
+          },
+          {
+            "label": "cleanup-lower",
+            "ok": true
+          },
+          {
+            "label": "restore-global",
+            "ok": true
+          }
+        ]
+      },
+      "nativeStartsDisabled": {
+        "frontendInGraph": true,
+        "cases": [
+          {
+            "label": "client-off",
+            "ok": true
+          },
+          {
+            "label": "workspace-one-on/global-off",
+            "ok": true
+          },
+          {
+            "label": "inspect-outside-scope",
+            "ok": true
+          },
+          {
+            "label": "workspace-two-on",
+            "ok": true
+          },
+          {
+            "label": "session-A-on",
+            "ok": true
+          },
+          {
+            "label": "session-B-on",
+            "ok": true
+          },
+          {
+            "label": "session-A-off",
+            "ok": true
+          },
+          {
+            "label": "session-A-inherit",
+            "ok": true
+          },
+          {
+            "label": "client-on-with-lower",
+            "ok": true
+          },
+          {
+            "label": "workspace-one-off",
+            "ok": true
+          },
+          {
+            "label": "session-A-on/parent-off",
+            "ok": true
+          },
+          {
+            "label": "cleanup-lower",
+            "ok": true
+          },
+          {
+            "label": "restore-global",
+            "ok": true
+          }
+        ]
+      },
+      "name": "dsh-tacit",
+      "nativeControls": [
+        {
+          "cycle": 0,
+          "ok": true,
+          "childErrors": []
+        },
+        {
+          "cycle": 1,
+          "ok": true,
+          "childErrors": []
+        },
+        {
+          "cycle": 2,
+          "ok": true,
+          "childErrors": []
+        }
+      ]
+    },
+    {
+      "afterNativeActivation": {
+        "frontendInGraph": true,
+        "cases": [
+          {
+            "label": "client-off",
+            "ok": true
+          },
+          {
+            "label": "workspace-one-on/global-off",
+            "ok": true
+          },
+          {
+            "label": "inspect-outside-scope",
+            "ok": true
+          },
+          {
+            "label": "workspace-two-on",
+            "ok": true
+          },
+          {
+            "label": "session-A-on",
+            "ok": true
+          },
+          {
+            "label": "session-B-on",
+            "ok": true
+          },
+          {
+            "label": "session-A-off",
+            "ok": true
+          },
+          {
+            "label": "session-A-inherit",
+            "ok": true
+          },
+          {
+            "label": "client-on-with-lower",
+            "ok": true
+          },
+          {
+            "label": "workspace-one-off",
+            "ok": true
+          },
+          {
+            "label": "session-A-on/parent-off",
+            "ok": true
+          },
+          {
+            "label": "cleanup-lower",
+            "ok": true
+          },
+          {
+            "label": "restore-global",
+            "ok": true
+          }
+        ]
+      },
+      "nativeStartsDisabled": {
+        "frontendInGraph": true,
+        "cases": [
+          {
+            "label": "client-off",
+            "ok": true
+          },
+          {
+            "label": "workspace-one-on/global-off",
+            "ok": true
+          },
+          {
+            "label": "inspect-outside-scope",
+            "ok": true
+          },
+          {
+            "label": "workspace-two-on",
+            "ok": true
+          },
+          {
+            "label": "session-A-on",
+            "ok": true
+          },
+          {
+            "label": "session-B-on",
+            "ok": true
+          },
+          {
+            "label": "session-A-off",
+            "ok": true
+          },
+          {
+            "label": "session-A-inherit",
+            "ok": true
+          },
+          {
+            "label": "client-on-with-lower",
+            "ok": true
+          },
+          {
+            "label": "workspace-one-off",
+            "ok": true
+          },
+          {
+            "label": "session-A-on/parent-off",
+            "ok": true
+          },
+          {
+            "label": "cleanup-lower",
+            "ok": true
+          },
+          {
+            "label": "restore-global",
+            "ok": true
+          }
+        ]
+      },
+      "name": "dsh-prompt-setting",
+      "nativeControls": [
+        {
+          "cycle": 0,
+          "ok": true,
+          "childErrors": []
+        },
+        {
+          "cycle": 1,
+          "ok": true,
+          "childErrors": []
+        },
+        {
+          "cycle": 2,
+          "ok": true,
+          "childErrors": []
+        }
+      ]
+    },
+    {
+      "afterNativeActivation": {
+        "frontendInGraph": true,
+        "cases": [
+          {
+            "label": "client-off",
+            "ok": true
+          },
+          {
+            "label": "workspace-one-on/global-off",
+            "ok": true
+          },
+          {
+            "label": "inspect-outside-scope",
+            "ok": true
+          },
+          {
+            "label": "workspace-two-on",
+            "ok": true
+          },
+          {
+            "label": "session-A-on",
+            "ok": true
+          },
+          {
+            "label": "session-B-on",
+            "ok": true
+          },
+          {
+            "label": "session-A-off",
+            "ok": true
+          },
+          {
+            "label": "session-A-inherit",
+            "ok": true
+          },
+          {
+            "label": "client-on-with-lower",
+            "ok": true
+          },
+          {
+            "label": "workspace-one-off",
+            "ok": true
+          },
+          {
+            "label": "session-A-on/parent-off",
+            "ok": true
+          },
+          {
+            "label": "cleanup-lower",
+            "ok": true
+          },
+          {
+            "label": "restore-global",
+            "ok": true
+          }
+        ]
+      },
+      "nativeStartsDisabled": {
+        "frontendInGraph": true,
+        "cases": [
+          {
+            "label": "client-off",
+            "ok": true
+          },
+          {
+            "label": "workspace-one-on/global-off",
+            "ok": true
+          },
+          {
+            "label": "inspect-outside-scope",
+            "ok": true
+          },
+          {
+            "label": "workspace-two-on",
+            "ok": true
+          },
+          {
+            "label": "session-A-on",
+            "ok": true
+          },
+          {
+            "label": "session-B-on",
+            "ok": true
+          },
+          {
+            "label": "session-A-off",
+            "ok": true
+          },
+          {
+            "label": "session-A-inherit",
+            "ok": true
+          },
+          {
+            "label": "client-on-with-lower",
+            "ok": true
+          },
+          {
+            "label": "workspace-one-off",
+            "ok": true
+          },
+          {
+            "label": "session-A-on/parent-off",
+            "ok": true
+          },
+          {
+            "label": "cleanup-lower",
+            "ok": true
+          },
+          {
+            "label": "restore-global",
+            "ok": true
+          }
+        ]
+      },
+      "name": "dsh-prompt-history",
+      "nativeControls": [
+        {
+          "cycle": 0,
+          "ok": true,
+          "childErrors": []
+        },
+        {
+          "cycle": 1,
+          "ok": true,
+          "childErrors": []
+        },
+        {
+          "cycle": 2,
+          "ok": true,
+          "childErrors": []
+        }
+      ]
+    },
+    {
+      "afterNativeActivation": {
+        "frontendInGraph": true,
+        "cases": [
+          {
+            "label": "client-off",
+            "ok": true
+          },
+          {
+            "label": "workspace-one-on/global-off",
+            "ok": true
+          },
+          {
+            "label": "inspect-outside-scope",
+            "ok": true
+          },
+          {
+            "label": "workspace-two-on",
+            "ok": true
+          },
+          {
+            "label": "session-A-on",
+            "ok": true
+          },
+          {
+            "label": "session-B-on",
+            "ok": true
+          },
+          {
+            "label": "session-A-off",
+            "ok": true
+          },
+          {
+            "label": "session-A-inherit",
+            "ok": true
+          },
+          {
+            "label": "client-on-with-lower",
+            "ok": true
+          },
+          {
+            "label": "workspace-one-off",
+            "ok": true
+          },
+          {
+            "label": "session-A-on/parent-off",
+            "ok": true
+          },
+          {
+            "label": "cleanup-lower",
+            "ok": true
+          },
+          {
+            "label": "restore-global",
+            "ok": true
+          }
+        ]
+      },
+      "nativeStartsDisabled": {
+        "frontendInGraph": true,
+        "cases": [
+          {
+            "label": "client-off",
+            "ok": true
+          },
+          {
+            "label": "workspace-one-on/global-off",
+            "ok": true
+          },
+          {
+            "label": "inspect-outside-scope",
+            "ok": true
+          },
+          {
+            "label": "workspace-two-on",
+            "ok": true
+          },
+          {
+            "label": "session-A-on",
+            "ok": true
+          },
+          {
+            "label": "session-B-on",
+            "ok": true
+          },
+          {
+            "label": "session-A-off",
+            "ok": true
+          },
+          {
+            "label": "session-A-inherit",
+            "ok": true
+          },
+          {
+            "label": "client-on-with-lower",
+            "ok": true
+          },
+          {
+            "label": "workspace-one-off",
+            "ok": true
+          },
+          {
+            "label": "session-A-on/parent-off",
+            "ok": true
+          },
+          {
+            "label": "cleanup-lower",
+            "ok": true
+          },
+          {
+            "label": "restore-global",
+            "ok": true
+          }
+        ]
+      },
+      "name": "@cerbur/clutch-dsh-title",
+      "nativeControls": [
+        {
+          "cycle": 0,
+          "ok": true,
+          "childErrors": []
+        },
+        {
+          "cycle": 1,
+          "ok": true,
+          "childErrors": []
+        },
+        {
+          "cycle": 2,
+          "ok": true,
+          "childErrors": []
+        }
+      ]
+    },
+    {
+      "afterNativeActivation": {
+        "frontendInGraph": true,
+        "cases": [
+          {
+            "label": "client-off",
+            "ok": true
+          },
+          {
+            "label": "workspace-one-on/global-off",
+            "ok": true
+          },
+          {
+            "label": "inspect-outside-scope",
+            "ok": true
+          },
+          {
+            "label": "workspace-two-on",
+            "ok": true
+          },
+          {
+            "label": "session-A-on",
+            "ok": true
+          },
+          {
+            "label": "session-B-on",
+            "ok": true
+          },
+          {
+            "label": "session-A-off",
+            "ok": true
+          },
+          {
+            "label": "session-A-inherit",
+            "ok": true
+          },
+          {
+            "label": "client-on-with-lower",
+            "ok": true
+          },
+          {
+            "label": "workspace-one-off",
+            "ok": true
+          },
+          {
+            "label": "session-A-on/parent-off",
+            "ok": true
+          },
+          {
+            "label": "cleanup-lower",
+            "ok": true
+          },
+          {
+            "label": "restore-global",
+            "ok": true
+          }
+        ]
+      },
+      "nativeStartsDisabled": {
+        "frontendInGraph": true,
+        "cases": [
+          {
+            "label": "client-off",
+            "ok": true
+          },
+          {
+            "label": "workspace-one-on/global-off",
+            "ok": true
+          },
+          {
+            "label": "inspect-outside-scope",
+            "ok": true
+          },
+          {
+            "label": "workspace-two-on",
+            "ok": true
+          },
+          {
+            "label": "session-A-on",
+            "ok": true
+          },
+          {
+            "label": "session-B-on",
+            "ok": true
+          },
+          {
+            "label": "session-A-off",
+            "ok": true
+          },
+          {
+            "label": "session-A-inherit",
+            "ok": true
+          },
+          {
+            "label": "client-on-with-lower",
+            "ok": true
+          },
+          {
+            "label": "workspace-one-off",
+            "ok": true
+          },
+          {
+            "label": "session-A-on/parent-off",
+            "ok": true
+          },
+          {
+            "label": "cleanup-lower",
+            "ok": true
+          },
+          {
+            "label": "restore-global",
+            "ok": true
+          }
+        ]
+      },
+      "name": "@deepcodec/dsh-clock",
+      "nativeControls": [
+        {
+          "cycle": 0,
+          "ok": true,
+          "childErrors": []
+        },
+        {
+          "cycle": 1,
+          "ok": true,
+          "childErrors": []
+        },
+        {
+          "cycle": 2,
+          "ok": true,
+          "childErrors": []
+        }
+      ]
+    },
+    {
+      "afterNativeActivation": {
+        "frontendInGraph": true,
+        "cases": [
+          {
+            "label": "client-off",
+            "ok": true
+          },
+          {
+            "label": "workspace-one-on/global-off",
+            "ok": true
+          },
+          {
+            "label": "inspect-outside-scope",
+            "ok": true
+          },
+          {
+            "label": "workspace-two-on",
+            "ok": true
+          },
+          {
+            "label": "session-A-on",
+            "ok": true
+          },
+          {
+            "label": "session-B-on",
+            "ok": true
+          },
+          {
+            "label": "session-A-off",
+            "ok": true
+          },
+          {
+            "label": "session-A-inherit",
+            "ok": true
+          },
+          {
+            "label": "client-on-with-lower",
+            "ok": true
+          },
+          {
+            "label": "workspace-one-off",
+            "ok": true
+          },
+          {
+            "label": "session-A-on/parent-off",
+            "ok": true
+          },
+          {
+            "label": "cleanup-lower",
+            "ok": true
+          },
+          {
+            "label": "restore-global",
+            "ok": true
+          },
+          {
+            "label": "whole-package-workspace",
+            "ok": true
+          }
+        ]
+      },
+      "nativeStartsDisabled": {
+        "frontendInGraph": true,
+        "cases": [
+          {
+            "label": "client-off",
+            "ok": true
+          },
+          {
+            "label": "workspace-one-on/global-off",
+            "ok": true
+          },
+          {
+            "label": "inspect-outside-scope",
+            "ok": true
+          },
+          {
+            "label": "workspace-two-on",
+            "ok": true
+          },
+          {
+            "label": "session-A-on",
+            "ok": true
+          },
+          {
+            "label": "session-B-on",
+            "ok": true
+          },
+          {
+            "label": "session-A-off",
+            "ok": true
+          },
+          {
+            "label": "session-A-inherit",
+            "ok": true
+          },
+          {
+            "label": "client-on-with-lower",
+            "ok": true
+          },
+          {
+            "label": "workspace-one-off",
+            "ok": true
+          },
+          {
+            "label": "session-A-on/parent-off",
+            "ok": true
+          },
+          {
+            "label": "cleanup-lower",
+            "ok": true
+          },
+          {
+            "label": "restore-global",
+            "ok": true
+          },
+          {
+            "label": "whole-package-workspace",
+            "ok": true
+          }
+        ]
+      },
+      "name": "billion-context",
+      "nativeControls": [
+        {
+          "cycle": 0,
+          "ok": true,
+          "childErrors": []
+        },
+        {
+          "cycle": 1,
+          "ok": true,
+          "childErrors": []
+        },
+        {
+          "cycle": 2,
+          "ok": true,
+          "childErrors": []
+        }
+      ]
+    }
+  ],
+  "clockSettings": {
+    "plugin": "@deepcodec/dsh-clock",
+    "ok": true,
+    "checks": [
+      "original settings render twice",
+      "separate session values",
+      "actual form mutation persists only to A"
+    ]
+  },
+  "notes": [
+    "Memory native route cleanup failure reproduces without the menu; older reports checked only the parent fiber.",
+    "Seven isolated profiles contain one sample plus DSH and the menu; frontend graph presence is not complete UI certification.",
+    "Functional matrix uses ten installed sample packages, a deterministic local model and loopback webhooks.",
+    "Native hot-insert followed immediately by shutdown also hung with an empty plugin; final mixed profiles mount menu at cold boot."
+  ],
+  "release": {
+    "version": "0.2.0",
+    "cleanCheckout": {
+      "typecheck": true,
+      "build": true,
+      "tests": {
+        "passed": 21,
+        "total": 21
+      }
+    },
+    "officialCliInstall": true,
+    "installedHost": "ACTIVE",
+    "frontendInModuleGraph": true,
+    "sha256": "a44566b10283f0c2e50df4a29282c02462f49d9dbb5ef0f14a8ddc8bd6ca496d"
+  }
+}
