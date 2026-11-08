@@ -28,14 +28,23 @@ process.env.DSH_TELEMETRY_DISABLED = '1'
 const report = { names, home }
 const lastReport = path.join(root, 'work', process.env.COMPAT_REPORT_NAME ?? 'native-mix-last.json')
 try {
-  const { loadProfileDirectory, loadLayeredEnv } = runtime('@deepseek-ai/dsh-app-boot')
+  const { loadProfileDirectory, loadLayeredEnv, composeEntries } = runtime('@deepseek-ai/dsh-app-boot')
+  if (process.argv.includes('--start-disabled')) {
+    const profile = loadProfileDirectory('dsh', dir, installAnchor)
+    const rows = composeEntries(profile.layers.map(layer => layer.patches))
+    fs.writeFileSync(path.join(dir, 'cordis.patch.yml'), JSON.stringify(rows.filter(row => extra.includes(row.name)).map(row => ({ id: row.id, disabled: true }))))
+  }
   const { runProfile } = await import(pathToFileURL(runtime.resolve('@deepseek-ai/dsh/profile-boot')))
   const app = await runProfile({ environment: loadLayeredEnv('dsh'), profile: 'test',
     resolvedProfile: { profile: loadProfileDirectory('dsh', dir, installAnchor), installAnchor },
     patchFiles: [], args: ['--no-open', '--port', '0'],
   })
   const { ctx } = app
-  if (names.includes('dsh-tiered-plugin-menu')) await ctx.plugin(await import(pathToFileURL(path.resolve(process.env.COMPAT_MENU_ENTRY ?? path.join(root, 'dist/index.js')))), { dataFile: path.join(home, 'menu.json') })
+  if (names.includes('dsh-tiered-plugin-menu')) {
+    const parent = [...ctx.loader.entries()].find(entry => extra.includes(entry.options.name))?.parent ?? ctx.loader.root
+    await parent.create({ id: 'compat-menu', name: pathToFileURL(path.resolve(process.env.COMPAT_MENU_ENTRY ?? path.join(root, 'dist/index.js'))).href,
+      config: { dataFile: path.join(home, 'menu.json') } })
+  }
   await ctx.loader.await()
   report.entries = [...ctx.loader.entries()].filter(entry => extra.includes(entry.options.name)).map(entry => ({
     id: entry.id, name: entry.options.name, state: entry.fiber?.state, disabled: entry.disabled,
@@ -56,7 +65,13 @@ try {
           record.off = entry.fiber?.state
           record.onChange = await ctx.pluginManager.setPluginEnabled(entry.id, true); await ctx.loader.await()
           await entry.fiber?.await()
-          record.on = entry.fiber?.state; record.ok = record.on === 2
+          record.childErrors = []
+          for (const runtime of ctx.registry.values()) for (const fiber of runtime.fibers) {
+            if (fiber.ctx.fiber.entry === entry && fiber.state === 3) {
+              try { await fiber.await() } catch (error) { record.childErrors.push(String(error)) }
+            }
+          }
+          record.on = entry.fiber?.state; record.ok = record.on === 2 && !record.childErrors.length
         } catch (error) { record.ok = false; record.error = String(error?.stack ?? error).slice(0, 1000) }
         item.cycles.push(record)
       }

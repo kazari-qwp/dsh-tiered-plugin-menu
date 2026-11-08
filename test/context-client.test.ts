@@ -144,7 +144,8 @@ test('打包入口：第三方全局从未启用，会话面板和配置卡也�
     const form = sessionForm({ promptPrefix: 'CLIENT' }, async () => {})
     ctx.provide('configForms', { get: () => form, whileServed: (_ids: any, mount: any) => mount() } as any)
     await ctx.plugin(Loader)
-    ctx.loader.import = async () => { throw new Error('未启用的全局模块不在 DSH 模块图中') }
+    // A lower host Loader entry contributes the original client to DSH's graph, even with no global host instance.
+    ctx.loader.import = async () => load<Plugin>(require.resolve('dsh-context/client'))
     await ctx.loader.await()
     const api = { list: async (scope: Scope) => ({ ok: true, value: [{
       id: 'dsh-context', package: 'dsh-context', name: 'dsh-context', settings: 'registered', managed: true,
@@ -155,6 +156,8 @@ test('打包入口：第三方全局从未启用，会话面板和配置卡也�
     ctx.provide('remote.tieredPluginMenu', api as any)
     ctx.provide('pluginNavigation', { openBundle() {} } as any)
     const fiber = await ctx.plugin(bundled)
+    // The module arrives after the menu has already started (first lower-scope activation).
+    await ctx.loader.root.update([{ id: 'dsh-context', name: 'dsh-context' }])
     // 等待客户端的依赖注入子入口完成；不是浏览器操作。
     await ctx.loader.await()
     for (let i = 0; i < 10 && !ctx.slots.entries('tiered-plugin-menu.active-session' as any).some(e => e.options.id === 'tiered-observer:dsh-context'); i++) {
@@ -168,7 +171,7 @@ test('打包入口：第三方全局从未启用，会话面板和配置卡也�
     await face.controller.select('B')
     assert.equal(ctx.slots.entries('conversation.view').length, 0, '未启用的会话没有面板')
     await face.controller.select('A')
-    assert.equal(ctx.slots.entries('plugins.bundle.config').length, 0)
+    assert.equal(ctx.slots.entries('plugins.bundle.config').length, 1)
     const injected = ctx.slots.entries('shell.overlay').find(e => e.options.id === 'tiered-plugin-menu')!.inject!() as any
     const result = await api.list({ level: 'session', id: 'A' })
     await act(async () => { view = create(createElement(injected.ui.Settings, { row: result.value[0], scope: { level: 'session', id: 'A' } })) })

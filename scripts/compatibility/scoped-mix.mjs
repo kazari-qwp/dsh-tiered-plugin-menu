@@ -50,10 +50,15 @@ export async function scopedMix(ctx, report, names, home, save) {
   const sb = { level: 'session', id: 'compat-B' }
   const scopes = [w1, w2, sa, sb]
   for (const name of names.filter(name => name !== 'dsh-tiered-plugin-menu')) {
-    const row = (await manager.rows(client)).find(row => row.package === name)
+    const packageRow = (await manager.rows(client)).find(row => row.package === name)
+    const row = packageRow?.components?.[0] ?? packageRow
     if (!row) { report.scoped.push({ name, error: 'not discovered' }); continue }
     const result = { name, cases: [] }
     report.scoped.push(result)
+    if (packageRow.components) {
+      result.packageComponents = packageRow.components.map(row => row.id)
+      result.packageOffPlan = await manager.plan(client, packageRow.id, 'off')
+    }
     const id = row.id
     const entry = [...ctx.loader.entries()].find(entry => entry.options.name === name)
     const originalConfig = entry?.options.config
@@ -72,7 +77,7 @@ export async function scopedMix(ctx, report, names, home, save) {
         result.clientModules = ctx.clientModules.graph().entries.map(entry => entry.id)
         result.instances = [...manager.instances].map(([scope, entries]) => ({ scope, plugins: [...entries.keys()] }))
         result.rows = await Promise.all(handles.map(async ({ agent }) => {
-          const selected = (await manager.rows({ level: 'session', id: agent.id })).find(row => row.id === id)
+          const selected = (await manager.rows({ level: 'session', id: agent.id })).flatMap(row => row.components ?? [row]).find(row => row.id === id)
           const assembly = await ctx.systemPrompt.assemble(assembleContextFor(agent))
           return { session: agent.id, source: selected.source, enabled: selected.enabled, active: selected.active,
             tools: ctx.tools.definitions(agent).map(tool => tool.name),
@@ -92,6 +97,15 @@ export async function scopedMix(ctx, report, names, home, save) {
     await act('restore-global', async () => {
       await manager.configure(client, id, true, originalConfig ?? {})
       if (entry) await entry.update({ config: originalConfig ?? {} })
+    })
+    if (packageRow.components) await act('whole-package-workspace', async () => {
+      const enable = await manager.plan(w1, packageRow.id, 'on')
+      if (enable.missing.length) throw new Error(enable.missing.join(', '))
+      await manager.change(w1, enable.id, enable.mode, enable.signature)
+      const group = (await manager.rows(w1)).find(row => row.id === packageRow.id)
+      if (!group.components.every(row => row.active)) throw new Error('Some package components did not activate')
+      const disable = await manager.plan(w1, packageRow.id, 'off')
+      await manager.change(w1, disable.id, disable.mode, disable.signature)
     })
     result.finalState = [...ctx.loader.entries()].find(entry => entry.options.name === name)?.fiber?.state
     save()

@@ -70,7 +70,9 @@ test('官方 Client Remote → Host Gateway：工作区与会话配置、继承�
     assert.equal(rows.value[0]!.config.template, 'RPC')
     assert.equal(rows.value[0]!.package, 'dsh-temporary-messages')
     assert.equal(rows.value[0]!.description, '给 DSH 提供会过期的上下文消息和可执行表达式模板')
-    assert.deepEqual(await api.invoke(scope, scope.id, 'temporary-messages', 'preview', [null, '{{ session.id }}']), { ok: true, value: 'rpc-session' })
+    assert.deepEqual(await api.call(scope, 'temporary-messages', 'temporaryMessagesUi', 'preview', {
+      sessionId: scope.id, template: '{{ session.id }} {{ 6 * 7 }}',
+    }), { ok: true, value: 'rpc-session 42' })
     assert.ok((await api.inherit(scope, 'temporary-messages')).ok)
     const inherited = await api.list(scope)
     assert.ok(inherited.ok)

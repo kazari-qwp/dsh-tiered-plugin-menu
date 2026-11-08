@@ -74,7 +74,7 @@ test('打包客户端：侧栏按钮绑定正确层级，点击不切换行，�
           listed.push(scope)
           return { ok: true, value: [{
             id: 'temporary-messages', name: '临时消息', own: true, source: scope, enabled: true, active: true,
-            verified: false, settings: 'temporary-messages',
+            verified: false, settings: 'native',
             package: 'dsh-temporary-messages', description: '临时上下文消息',
             config: { template: 'FROM BUNDLE', enabled: true, defaultTtlTokens: 0, defaultK: false, compressor: 'identity' },
           }] }
@@ -162,10 +162,14 @@ test('打包客户端：侧栏按钮绑定正确层级，点击不切换行，�
     await act(async () => {
       Array.from(document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')).find(button => button.textContent === '设置')!.click()
     })
-    assert.equal(document.querySelector<HTMLTextAreaElement>('#temporary-template')!.value, 'FROM BUNDLE')
+    assert.equal(JSON.parse(document.querySelector<HTMLTextAreaElement>('[aria-label="本层独立配置（JSON）"]')!.value).template, 'FROM BUNDLE')
     assert.equal(document.querySelectorAll('#workspace-actions .tiered-plugin-button').length, 1)
     assert.deepEqual(details, [], '开关和设置按钮不应触发详情导航')
     await click('[role="dialog"] .tiered-card-open')
+    assert.deepEqual(details, [], '包条目先进入本层组件详情')
+    await act(async () => {
+      Array.from(document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')).find(button => button.textContent === '查看原生插件详情')!.click()
+    })
     assert.deepEqual(details, ['dsh-temporary-messages'])
     assert.equal(document.querySelector('[role="dialog"]'), null, '进入官方详情页时关闭浮层')
     await act(async () => { await fiber.dispose() })

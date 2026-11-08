@@ -1,12 +1,14 @@
 import type { RemoteResult, TypertCodec, TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
-import type { MenuContext, Scope, PluginConfig, PluginRow } from './shared.ts'
+import type { MenuContext, Scope, PluginConfig, PluginRow, ChangeMode, ChangePlan } from './shared.ts'
 
 export interface MenuRemote {
   context(sessionId: string | null): Promise<RemoteResult<MenuContext>>
   list(scope: Scope): Promise<RemoteResult<PluginRow[]>>
+  plan(scope: Scope, id: string, mode: ChangeMode): Promise<RemoteResult<ChangePlan>>
+  change(scope: Scope, id: string, mode: ChangeMode, signature: string): Promise<RemoteResult<void>>
+  call(scope: Scope, id: string, namespace: string, method: string, args: PluginConfig): Promise<RemoteResult<unknown>>
   inherit(scope: Scope, id: string): Promise<RemoteResult<void>>
   configure(scope: Scope, id: string, enabled: boolean, config: PluginConfig, confirmed: boolean): Promise<RemoteResult<void>>
-  invoke(scope: Scope, sessionId: string | null, id: string, method: 'catalog' | 'preview', args: unknown[]): Promise<RemoteResult<unknown>>
 }
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
@@ -29,9 +31,11 @@ export const remoteContribution: TypertRemoteContribution = {
   descriptors: [
     ['context', [['sessionId', 'session']]],
     ['list', [['scope', 'scope']]],
+    ['plan', [['scope', 'scope'], ['id', 'string'], ['mode', 'string']]],
+    ['change', [['scope', 'scope'], ['id', 'string'], ['mode', 'string'], ['signature', 'string']]],
+    ['call', [['scope', 'scope'], ['id', 'string'], ['namespace', 'string'], ['method', 'string'], ['args', 'config']]],
     ['inherit', [['scope', 'scope'], ['id', 'string']]],
     ['configure', [['scope', 'scope'], ['id', 'string'], ['enabled', 'boolean'], ['config', 'config'], ['confirmed', 'boolean']]],
-    ['invoke', [['scope', 'scope'], ['sessionId', 'session'], ['id', 'string'], ['method', 'string'], ['args', 'args']]],
   ].map(([method, parameters]) => ({
     id: `tieredPluginMenu/${method}`, service: 'tieredPluginMenu', namespace: 'tieredPluginMenu', method: method as string,
     invocation: { kind: 'direct' as const },

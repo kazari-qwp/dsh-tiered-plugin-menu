@@ -1,4 +1,4 @@
-Bundled client artifacts: dsh-temporary-messages 0.1.10 (MIT), dsh-context 0.82.2 (Apache-2.0). Original client bodies are reused; registration is wrapped for private component loading, and CSS ownership/deduplication identifiers are assigned to dsh-tiered-plugin-menu. CSS contents are unchanged.
+The release bundles Zod validation code (MIT). Since 0.2.0 it does not embed third-party plugin clients or styles; DSH loads those from the installed original packages. The source test fixtures use dsh-temporary-messages 0.1.10 (MIT, including Acorn) and dsh-context 0.82.2 (Apache-2.0). Their notices are retained below for the source distribution and historical builds.
 
 dsh-temporary-messages:
 MIT License
@@ -23,7 +23,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-This package bundles Acorn 8.19.0.
+The temporary-messages test fixture bundles Acorn 8.19.0.
 
 MIT License
 

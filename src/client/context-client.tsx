@@ -1,10 +1,13 @@
 import { Context, Service, type Fiber, type Plugin } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
-import { createElement, useEffect, useState, type ComponentType } from 'react'
+import { createElement, useEffect, useState, type ComponentType, type ReactNode } from 'react'
 import type { MenuRemote } from '../remote-contract.ts'
 import { clientScope, scopeKey, type PluginRow, type Scope } from '../shared.ts'
 import { sessionForm } from './form.ts'
 import { captureRegisteredSettings } from './registered-settings.tsx'
+import { isolateProvidedServices } from '../isolation.ts'
+import { scopedRemote } from './scoped-remote.ts'
+import { scopePluginFetch } from './scoped-fetch.ts'
 
 /** 后端实例按作用域长期存活；客户端把当前会话的原生面板绑定到它的配置表。 */
 export class ContextClient {
@@ -20,10 +23,11 @@ export class ContextClient {
   private forms = new Map<string, ReturnType<typeof sessionForm>>()
   private formRows = new Map<string, PluginRow>()
   private cards = new Map<string, Promise<{ Page: ComponentType; dispose(): unknown }>>()
+  private fetch = scopePluginFetch()
 
-  constructor(private ctx: Context, private api: MenuRemote, private plugin: Plugin, private namespace: string) {
+  constructor(private ctx: Context, private api: MenuRemote, private plugin: Plugin, private namespace: string, private packageName = namespace) {
     ctx.on('loader/patch-context', async (entry, next) => {
-      if (this.managed && !this.stopped && entry.options.name === this.namespace) {
+      if (this.managed && !this.stopped && entry.options.name === this.packageName) {
         this.rememberNative(entry)
         // 原入口等待私有 slots；重新开启全局时创建的新入口也一样处理。
         entry.ctx[Context.isolate].slots = this.mutedSlots
@@ -47,7 +51,7 @@ export class ContextClient {
   }
 
   private form(row: PluginRow, scope: Scope) {
-    const key = scopeKey(scope)
+    const key = `${scopeKey(scope)}/${row.id}`
     this.formRows.set(key, row)
     let form = this.forms.get(key)
     if (!form) {
@@ -63,9 +67,13 @@ export class ContextClient {
   }
 
   async settings(row: PluginRow, scope: Scope): Promise<ComponentType> {
+    const current = await this.api.list(scope)
+    if (!current.ok) throw new Error(current.error.message)
+    row = current.value.flatMap(item => item.components ?? [item]).find(item => item.id === row.id) ?? row
     const form = this.form(row, scope)
-    const key = scopeKey(scope)
-    if (!this.cards.has(key)) this.cards.set(key, captureRegisteredSettings(this.ctx, this.plugin, this.namespace, form))
+    const key = `${scopeKey(scope)}/${row.id}`
+    if (!this.cards.has(key)) this.cards.set(key, captureRegisteredSettings(this.ctx, this.plugin, row.configNamespace ?? this.namespace, form,
+      ctx => scopedRemote(ctx, this.api, row, scope), this.packageName))
     return (await this.cards.get(key)!).Page
   }
 
@@ -79,9 +87,10 @@ export class ContextClient {
     const client = await this.row(clientScope)
     if (client) this.form(client, clientScope)
     const row = await this.row(this.sessionId ? { level: 'session', id: this.sessionId } : clientScope)
+    if (row) this.fetch.select(row)
     if (!row?.managed) return
     this.managed = true
-    const entry = [...this.ctx.loader.entries()].find(entry => entry.options.name === this.namespace)
+    const entry = [...this.ctx.loader.entries()].find(entry => entry.options.name === this.packageName)
     if (entry && entry !== this.native?.entry) {
       this.rememberNative(entry)
       const { disabled } = this.native!
@@ -89,19 +98,29 @@ export class ContextClient {
       await entry.update({ disabled })
     }
     if (entry && client && !this.removeCard) {
-      const Page = await this.settings(client, clientScope)
-      this.removeCard = this.ctx.slots.inject('plugins.bundle.config', () => this.ctx.slots.register({
-        name: 'plugins.bundle.config', key: this.namespace,
-      } as any, () => createElement(Page)))
+      const row = client.components?.[0] ?? client
+      try {
+        const Page = await this.settings(row, clientScope)
+        this.removeCard = this.ctx.slots.inject('plugins.bundle.config', () => this.ctx.slots.register({
+          name: 'plugins.bundle.config', key: row.configNamespace ?? row.id,
+        } as any, () => createElement(Page)))
+      } catch { /* Host-only components may have no native settings card. */ }
     }
-    const key = JSON.stringify([row.enabled, row.source, row.config])
+    const key = JSON.stringify([row.enabled, row.partial, row.source, row.config, row.components])
     if (key === this.current) return
     await this.mounted?.dispose()
     this.mounted = undefined
-    if (!row.enabled) { this.current = key; return }
+    if (!row.enabled && !row.partial) { this.current = key; return }
+    const componentRows = row.components ?? [row]
     const form = this.form(row, row.source)
-    this.mounted = await this.ctx.isolate('configForms').isolate('slots').plugin(async (child: Context) => {
-      child.provide('configForms', { get: () => form, whileServed: (_ids: string[], mount: () => () => void) => mount() })
+    let isolated = this.ctx.isolate('configForms').isolate('slots').isolate('remote')
+    isolated = isolateProvidedServices(isolated, Object.create(isolated[Context.isolate]))
+    this.mounted = await isolated.plugin(async (child: Context) => {
+      child.provide('configForms', { get: (ns: string) => {
+        const component = componentRows.find(item => item.configNamespace === ns)
+        return component ? this.form(component, component.source) : form
+      }, whileServed: (_ids: string[], mount: () => () => void) => mount() })
+      child.provide('remote', scopedRemote(child, this.api, componentRows[0]!, row.source))
       new PanelSlots(child, this.ctx)
       await child.plugin(this.plugin)
     })
@@ -110,6 +129,7 @@ export class ContextClient {
 
   async dispose() {
     this.stopped = true
+    this.fetch.dispose()
     await this.pending.catch(() => {})
     await this.mounted?.dispose()
     this.removeCard?.()
@@ -142,7 +162,7 @@ export function ActiveSession({ controller, sessionId }: { controller: ContextCl
   return null
 }
 
-export function RegisteredSettings({ controller, row, scope }: { controller: ContextClient; row: PluginRow; scope: Scope }) {
+export function RegisteredSettings({ controller, row, scope, fallback }: { controller: ContextClient; row: PluginRow; scope: Scope; fallback?: ReactNode }) {
   const [Page, setPage] = useState<ComponentType>()
   const [error, setError] = useState('')
   useEffect(() => {
@@ -150,5 +170,5 @@ export function RegisteredSettings({ controller, row, scope }: { controller: Con
     void controller.settings(row, scope).then(page => { if (live) setPage(() => page) }, error => { if (live) setError(String(error)) })
     return () => { live = false }
   }, [controller, scopeKey(scope), row.config])
-  return error ? <p role="status">{error}</p> : Page ? <Page /> : <p>加载原生配置…</p>
+  return error ? <>{fallback ?? <p role="status">{error}</p>}</> : Page ? <Page /> : <p>加载原生配置…</p>
 }

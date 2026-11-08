@@ -15,25 +15,30 @@ export interface PluginRow extends SavedConfig {
   active: boolean
   managed?: boolean
   verified: boolean
-  settings: 'temporary-messages' | 'native' | 'registered'
+  settings: 'native' | 'registered'
+  /** The installed package is the list item; components are shown in its details. */
+  components?: PluginRow[]
+  partial?: boolean
+  configNamespace?: string
+  routes?: string[]
 }
 export interface MenuContext {
   workspaces: { id: string; title: string; path: string }[]
   workspaceId: string | null
 }
 
-// 适配表只声明包和服务名；各层共用同一套实例、配置和事件路由。
-export const adapters = [{
-  id: 'temporary-messages', name: '临时消息', package: 'dsh-temporary-messages',
-  services: ['temporaryMessages', 'temporaryMessageCompressors', 'temporaryMessagesUi'],
-  uiService: 'temporaryMessagesUi',
-  scopedRegistries: false,
-}, {
-  id: 'dsh-context', name: 'dsh-context', package: 'dsh-context',
-  services: [], uiService: undefined, scopedRegistries: true,
-}] as const
-
-export type Adapter = typeof adapters[number]
+export type ChangeMode = 'on' | 'off' | 'inherit'
+export interface PlannedChange { scope: Scope; id: string; name: string; mode: ChangeMode }
+export interface ChangePlan {
+  scope: Scope
+  id: string
+  mode: ChangeMode
+  changes: PlannedChange[]
+  dependencies: PlannedChange[]
+  missing: string[]
+  unverified: string[]
+  signature: string
+}
 
 /** package.json 中由插件作者声明；未声明的层级保持未验证。 */
 export interface TieredPluginMetadata {

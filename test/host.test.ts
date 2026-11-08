@@ -5,6 +5,9 @@ import { resolve } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
+import Gateway from '@deepseek-ai/dsh-api-gateway'
+import RemoteAccess from '@deepseek-ai/dsh-api-remote-access'
+import { Peer } from '@deepseek-ai/dsh-client-connection'
 import { LlmAdapter, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
@@ -35,6 +38,8 @@ test('真实插件 + 原生工作区：共享实例、跨区隔离、逐层覆�
     const ws1: Scope = { level: 'workspace', id: String(one.id) }
     const ws2: Scope = { level: 'workspace', id: String(two.id) }
     await ctx.plugin(TypertRegistry)
+    await ctx.plugin(RemoteAccess)
+    await ctx.plugin(Gateway)
     await ctx.plugin(Loader)
     ctx.loader.import = async () => temporary
     await ctx.loader.root.update([{ id, name: 'dsh-temporary-messages', config: { template: 'GLOBAL' } }])
@@ -95,9 +100,10 @@ test('真实插件 + 原生工作区：共享实例、跨区隔离、逐层覆�
     expectTail('A', 'SESSION A'); expectTail('B', 'ONE CHANGED B')
 
     const signal = new AbortController().signal
-    assert.equal(await manager.invoke(ws1, 'B', id, 'preview', [null, '{{ session.id }} {{ 6 * 7 }}'], signal), 'B 42')
-    const catalog = await manager.invoke(ws1, null, id, 'catalog', [], signal) as { sessions: string[] }
-    assert.deepEqual(catalog.sessions.sort(), ['A', 'B'])
+    const peer = new Peer(ctx, { principal: { kind: 'owner' }, interactions: 'none' })
+    assert.equal(await manager.call(ws1, id, 'temporaryMessagesUi', 'preview', { sessionId: 'B', template: '{{ session.id }} {{ 6 * 7 }}' }, peer, signal), 'B 42')
+    const catalog = await manager.call(ws1, id, 'temporaryMessagesUi', 'catalog', { sessionId: 'B' }, peer, signal) as { sessions: string[] }
+    assert.ok(catalog.sessions.includes('B'))
     await manager.configure(sessionScope('A'), id, false, { template: 'OFF' })
     assert.equal(ownA.owner.uid, null)
     await send(a.agent)

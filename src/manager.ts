@@ -1,4 +1,4 @@
-import { Context, resolveConfig, type Fiber, type Plugin } from '@deepseek-ai/cordis'
+import { Context, Inject, resolveConfig, type Fiber, type Plugin } from '@deepseek-ai/cordis'
 import { isVolatile } from '@deepseek-ai/cosmokit'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
@@ -11,6 +11,13 @@ import { attachRoute, installRouting, routing } from './routing.ts'
 import { clientScope, scopeKey, type MenuContext, type PluginConfig, type PluginRow, type Scope } from './shared.ts'
 import type { ChangeResult } from '@deepseek-ai/dsh-plugin-manager'
 import { ScopedServices, scopedServiceNames } from './scoped-services.ts'
+import { isolateProvidedServices } from './isolation.ts'
+import { RuntimeTree } from './runtime-tree.ts'
+import { dependencyPlan, type DependencyNode } from './dependencies.ts'
+import type { ChangeMode, ChangePlan } from './shared.ts'
+import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
+import type { PeerScope } from '@deepseek-ai/dsh-typert-protocol'
+import type {} from '@deepseek-ai/dsh-api-gateway'
 
 interface Instance { scope: Scope; owner: Fiber; plugin: Fiber }
 
@@ -21,23 +28,29 @@ export class PluginManager {
   private plugins = new Map<string, InstalledPlugin>()
   private managed = new Set<string>()
   private services = new Map<string, ScopedServices>()
+  private runtime: RuntimeTree
+  private realms = new Map<string, Record<string, symbol>>()
+  private declarations = new Map<string, { provides: Set<string>; requires: Set<string> }>()
   private clientOwners: { entry: NonNullable<ReturnType<PluginManager['entry']>>; owner: Fiber; isolation: any; labels: Record<string, symbol> }[] = []
 
-  constructor(private ctx: Context, readonly store: ConfigStore) {}
+  constructor(private ctx: Context, readonly store: ConfigStore) { this.runtime = new RuntimeTree(ctx) }
 
   private async refresh(): Promise<void> {
     this.plugins = new Map((await installedPlugins(this.ctx)).map(item => [item.id, item]))
+    const packages = new Map<string, string[]>()
+    for (const item of this.plugins.values()) packages.set(item.package, [...packages.get(item.package) ?? [], item.id])
+    for (const [name, ids] of packages) this.store.migrate(name, ids)
   }
 
   private adapter(id: string): InstalledPlugin {
-    const plugin = this.plugins.get(id)
+    const plugin = this.plugins.get(id) ?? [...this.plugins.values()].find(item => item.package === id && item.parentId === item.id)
     if (!plugin) throw new Error(`未安装的插件：${id}`)
     return plugin
   }
 
   private entries(id: string) {
     const rows = this.adapter(id).bundle.rows
-    return [...this.ctx.loader.entries()].filter(entry => rows.some(row =>
+    return [...this.ctx.loader.entries()].filter(entry => entry.parent.tree !== this.runtime && rows.some(row =>
       row.entryId === entry.id || (row.rowId === entry.options.id && row.moduleName === entry.options.name)))
   }
 
@@ -48,9 +61,157 @@ export class PluginManager {
   private async definition(id: string): Promise<Plugin> {
     const entry = this.entry(id)
     const rows = this.adapter(id).bundle.rows
-    if (rows.length !== 1) throw new Error('此插件包不是单入口插件，当前还不能创建独立实例')
     const namespace = entry?.moduleNamespace ?? await (entry?.parent.tree ?? this.ctx.loader).import(rows[0]!.moduleName)
     return this.ctx.loader.unwrapExports(namespace)
+  }
+
+  private targets(id: string) {
+    const group = [...this.plugins.values()].filter(item => item.parentId === id || item.package === id)
+    return group.length ? group : [this.adapter(id)]
+  }
+
+  private async dependencyNodes(scope: Scope): Promise<DependencyNode[]> {
+    const result: DependencyNode[] = []
+    for (const item of this.plugins.values()) {
+      const plugin = await this.definition(item.id) as Plugin.Object
+      const declared = this.declarations.get(item.id) ?? { provides: new Set<string>(), requires: new Set<string>() }
+      for (const name of [plugin.provide ?? []].flat()) declared.provides.add(name)
+      for (const name of Object.keys(Inject.resolve(plugin.inject))) declared.requires.add(name)
+      for (const name of Object.keys(Inject.resolve(item.options.inject))) declared.requires.add(name)
+      const entry = this.entry(item.id)
+      for (const runtime of this.ctx.registry.values()) for (const fiber of runtime.fibers) {
+        if (!entry || fiber.ctx.fiber.entry !== entry) continue
+        for (const provision of fiber.provisions) if (provision.isolate === this.ctx.root[Context.isolate][provision.name]) declared.provides.add(provision.name)
+        // An unserved ctx.inject callback may be an optional integration (for example, GUI settings).
+        if (fiber.state === 2) for (const name of Object.keys(fiber.inject)) declared.requires.add(name)
+      }
+      this.declarations.set(item.id, declared)
+      const source = this.source(scope, item.id)
+      result.push({ id: item.id, name: item.options.id, provides: [...declared.provides],
+        requires: [...declared.requires].filter(name => !declared.provides.has(name)),
+        enabled: source.level === 'client' ? this.clientEnabled(item.id) : this.store.get(source, item.id)!.enabled })
+    }
+    if (scope.level !== 'client') return result
+    const provided = new Set(result.flatMap(node => node.provides))
+    const known = new Set([...this.plugins.values()].flatMap(item => this.entries(item.id)))
+    // Native components can depend on third-party services too (for example, agent presets).
+    for (const entry of this.ctx.loader.entries()) {
+      if (known.has(entry) || entry.parent.tree === this.runtime) continue
+      const required = Object.keys({ ...Inject.resolve(entry.options.inject), ...entry.fiber?.inject }).filter(name => provided.has(name))
+      if (required.length) result.push({ id: `@entry:${entry.id}`, name: entry.options.id, requires: required, provides: [], enabled: !entry.disabled })
+    }
+    return result
+  }
+
+  async plan(scope: Scope, id: string, mode: ChangeMode): Promise<ChangePlan> {
+    await this.refresh()
+    if (mode === 'inherit' && scope.level === 'client') throw new Error('客户端没有上级配置')
+    const targets = this.targets(id).map(item => item.id)
+    const nodes = await this.dependencyNodes(scope)
+    const provided = new Set(nodes.flatMap(node => node.provides))
+    const host = new Set(Object.keys(this.ctx.reflect.props).filter(name => this.ctx.reflect.props[name]!.type === 'service' && !provided.has(name) && this.ctx.get(name) !== undefined))
+    const changes: ChangePlan['changes'] = []
+    const missing: string[] = []
+    const on = targets.filter(target => mode === 'on' || mode === 'inherit' && (() => {
+      const parent = this.chain(scope).slice(1).find(candidate => this.store.get(candidate, target)) ?? clientScope
+      return parent.level === 'client' ? this.clientEnabled(target) : this.store.get(parent, target)!.enabled
+    })())
+    for (const [selection, enabled] of [[on, true], [targets.filter(target => !on.includes(target)), false]] as const) {
+      if (!selection.length) continue
+      const plan = dependencyPlan(nodes, selection, enabled, host)
+      missing.push(...plan.missing)
+      for (const target of [...plan.enable, ...plan.disable]) changes.push({ scope, id: target,
+        name: nodes.find(node => node.id === target)!.name, mode: targets.includes(target) ? mode : enabled ? 'on' : 'off' })
+    }
+    const after = (view: Scope, id: string) => {
+      for (const candidate of this.chain(view)) {
+        const change = changes.find(item => item.id === id && scopeKey(item.scope) === scopeKey(candidate))
+        if (change?.mode === 'inherit') continue
+        if (change) return change.mode === 'on'
+        if (candidate.level === 'client') return this.clientEnabled(id)
+        const saved = this.store.get(candidate, id)
+        if (saved) return saved.enabled
+      }
+      return false
+    }
+    const children = new Map<string, Scope>()
+    for (const child of [
+      ...this.store.scopes(),
+      ...this.ctx.workspaceRegistry.list().map(workspace => ({ level: 'workspace' as const, id: String(workspace.id) })),
+      ...this.ctx.agents.list().map(agent => ({ level: 'session' as const, id: String(agent.id) })),
+    ]) if (scopeKey(child) !== scopeKey(scope) && this.chain(child).some(parent => scopeKey(parent) === scopeKey(scope))) children.set(scopeKey(child), child)
+    // A session may keep an explicit consumer while inheriting its provider from a workspace.
+    for (const child of [...children.values()].sort((a, b) => Number(a.level === 'session') - Number(b.level === 'session'))) {
+      const childNodes = await this.dependencyNodes(child)
+      const removed = childNodes.filter(node => node.enabled && !after(child, node.id)).map(node => node.id)
+      if (removed.length) {
+        const plan = dependencyPlan(childNodes, removed, false, host)
+        for (const target of plan.disable) if (after(child, target)) changes.push({ scope: child, id: target,
+          name: childNodes.find(node => node.id === target)!.name, mode: 'off' })
+      }
+      const added = childNodes.filter(node => !node.enabled && after(child, node.id)).map(node => node.id)
+      if (added.length) {
+        const plan = dependencyPlan(childNodes.map(node => ({ ...node, enabled: after(child, node.id) })), added, true, host)
+        missing.push(...plan.missing)
+        for (const target of plan.enable) if (!after(child, target)) changes.push({ scope: child, id: target,
+          name: childNodes.find(node => node.id === target)!.name, mode: 'on' })
+      }
+    }
+    const dependencies = changes.filter(change => scopeKey(change.scope) !== scopeKey(scope) || !targets.includes(change.id))
+    const unverified = changes.filter(change => change.mode === 'on' && change.scope.level !== 'client'
+      && !change.id.startsWith('@entry:') && !this.adapter(change.id).verifiedScopes.includes(change.scope.level)
+      && !this.store.get(change.scope, change.id)?.enabled).map(change => change.name)
+    const signature = JSON.stringify([changes, missing, unverified, nodes.map(node => [node.id, node.enabled])])
+    return { scope, id, mode, changes, dependencies, missing, unverified, signature }
+  }
+
+  async change(scope: Scope, id: string, mode: ChangeMode, signature: string): Promise<void> {
+    const plan = await this.plan(scope, id, mode)
+    if (plan.signature !== signature) throw new Error('依赖状态已变化，请重新确认')
+    if (plan.missing.length) throw new Error(`依赖不可用：${plan.missing.join('、')}`)
+    // The UI confirms the whole list before the first write.
+    const key = (change: { scope: Scope; id: string }) => `${scopeKey(change.scope)}/${change.id}`
+    const previous = new Map(plan.changes.map(change => [key(change), this.store.get(change.scope, change.id)]))
+    const rows = new Map<string, PluginRow>()
+    for (const change of plan.changes) {
+      if (change.id.startsWith('@entry:')) continue
+      const row = (await this.rows(change.scope)).flatMap(row => row.components ?? [row]).find(row => row.id === change.id)!
+      rows.set(key(change), row)
+    }
+    const applied: typeof plan.changes = []
+    try {
+      // Deeper consumers close before their inherited providers; providers enable before consumers.
+      const ordered = [...plan.changes].sort((a, b) => a.mode === 'off' && b.mode === 'off'
+        ? this.chain(b.scope).length - this.chain(a.scope).length : 0)
+      for (const change of ordered) {
+        if (change.id.startsWith('@entry:')) {
+          if (change.scope.level !== 'client') throw new Error(`原生组件 ${change.name} 只能在客户端级更改`)
+          this.checkChange(await this.ctx.pluginManager.setPluginEnabled(change.id.slice('@entry:'.length) as never, change.mode === 'on'))
+          applied.push(change)
+          continue
+        }
+        if (change.mode === 'inherit') await this.inherit(change.scope, change.id, true)
+        else await this.configure(change.scope, change.id, change.mode === 'on', rows.get(key(change))!.config, true, true)
+        applied.push(change)
+      }
+    } catch (error) {
+      for (const change of applied.reverse()) {
+        if (change.id.startsWith('@entry:')) {
+          this.checkChange(await this.ctx.pluginManager.setPluginEnabled(change.id.slice('@entry:'.length) as never, change.mode !== 'on'))
+          continue
+        }
+        if (change.scope.level === 'client') {
+          const row = rows.get(key(change))!
+          await this.configure(change.scope, change.id, row.enabled, row.config, true)
+        } else {
+          const saved = previous.get(key(change))
+          if (saved) this.store.set(change.scope, change.id, saved)
+          else this.store.remove(change.scope, change.id)
+        }
+      }
+      await this.sync()
+      throw error
+    }
   }
 
   private async normalize(id: string, config: PluginConfig): Promise<PluginConfig> {
@@ -96,26 +257,44 @@ export class PluginManager {
 
   async rows(scope: Scope): Promise<PluginRow[]> {
     await this.refresh()
-    return Promise.all([...this.plugins.values()].map(async adapter => {
+    const components = await Promise.all([...this.plugins.values()].map(async adapter => {
       const entry = this.entry(adapter.id)
       const source = this.source(scope, adapter.id)
       const saved = source.level === 'client'
         ? { enabled: this.clientEnabled(adapter.id), config: entry?.options.config ?? {} }
         : this.store.get(source, adapter.id)!
       return {
-        id: adapter.id, name: adapter.package, package: adapter.package, description: adapter.description, ...saved,
-        config: adapter.uiService || adapter.scopedRegistries ? await this.normalize(adapter.id, saved.config) : saved.config,
+        id: adapter.id, name: adapter.parentId === adapter.id ? adapter.package : adapter.options.id, package: adapter.package, description: adapter.description, ...saved,
+        config: await this.normalize(adapter.id, saved.config),
+        configNamespace: adapter.options.id,
+        routes: this.services.get(adapter.id)?.paths() ?? [],
         managed: this.managed.has(adapter.id),
         verified: adapter.verifiedScopes.includes(scope.level),
-        settings: adapter.uiService ? 'temporary-messages' : adapter.scopedRegistries ? 'registered' : 'native',
+        settings: 'registered' as const,
         own: scope.level === 'client' || !!this.store.get(scope, adapter.id), source,
         active: saved.enabled && (source.level === 'client' ? this.entries(adapter.id).some(entry => entry.fiber?.state === 2) : this.instance(source, adapter.id)?.plugin.state === 2),
       }
     }))
+    const result: PluginRow[] = []
+    for (const row of components) {
+      const parent = this.adapter(row.id).parentId
+      if (parent === row.id) { result.push(row); continue }
+      let group = result.find(item => item.id === parent)
+      if (!group) { group = { ...row, id: parent, name: row.package, components: [] }; result.push(group) }
+      group.components!.push(row)
+    }
+    for (const group of result) if (group.components) {
+      group.enabled = group.components.every(row => row.enabled)
+      group.active = group.components.every(row => row.active)
+      group.own = group.components.some(row => row.own)
+      group.managed = group.components.some(row => row.managed)
+      group.partial = group.components.some(row => row.enabled) && !group.enabled
+    }
+    return result
   }
 
   private markEntry(entry: NonNullable<ReturnType<PluginManager['entry']>>): void {
-    if (this.stopped) return
+    if (this.stopped || entry.parent?.tree === this.runtime) return
     const mounted = this.clientOwners.find(item => item.entry === entry)
     if (mounted) Object.assign(entry.ctx[Context.isolate], mounted.labels)
     const adapter = [...this.plugins.values()].find(item => this.managed.has(item.id) && item.bundle.rows.some(row => row.moduleName === entry.options.name))
@@ -126,7 +305,7 @@ export class PluginManager {
     if (this.managed.has(id)) return
     this.managed.add(id)
     const adapter = this.adapter(id)
-    if (adapter.scopedRegistries) this.services.set(id, new ScopedServices(this.ctx))
+    this.services.set(id, new ScopedServices(this.ctx))
     for (const entry of this.entries(id)) {
       this.markEntry(entry)
       const broker = this.services.get(id)
@@ -163,9 +342,22 @@ export class PluginManager {
     if (result.error) throw new Error(result.error.diagnostic ?? result.error.code)
   }
 
-  async configure(scope: Scope, id: string, enabled: boolean, config: PluginConfig, confirmed = false): Promise<void> {
+  async configure(scope: Scope, id: string, enabled: boolean, config: PluginConfig, confirmed = false, applyingPlan = false): Promise<void> {
     await this.refresh()
+    const targets = this.targets(id)
+    if (targets.length > 1) {
+      const plan = await this.plan(scope, id, enabled ? 'on' : 'off')
+      if (plan.dependencies.length || plan.missing.length) throw new Error('需要处理依赖，请通过菜单确认完整的启停列表')
+      for (const change of plan.changes) await this.configure(scope, change.id, enabled, config, confirmed)
+      return
+    }
+    id = this.adapter(id).id
     const adapter = this.adapter(id)
+    if (!applyingPlan) {
+      const plan = await this.plan(scope, id, enabled ? 'on' : 'off')
+      if (plan.missing.length) throw new Error(`缺少依赖，无法启用：${plan.missing.join('、')}`)
+      if (plan.dependencies.length) throw new Error(`需要先${enabled ? '启用' : '关闭'}依赖组件：${plan.dependencies.map(change => change.name).join('、')}；请通过菜单确认`)
+    }
     if (scope.level === 'client') {
       if (!adapter.bundle.enabled) {
         if (!enabled) return
@@ -173,13 +365,13 @@ export class PluginManager {
         await this.refresh()
       }
       for (const entry of this.entries(id)) {
-        const normalized = enabled && (adapter.uiService || adapter.scopedRegistries)
+        const normalized = enabled
           ? await this.normalize(id, config) : undefined
         this.checkChange(await this.ctx.pluginManager.setPluginEnabled(entry.id as never, enabled))
         // 原生客户端实例由 DSH 管理；只有已复用的配置表会从这里保存配置。
-        if (normalized) {
+        if (normalized && JSON.stringify(normalized) !== JSON.stringify(await this.normalize(id, entry.options.config ?? {}))) {
           // 开关会重新读取 profile；配置也走持久化编辑，不能只改当前内存入口。
-          await this.ctx.configEditor.edit(this.entries(id).find(current => current.id === entry.id)!, () => normalized)
+          await this.ctx.configEditor.edit(this.entries(id).find(current => current.id === entry.id)!, () => config)
         }
       }
       await this.services.get(id)?.refresh()
@@ -195,9 +387,9 @@ export class PluginManager {
     }
     const normalized = await this.normalize(id, config)
     await this.manage(id)
-    this.store.set(scope, id, { enabled, config: normalized })
+    this.store.set(scope, id, { enabled, config })
     try {
-      if (enabled) await this.instance(scope, id)?.plugin.update(normalized)
+      if (enabled) await this.instance(scope, id)?.plugin.update(config)
       await this.sync()
       await this.services.get(id)?.refresh()
     } catch (error) {
@@ -217,8 +409,14 @@ export class PluginManager {
     }
   }
 
-  async inherit(scope: Scope, id: string): Promise<void> {
+  async inherit(scope: Scope, id: string, applyingPlan = false): Promise<void> {
     if (scope.level === 'client') throw new Error('客户端没有上级配置')
+    if (!applyingPlan) {
+      const plan = await this.plan(scope, id, 'inherit')
+      if (plan.missing.length || plan.dependencies.length) throw new Error('继承会改变组件依赖，请通过菜单确认完整的启停列表')
+    }
+    const targets = this.targets(id)
+    if (targets.length > 1) { for (const target of targets) await this.inherit(scope, target.id, applyingPlan); return }
     this.store.remove(scope, id)
     await this.sync()
     await this.services.get(id)?.refresh()
@@ -249,16 +447,23 @@ export class PluginManager {
       await instance.owner.dispose()
       if (!instances.size) this.instances.delete(key)
     }
+    for (const broker of this.services.values()) await broker.refreshCommands()
   }
 
   private async mount(scope: Scope, adapter: InstalledPlugin, config: PluginConfig): Promise<void> {
-    let isolated = this.ctx
-    for (const service of [...adapter.services, ...(adapter.scopedRegistries ? scopedServiceNames : ['settings']), 'typert']) isolated = isolated.isolate(service)
+    const key = scopeKey(scope)
+    const workspaceId = scope.level === 'session' ? this.context(scope.id).workspaceId : null
+    const parentLabels = workspaceId ? this.realms.get(scopeKey({ level: 'workspace', id: workspaceId })) ?? this.ctx[Context.isolate] : this.ctx[Context.isolate]
+    let labels = this.realms.get(key)
+    if (!labels) { labels = Object.create(parentLabels); this.realms.set(key, labels!) }
+    else Object.setPrototypeOf(labels, parentLabels)
+    let isolated = isolateProvidedServices(this.ctx, labels!)
+    for (const service of [...scopedServiceNames, 'settings', 'typert']) isolated = isolated.isolate(service)
     const route = { accepts: (sessionId: string) => this.accepts(scope, adapter.id, sessionId) }
     isolated = isolated.extend({ [routing]: route })
-    const owner = await isolated.plugin((ctx: Context) => {
-      // 原插件的 UI 服务留在本实例，由统一远程接口转发。
-      ctx.provide('typert', { register: () => () => {} })
+    const owner = await isolated.plugin(async (ctx: Context) => {
+      ctx.provide('settings', { configure: () => () => {} })
+      await ctx.plugin(TypertRegistry)
     })
     await this.services.get(adapter.id)?.mount(owner.ctx, { scope, accepts: route.accepts,
       configKey: () => JSON.stringify(this.store.get(scope, adapter.id)?.config ?? {}) })
@@ -271,7 +476,11 @@ export class PluginManager {
     })
     let plugin: Fiber
     try {
-      plugin = await owner.ctx.plugin(await this.definition(adapter.id), config)
+      const original = this.entry(adapter.id)
+      const tree = original?.parent.tree ?? this.ctx.loader
+      const entry = await this.runtime.mount(owner.ctx, encodeURIComponent(`${scopeKey(scope)}/${adapter.id}`),
+        { ...adapter.options, config }, name => tree.import(name))
+      plugin = entry.fiber!
       const error = (await Promise.all(failures)).find(Boolean)
       if (error) throw error
     } catch (error) {
@@ -290,19 +499,14 @@ export class PluginManager {
     for (const instance of instances?.values() ?? []) await instance.owner.dispose()
   }
 
-  async invoke(scope: Scope, sessionId: string | null, id: string, method: 'catalog' | 'preview', args: unknown[], signal: AbortSignal): Promise<unknown> {
+  async call(scope: Scope, id: string, namespace: string, method: string, args: PluginConfig, peer: PeerScope, signal: AbortSignal) {
+    id = this.adapter(id).id
     const source = this.source(scope, id)
     const context = source.level === 'client' ? this.entry(id)?.fiber?.ctx : this.instance(source, id)?.plugin.ctx
-    if (!context) throw new Error('请先启用插件；会话级还需要打开对应会话')
-    const service = context.get(this.adapter(id).uiService!) as {
-      catalog(sessionId: string | null, signal: AbortSignal): Promise<Record<string, unknown>>
-      preview(sessionId: string | null, template: string, signal: AbortSignal): Promise<string>
-    }
-    const sessions = this.ctx.agents.list().filter(agent => this.chain({ level: 'session', id: String(agent.id) })
-      .some(candidate => scopeKey(candidate) === scopeKey(scope))).map(agent => String(agent.id))
-    const selected = sessionId && sessions.includes(sessionId) ? sessionId : sessions[0] ?? null
-    if (method === 'catalog') return { ...await service.catalog(selected, signal), sessions }
-    return service.preview(selected, String(args[1]), signal)
+    if (!context) throw new Error('此作用域没有运行中的插件实例')
+    // Use the normal DSH descriptor, argument checks, peer and cancellation, in the selected context.
+    const gateway = context.get('typertGateway') as Context['typertGateway']
+    return gateway.invoke({ namespace, method, args, peer, signal })
   }
 
   async dispose(): Promise<void> {

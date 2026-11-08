@@ -9,6 +9,8 @@ import { captureSettings } from '../src/client/capture.ts'
 import { sessionForm } from '../src/client/form.ts'
 import { LevelSettings, MenuDialog } from '../src/client/menu.tsx'
 import type { MenuRemote } from '../src/remote-contract.ts'
+import { withChangePlans } from './menu-api.ts'
+import { ContextClient, RegisteredSettings } from '../src/client/context-client.tsx'
 import { clientScope, scopeKey, type PluginRow, type Scope } from '../src/shared.ts'
 
 function originalClient(): Plugin {
@@ -22,18 +24,20 @@ function originalClient(): Plugin {
 test('复用原设置页：工作区/会话独立入口分别保存，取消覆盖，设置页选择工作区', { timeout: 10000 }, async () => {
   const ctx = new Context()
   let tree: ReactTestRenderer | undefined
+  let controller: ContextClient | undefined
   try {
     const captured = await captureSettings(ctx, originalClient(), 'temporaryMessagesUi')
     const opened: string[] = []
-    const ui = { Artwork: () => createElement('svg'), openDetails: (name: string) => { opened.push(name) } }
+    const ui = { Artwork: () => createElement('svg'), openDetails: (name: string) => { opened.push(name) },
+      Settings: ({ row, scope }: { row: PluginRow; scope: Scope }) => createElement(RegisteredSettings, { controller: controller!, row, scope }) }
     const base: PluginRow = { id: 'temporary-messages', name: '临时消息', source: clientScope, own: true, active: true, enabled: true,
-      verified: false, settings: 'temporary-messages',
+      verified: false, settings: 'registered',
       package: 'dsh-temporary-messages', description: '临时上下文消息',
       config: { enabled: true, template: 'BASE', defaultTtlTokens: 0, defaultK: false, compressor: 'identity' } }
     const saved = new Map<string, PluginRow>()
     const workspace: Scope = { level: 'workspace', id: 'one' }
     const session: Scope = { level: 'session', id: 'A' }
-    const api: MenuRemote = {
+    const api = withChangePlans({
       context: async () => ({ ok: true, value: { workspaceId: 'one', workspaces: [{ id: 'one', title: '工作区一', path: '/one' }] } }),
       list: async scope => ({ ok: true, value: [{ ...structuredClone(saved.get(scopeKey(scope)) ??
         (scope.level === 'session' ? saved.get(scopeKey(workspace)) : undefined) ?? base), own: scope.level === 'client' || saved.has(scopeKey(scope)) }] }),
@@ -42,10 +46,11 @@ test('复用原设置页：工作区/会话独立入口分别保存，取消覆�
         saved.set(scopeKey(scope), { ...base, source: scope, own: true, enabled, config })
         return { ok: true, value: undefined }
       },
-      invoke: async (_scope, sessionId, _id, method) => ({ ok: true, value: method === 'preview' ? `PREVIEW ${sessionId}` : {
-        sessions: ['A'], tools: [], compressors: [{ id: 'identity', name: '保留原文', description: '原插件目录' }],
-      } }),
-    }
+    })
+    api.call = async (_scope, _id, _namespace, method, args) => ({ ok: true, value: method === 'preview' ? `PREVIEW ${args.sessionId}` : {
+      sessions: ['A'], tools: [], compressors: [{ id: 'identity', name: '保留原文', description: '原插件目录' }],
+    } })
+    controller = new ContextClient(ctx, api, originalClient(), base.id, base.package)
     await act(async () => { tree = create(createElement(MenuDialog, {
       api, Page: captured.Page, ui, target: { scope: { level: 'session', id: 'A' } }, onClose() {},
     })) })
@@ -67,6 +72,7 @@ test('复用原设置页：工作区/会话独立入口分别保存，取消覆�
     assert.equal(tree!.root.findAllByProps({ id: 'temporary-template' }).length, 0)
     await act(async () => { button('设置').props.onClick() })
     assert.equal(tree!.root.findByProps({ id: 'temporary-template' }).props.value, 'SESSION A')
+    await act(async () => { tree!.root.findByProps({ id: 'temporary-session' }).props.onChange({ target: { value: 'A' } }) })
     await act(async () => { await button('运行预览').props.onClick() })
     assert.ok(tree!.root.findAllByType('pre').some(node => node.children.includes('PREVIEW A')))
     await act(async () => { tree!.root.findByProps({ id: 'temporary-compressor-tab' }).props.onClick() })
@@ -87,6 +93,8 @@ test('复用原设置页：工作区/会话独立入口分别保存，取消覆�
     assert.equal(tree!.root.findByProps({ 'data-mode': 'inherit' }).props['aria-pressed'], true)
     assert.deepEqual(opened, [], '切换模式、展开设置均不进入详情页')
     await act(async () => { tree!.root.findByProps({ 'aria-label': '查看临时消息详情' }).props.onClick() })
+    assert.deepEqual(opened, [], '先打开本层组件详情')
+    await act(async () => { button('查看原生插件详情').props.onClick() })
     assert.deepEqual(opened, ['dsh-temporary-messages'])
     await act(async () => { tree!.update(createElement(LevelSettings, { api, Page: captured.Page, ui, close() {} })) })
     assert.equal(tree!.root.findByProps({ 'data-mode': 'inherit' }).props.disabled, true)
@@ -95,7 +103,7 @@ test('复用原设置页：工作区/会话独立入口分别保存，取消覆�
     await act(async () => { button('设置').props.onClick() })
     assert.equal(tree!.root.findByProps({ id: 'temporary-template' }).props.value, 'WORKSPACE ONE')
     await captured.dispose()
-  } finally { await act(async () => { tree?.unmount() }); await ctx.fiber.dispose() }
+  } finally { await act(async () => { tree?.unmount() }); await controller?.dispose(); await ctx.fiber.dispose() }
 })
 
 test('两份配置表修改互不影响', async () => {
@@ -111,7 +119,7 @@ test('分组和二次确认：取消无写入，确认才启用，客户端不�
   const saved = new Set<string>()
   const ui = { Artwork: () => createElement('svg'), openDetails() {} }
   const packages = ['temporary', 'declared', 'context']
-  const api: MenuRemote = {
+  const api = withChangePlans({
     context: async () => ({ ok: true, value: { workspaces: [], workspaceId: null } }),
     list: async scope => ({ ok: true, value: packages.map(id => ({
       id, name: id, package: id, description: id, source: scope, config: {}, active: false,
@@ -125,8 +133,7 @@ test('分组和二次确认：取消无写入，确认才启用，客户端不�
       return { ok: true, value: undefined }
     },
     inherit: async () => ({ ok: true, value: undefined }),
-    invoke: async () => ({ ok: true, value: undefined }),
-  }
+  })
   let tree: ReactTestRenderer | undefined
   const open = async (scope: Scope) => act(async () => {
     const element = createElement(MenuDialog, { api, Page: () => null, ui, target: { scope }, onClose() {} })

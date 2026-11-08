@@ -6,7 +6,7 @@ import z from '@deepseek-ai/schemastery'
 import { PluginManager } from './manager.ts'
 import { ConfigStore } from './store.ts'
 import { remoteContribution } from './remote-contract.ts'
-import type { Scope, PluginConfig } from './shared.ts'
+import type { Scope, PluginConfig, ChangeMode } from './shared.ts'
 
 export { PluginManager } from './manager.ts'
 export const inject = ['agents', 'loader', 'typert', 'workspaceRegistry', 'pluginManager', 'profileContext', 'configEditor']
@@ -19,13 +19,14 @@ class MenuService extends TypertRemoteService {
   constructor(ctx: Context) { super(ctx, 'tieredPluginMenu') }
   context(sessionId: string | null) { return this.ctx.tieredPlugins.context(sessionId) }
   list(scope: Scope) { return this.ctx.tieredPlugins.rows(scope) }
+  plan(scope: Scope, id: string, mode: ChangeMode) { return this.ctx.tieredPlugins.plan(scope, id, mode) }
+  change(scope: Scope, id: string, mode: ChangeMode, signature: string) { return this.ctx.tieredPlugins.change(scope, id, mode, signature) }
+  call(scope: Scope, id: string, namespace: string, method: string, args: PluginConfig, signal: AbortSignal) {
+    return this.ctx.tieredPlugins.call(scope, id, namespace, method, args, this.ctx.invocation!.peer, signal)
+  }
   inherit(scope: Scope, id: string) { return this.ctx.tieredPlugins.inherit(scope, id) }
   async configure(scope: Scope, id: string, enabled: boolean, config: PluginConfig, confirmed = false) {
     await this.ctx.tieredPlugins.configure(scope, id, enabled, config, confirmed)
-  }
-  invoke(scope: Scope, sessionId: string | null, id: string, method: 'catalog' | 'preview', args: unknown[], signal: AbortSignal) {
-    if (method !== 'catalog' && method !== 'preview') throw new Error('未知设置页方法')
-    return this.ctx.tieredPlugins.invoke(scope, sessionId, id, method, args, signal)
   }
 }
 

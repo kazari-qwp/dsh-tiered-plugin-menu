@@ -19,12 +19,21 @@ export function sessionForm(initial: PluginConfig, save: (value: PluginConfig) =
       for (const listener of listeners) listener()
     },
     async mutate(ops) {
-      const value = { ...snapshot.value }
+      let value = structuredClone(snapshot.value!)
       for (const op of ops) {
-        if (op.path.length !== 1) throw new Error('骨架版仅适配顶层配置字段')
-        const field = String(op.path[0])
-        if (op.op === 'set') value[field] = op.value
-        else delete value[field]
+        if (!op.path.length) { value = op.op === 'set' ? op.value as PluginConfig : {}; continue }
+        let parent: any = value
+        for (let index = 0; index < op.path.length - 1; index++) {
+          const field = op.path[index]!
+          if (!Object.hasOwn(parent, field)) Object.defineProperty(parent, field, {
+            value: /^\d+$/.test(op.path[index + 1]!) ? [] : {}, writable: true, enumerable: true, configurable: true,
+          })
+          parent = parent[field]
+        }
+        const field = op.path.at(-1)!
+        if (op.op === 'set') Object.defineProperty(parent, field, { value: op.value, writable: true, enumerable: true, configurable: true })
+        else if (Array.isArray(parent)) parent.splice(Number(field), 1)
+        else delete parent[field]
       }
       await save(value)
       snapshot = { ...snapshot, value, user: value, revision: snapshot.revision! + 1 }

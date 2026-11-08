@@ -5,16 +5,36 @@ import type { Session } from '@deepseek-ai/dsh-session'
 import type { ConnectionFetchRoute } from '@deepseek-ai/dsh-client-connection'
 import { z } from 'zod'
 import { scopeKey, type Scope } from './shared.ts'
+import type { ToolDefinition, ToolRegistrationOptions } from '@deepseek-ai/dsh-tools'
 
 interface Owner { scope: Scope; accepts(sessionId: string): boolean; configKey(): string }
 interface Contribution<T> { owner: Owner; value: T }
 type Definition = ProjectionDefinition<any, any>
 interface ProjectionState { sessionId: string; owner: string | null; config: string; value: any }
 
+/** Unchanged operations keep the native implementation; only registrations are routed. */
+function forwardService(facade: object, root: Context, name: string) {
+  const native = root.get(name) as any
+  for (let object = native; object && object !== Object.prototype; object = Object.getPrototypeOf(object)) {
+    for (const key of Object.getOwnPropertyNames(object)) {
+      if (key in facade) continue
+      Object.defineProperty(facade, key, { configurable: true, get() {
+        const value = native[key]
+        return typeof value === 'function' ? value.bind(native) : value
+      } })
+    }
+  }
+}
+
 /** 同名注册只进入宿主一次；各实例仍拥有自己的回调、配置和释放函数。 */
 export class ScopedServices {
   private prompts = new Map<string, { entries: Contribution<PromptSection | PromptContext>[]; dispose(): void }>()
   private routes = new Map<string, { entries: Contribution<ConnectionFetchRoute>[]; dispose(): void }>()
+  private tools = new Map<string, { entries: Contribution<{ definition: ToolDefinition; options?: ToolRegistrationOptions }>[]; dispose(): void }>()
+  private web = new Map<string, { entries: Contribution<any>[]; dispose(): void }>()
+  private titles: Contribution<any>[] = []
+  private removeTitle?: () => void
+  private commands = new Map<string, { entries: Contribution<any>[]; mounted: Map<string, Fiber> }>()
   private projections = new Map<string, {
     entries: Contribution<Definition>[]; handle?: ProjectionHandle<ProjectionState>; pending: Promise<void>
   }>()
@@ -23,6 +43,117 @@ export class ScopedServices {
 
   private pick<T>(entries: Contribution<T>[], sessionId?: string) {
     return entries.find(entry => sessionId ? entry.owner.accepts(sessionId) : entry.owner.scope.level === 'client')
+  }
+
+  paths() { return [...this.routes.keys(), ...[...this.web.values()].map(group => group.entries[0]!.value.path)] }
+
+  tool(ctx: Context, owner: Owner, definition: ToolDefinition, options?: ToolRegistrationOptions) {
+    return ctx.effect(() => {
+      let group = this.tools.get(definition.name)
+      if (!group) {
+        const entries: Contribution<{ definition: ToolDefinition; options?: ToolRegistrationOptions }>[] = []
+        const dispose = (this.root.get('tools') as Context['tools']).register({ ...definition,
+          execute: (args, exec) => {
+            const selected = this.pick(entries, exec.agent?.id)
+            if (!selected) throw new Error('此会话未启用该工具')
+            return selected.value.definition.execute(args, exec)
+          },
+        }, { when: async request => {
+          const selected = this.pick(entries, request.agent.id)
+          return !!selected && (await selected.value.options?.when?.(request) ?? true)
+        } })
+        group = { entries, dispose }; this.tools.set(definition.name, group)
+      }
+      const entry = { owner, value: { definition, options } }; group.entries.push(entry)
+      return () => {
+        group.entries.splice(group.entries.indexOf(entry), 1)
+        if (!group.entries.length) { group.dispose(); this.tools.delete(definition.name) }
+      }
+    })
+  }
+
+  webRoute(ctx: Context, owner: Owner, method: 'register' | 'registerUpgrade', value: any) {
+    return ctx.effect(() => {
+      const key = `${method}/${value.kind}/${value.path}`
+      let group = this.web.get(key)
+      if (!group) {
+        const entries: Contribution<any>[] = []
+        const pick = (request: any) => {
+          const scope = request.headers instanceof Headers ? request.headers.get('x-dsh-tiered-scope') : request.headers['x-dsh-tiered-scope']
+          return scope ? entries.find(entry => scopeKey(entry.owner.scope) === scope) : this.pick(entries)
+        }
+        const route = { ...value,
+          ...(value.resource ? { resource: (request: Request, peer: unknown) => pick(request)?.value.resource(request, peer) ?? new Response('Plugin disabled', { status: 404 }) }
+            : { handler: (request: any, response: any, ...args: any[]) => {
+              const selected = pick(request)
+              if (selected) return selected.value.handler(request, response, ...args)
+              if ('writeHead' in response) response.writeHead(404)
+              response.end()
+            } }),
+        }
+        const dispose = (this.root.get('webServer') as any)[method](route)
+        group = { entries, dispose }; this.web.set(key, group)
+      }
+      const entry = { owner, value }; group.entries.push(entry)
+      return () => {
+        group.entries.splice(group.entries.indexOf(entry), 1)
+        if (!group.entries.length) { group.dispose(); this.web.delete(key) }
+      }
+    })
+  }
+
+  title(ctx: Context, owner: Owner, value: any) {
+    return ctx.effect(() => {
+      const entry = { owner, value }; this.titles.push(entry)
+      this.removeTitle ??= (this.root.get('sessionTitle') as any).register({ ...value,
+        generate: (request: any) => {
+          const selected = this.pick(this.titles, request.session.id)
+          if (!selected) throw new Error('此会话未启用标题插件')
+          return selected.value.generate(request)
+        },
+      })
+      return () => {
+        this.titles.splice(this.titles.indexOf(entry), 1)
+        if (!this.titles.length) { this.removeTitle!(); this.removeTitle = undefined }
+      }
+    })
+  }
+
+  command(ctx: Context, owner: Owner, value: any) {
+    return ctx.effect(() => {
+      const group = this.commands.get(value.name) ?? { entries: [] as Contribution<any>[], mounted: new Map<string, Fiber>() }
+      this.commands.set(value.name, group)
+      const entry = { owner, value }; group.entries.push(entry)
+      const ready = this.refreshCommands()
+      return async () => {
+        await ready
+        group.entries.splice(group.entries.indexOf(entry), 1)
+        await this.refreshCommands()
+        if (!group.entries.length) this.commands.delete(value.name)
+      }
+    })
+  }
+
+  async refreshCommands() {
+    for (const [name, group] of this.commands) {
+      const agents = (this.root.get('agents') as Context['agents']).list()
+      for (const [id, fiber] of group.mounted) if (!agents.some(agent => agent.id === id) || !this.pick(group.entries, id)) {
+        group.mounted.delete(id); await fiber.dispose()
+      }
+      for (const agent of agents) {
+        const selected = this.pick(group.entries, agent.id)
+        if (!selected || group.mounted.has(agent.id)) continue
+        const fiber = agent.ctx.inject(['commands'], child => {
+          const commands = child.get('commands') as any
+          commands.register({ ...selected.value, handler: (request: any) => {
+            const current = this.pick(group.entries, request.agent.id)
+            return current ? current.value.handler(request) : { kind: 'error', message: '此会话未启用该命令' }
+          } })
+        })
+        group.mounted.set(agent.id, fiber)
+        await fiber
+      }
+    }
   }
 
   prompt(ctx: Context, owner: Owner, kind: 'section' | 'context', value: PromptSection | PromptContext) {
@@ -57,8 +188,8 @@ export class ScopedServices {
           const body = request.headers.get('content-type')?.includes('json')
             ? await request.clone().json().catch(() => null) : null
           const sessionId = typeof body?.sessionId === 'string' ? body.sessionId : undefined
-          const selected = this.pick(entries, sessionId)
-            ?? (!sessionId ? entries[0] : undefined)
+          const scope = request.headers.get('x-dsh-tiered-scope')
+          const selected = scope ? entries.find(entry => scopeKey(entry.owner.scope) === scope) : this.pick(entries, sessionId)
           if (!selected) return Response.json({ ok: false, error: { code: 'plugin-disabled', message: '此会话未启用插件' } }, { status: 404 })
           return selected.value.fetch(request)
         } })
@@ -144,6 +275,7 @@ export class ScopedServices {
 
   async refresh(): Promise<void> {
     await Promise.all([...this.projections.keys()].map(key => this.refreshProjection(key)))
+    await this.refreshCommands()
   }
 
   stateOf(session: Session, key: string) { return this.projections.get(key)?.handle?.stateOf(session).value }
@@ -154,6 +286,8 @@ export class ScopedServices {
     return ctx.plugin((child: Context) => {
       for (const [name, Factory] of [
         ['systemPrompt', PromptFacade], ['sessionProjections', ProjectionFacade], ['connection', ConnectionFacade],
+        ['tools', ToolsFacade], ['webServer', WebFacade], ['sessionTitle', TitleFacade],
+        ['commands', CommandsFacade],
       ] as const) {
         child.effect(() => broker.root.inject([name], async () => {
           const fiber = await child.plugin((serviceCtx: Context) => { new Factory(serviceCtx, broker, owner, broker.root) })
@@ -162,6 +296,34 @@ export class ScopedServices {
       }
     })
   }
+}
+
+class ToolsFacade extends Service {
+  constructor(ctx: Context, private broker: ScopedServices, private owner: Owner, private root: Context) { super(ctx, 'tools'); forwardService(this, root, 'tools') }
+  register(value: ToolDefinition, options?: ToolRegistrationOptions) { return this.broker.tool(this.ctx, this.owner, value, options) }
+  get(name: string, scope?: any) { return (this.root.get('tools') as Context['tools']).get(name, scope) }
+  definitions(scope?: any) { return (this.root.get('tools') as Context['tools']).definitions(scope) }
+  schemas(scope?: any) { return (this.root.get('tools') as Context['tools']).schemas(scope) }
+}
+
+class CommandsFacade extends Service {
+  constructor(ctx: Context, private broker: ScopedServices, private owner: Owner, root: Context) { super(ctx, 'commands'); forwardService(this, root, 'commands') }
+  register(value: any) { return this.broker.command(this.ctx, this.owner, value) }
+}
+
+class WebFacade extends Service {
+  constructor(ctx: Context, private broker: ScopedServices, private owner: Owner, private root: Context) { super(ctx, 'webServer'); forwardService(this, root, 'webServer') }
+  register(value: any) { return this.broker.webRoute(this.ctx, this.owner, 'register', value) }
+  registerUpgrade(value: any) { return this.broker.webRoute(this.ctx, this.owner, 'registerUpgrade', value) }
+  get server() { return (this.root.get('webServer') as any).server }
+}
+
+class TitleFacade extends Service {
+  constructor(ctx: Context, private broker: ScopedServices, private owner: Owner, private root: Context) { super(ctx, 'sessionTitle'); forwardService(this, root, 'sessionTitle') }
+  register(value: any) { return this.broker.title(this.ctx, this.owner, value) }
+  read(...args: any[]) { return (this.root.get('sessionTitle') as any).read(...args) }
+  rename(...args: any[]) { return (this.root.get('sessionTitle') as any).rename(...args) }
+  generate(...args: any[]) { return (this.root.get('sessionTitle') as any).generate(...args) }
 }
 
 class PromptFacade extends Service {
@@ -185,4 +347,4 @@ class ConnectionFacade extends Service {
   get rpc() { return (this.root.get('connection') as Context['connection']).rpc }
 }
 
-export const scopedServiceNames = ['systemPrompt', 'sessionProjections', 'connection'] as const
+export const scopedServiceNames = ['systemPrompt', 'sessionProjections', 'connection', 'tools', 'webServer', 'sessionTitle', 'commands'] as const

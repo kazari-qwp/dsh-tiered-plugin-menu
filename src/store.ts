@@ -17,6 +17,23 @@ export class ConfigStore {
     return Object.entries(this.data).some(([key, configs]) => key !== 'client:' && !!configs[id])
   }
 
+  scopes(): Scope[] {
+    return Object.keys(this.data).map(key => ({ level: key.slice(0, key.indexOf(':')) as Scope['level'], id: key.slice(key.indexOf(':') + 1) }))
+  }
+
+  migrate(packageName: string, componentIds: string[]): void {
+    if (componentIds.includes(packageName)) return
+    let changed = false
+    for (const configs of Object.values(this.data)) {
+      const previous = configs[packageName]
+      if (!previous) continue
+      for (const id of componentIds) configs[id] ??= previous
+      delete configs[packageName]
+      changed = true
+    }
+    if (changed) this.save()
+  }
+
   set(scope: Scope, id: string, config: SavedConfig): void {
     const configs = this.data[scopeKey(scope)] ??= {}
     configs[id] = config

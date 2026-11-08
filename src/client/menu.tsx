@@ -1,8 +1,7 @@
-import { Fragment, useEffect, useId, useMemo, useState, type ComponentType } from 'react'
+import { Fragment, useEffect, useId, useState, type ComponentType } from 'react'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { MenuRemote } from '../remote-contract.ts'
-import { clientScope, scopeKey, type MenuContext, type PluginRow, type Scope } from '../shared.ts'
-import { sessionForm } from './form.ts'
+import { clientScope, scopeKey, type MenuContext, type PluginRow, type Scope, type ChangePlan, type ChangeMode } from '../shared.ts'
 
 export const labels = { client: '客户端', workspace: '工作区', session: '会话' }
 function value<T>(result: RemoteResult<T>): T {
@@ -19,26 +18,11 @@ export interface MenuUi {
 type MenuProps = { api: MenuRemote; Page: PageType; ui: MenuUi }
 const modes = [{ value: 'inherit', label: '继承' }, { value: 'on', label: '启用' }, { value: 'off', label: '关闭' }] as const
 
-function PluginSettings({ api, row, scope, sessionId, Page, onSaved }: {
-  api: MenuRemote; row: PluginRow; scope: Scope; sessionId: string | null; Page: PageType; onSaved(): Promise<void>
-}) {
-  const form = useMemo(() => sessionForm(row.config, async config => {
-    value(await api.configure(scope, row.id, true, config, false))
-    await onSaved()
-  }), [api, scopeKey(scope), row.id])
-  const originalApi = useMemo(() => ({
-    catalog: (id: string | null) => api.invoke(scope, id ?? sessionId, row.id, 'catalog', [id]),
-    preview: (id: string | null, template: string) => api.invoke(scope, id ?? sessionId, row.id, 'preview', [id, template]),
-  }), [api, scopeKey(scope), sessionId, row.id])
-  return <><p className="tiered-hint">修改{labels[scope.level]}配置{scope.level === 'workspace' ? '，同工作区内继承它的会话共同使用' : ''}。</p><Page form={form} api={originalApi} /></>
-}
-
-function NativeSettings({ api, row, scope, ui, onSaved }: {
+export function NativeSettings({ api, row, scope, ui, onSaved }: {
   api: MenuRemote; row: PluginRow; scope: Scope; ui: MenuUi; onSaved(): Promise<void>
 }) {
   const [text, setText] = useState(() => JSON.stringify(row.config, null, 2))
   const [notice, setNotice] = useState('')
-  if (scope.level === 'client') return <button type="button" className="tiered-action" onClick={() => ui.openDetails(row.package)}>打开插件原生设置</button>
   const save = async () => {
     try {
       value(await api.configure(scope, row.id, true, JSON.parse(text), false))
@@ -55,8 +39,8 @@ function NativeSettings({ api, row, scope, ui, onSaved }: {
   </>
 }
 
-function ConfirmEnable({ row, scope, onCancel, onConfirm }: {
-  row: PluginRow; scope: Scope; onCancel(): void; onConfirm(): void
+function ConfirmEnable({ plan, onCancel, onConfirm }: {
+  plan: ChangePlan; onCancel(): void; onConfirm(): void
 }) {
   const id = useId()
   return <div className="tiered-confirm-backdrop" onKeyDown={event => {
@@ -71,11 +55,15 @@ function ConfirmEnable({ row, scope, onCancel, onConfirm }: {
     }
   }}>
     <section className="tiered-confirm" role="alertdialog" aria-modal="true" aria-labelledby={`${id}-title`} aria-describedby={`${id}-body`}>
-      <h3 id={`${id}-title`}>启用未验证插件？</h3>
-      <p id={`${id}-body`}>{row.name} 尚未声明支持{labels[scope.level]}级隔离。尝试启用可能发生配置串用、重复注册或运行错误。</p>
+      <h3 id={`${id}-title`}>{plan.dependencies.length ? plan.dependencies.some(item => item.mode === 'on') ? '需要启用依赖组件' : '需要先关闭依赖它的组件' : '启用未验证插件？'}</h3>
+      <div id={`${id}-body`}>
+        {plan.dependencies.length > 0 && <><p>{plan.dependencies.some(item => item.mode === 'on') ? '继续启用需要同时启用：' : '仍有以下组件依赖它，必须先关闭：'}</p>
+          <ul>{plan.dependencies.map(item => <li key={`${scopeKey(item.scope)}/${item.id}`}>{item.name}（{labels[item.scope.level]}）</li>)}</ul></>}
+        {plan.unverified.length > 0 && <p>{plan.unverified.join('、')} 尚未声明支持{labels[plan.scope.level]}级隔离。尝试启用可能发生配置串用、重复注册或运行错误。</p>}
+      </div>
       <div className="tiered-confirm-actions">
         <button type="button" className="tiered-action" autoFocus onClick={onCancel}>取消</button>
-        <button type="button" className="tiered-action tiered-confirm-enable" onClick={onConfirm}>仍然启用</button>
+        <button type="button" className="tiered-action tiered-confirm-enable" onClick={onConfirm}>{plan.dependencies.length ? plan.dependencies.some(item => item.mode === 'on') ? '自动启用' : '自动关闭' : '仍然启用'}</button>
       </div>
     </section>
   </div>
@@ -86,27 +74,43 @@ export function ScopePanel({ api, scope, sessionId = null, Page, ui }: MenuProps
   const [rows, setRows] = useState<PluginRow[]>([])
   const [selected, setSelected] = useState<string | null>(null)
   const [notice, setNotice] = useState('')
-  const [pending, setPending] = useState<PluginRow | null>(null)
+  const [pending, setPending] = useState<ChangePlan | null>(null)
+  const [details, setDetails] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
   const refresh = async () => { setRows(value(await api.list(scope))); ui.changed?.() }
   useEffect(() => { void refresh().catch(error => setNotice(String(error))) }, [api, scopeKey(scope)])
-  const configure = async (item: PluginRow, mode: string, confirmed = false) => {
+  const execute = async (plan: ChangePlan) => {
+    setBusy(true)
     try {
-      if (mode === 'inherit') value(await api.inherit(scope, item.id))
-      else value(await api.configure(scope, item.id, mode === 'on', item.config, confirmed))
+      value(await api.change(plan.scope, plan.id, plan.mode, plan.signature))
       await refresh()
       setNotice('已保存')
-    } catch (error) { setNotice(String(error)) }
+    } catch (error) { setNotice(String(error)) } finally { setBusy(false) }
   }
-  const groups = scope.level === 'client' ? [{ id: 'all', rows }] : [
-    { id: 'verified', rows: rows.filter(item => item.verified) },
-    { id: 'unverified', rows: rows.filter(item => !item.verified) },
+  const configure = async (item: PluginRow, mode: ChangeMode) => {
+    setBusy(true)
+    try {
+      const plan = value(await api.plan(scope, item.id, mode))
+      if (plan.missing.length) { setNotice(`依赖不可用：${plan.missing.join('、')}`); return }
+      if (plan.dependencies.length || plan.unverified.length) setPending(plan)
+      else await execute(plan)
+    } catch (error) { setNotice(String(error)) } finally { setBusy(false) }
+  }
+  const packageRow = rows.find(row => row.id === details)
+  const shown = packageRow ? packageRow.components ?? [packageRow] : rows
+  const groups = scope.level === 'client' ? [{ id: 'all', rows: shown }] : [
+    { id: 'verified', rows: shown.filter(item => item.verified) },
+    { id: 'unverified', rows: shown.filter(item => !item.verified) },
   ]
   return <>
+    {packageRow && <div className="tiered-detail-heading"><button type="button" className="tiered-action" onClick={() => { setDetails(null); setSelected(null) }}>‹ 插件</button>
+      <h3>{packageRow.name}</h3><p className="tiered-hint">包含的组件 · {shown.length} 个</p>
+      <button type="button" className="tiered-action" onClick={() => ui.openDetails(packageRow.package)}>查看原生插件详情</button></div>}
     {groups.filter(group => group.rows.length).map(group => <Fragment key={group.id}>
     {group.id === 'unverified' && <div className="tiered-divider" role="separator"><span>未验证兼容性</span></div>}
     <ul className="tiered-plugin-list">
       {group.rows.map(item => {
-        const mode = !item.own ? 'inherit' : item.enabled ? 'on' : 'off'
+        const mode = item.partial ? 'partial' : !item.own ? 'inherit' : item.enabled ? 'on' : 'off'
         const expanded = selected === item.id && item.own && item.enabled
         const settingsId = `${panelId}-${item.id}-settings`
         const descriptionId = `${panelId}-${item.id}-description`
@@ -117,29 +121,26 @@ export function ScopePanel({ api, scope, sessionId = null, Page, ui }: MenuProps
             <span className="tiered-artwork" aria-hidden="true"><ui.Artwork size={36} /></span>
             <div className="tiered-card-main">
               <button type="button" className="tiered-card-open" aria-label={`查看${item.name}详情`} aria-describedby={descriptionId}
-                onClick={() => ui.openDetails(item.package)}>{item.name}</button>
-              <span className="tiered-card-description" id={descriptionId}>{item.description}</span>
+                onClick={() => { if (!packageRow) { setDetails(item.id); setSelected(null) } }}>{item.name}</button>
+              <span className="tiered-card-description" id={descriptionId}>{item.partial ? '部分启用 · ' : ''}{item.description}</span>
             </div>
             <div className="tiered-controls">
               <div className="tiered-mode" role="group" aria-label={`${item.name}配置方式`}>
                 {modes.map(option => <button type="button" key={option.value} data-mode={option.value}
-                  aria-pressed={mode === option.value} disabled={scope.level === 'client' && option.value === 'inherit'}
+                  aria-pressed={mode === option.value} disabled={busy || scope.level === 'client' && option.value === 'inherit'}
                   title={option.value === 'inherit' ? inheritHint : undefined}
                   onClick={() => {
                     if (mode === option.value) return
-                    if (option.value === 'on' && scope.level !== 'client' && !item.verified) setPending(item)
-                    else void configure(item, option.value)
+                    void configure(item, option.value)
                   }}>{option.label}</button>)}
               </div>
-              <button type="button" className="tiered-expand" disabled={!item.own || !item.enabled}
+              <button type="button" className="tiered-expand" disabled={!item.components && (!item.own || !item.enabled)}
                 aria-expanded={expanded} aria-controls={settingsId}
-                onClick={() => setSelected(expanded ? null : item.id)}>设置<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7" /></svg></button>
+                onClick={() => item.components ? setDetails(item.id) : setSelected(expanded ? null : item.id)}>设置<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7" /></svg></button>
             </div>
           </div>
           {expanded && <div id={settingsId} className="tiered-inline-settings">
-            {item.settings === 'temporary-messages'
-              ? <PluginSettings api={api} row={item} scope={scope} sessionId={sessionId} Page={Page} onSaved={refresh} />
-              : item.settings === 'registered' && ui.Settings ? <ui.Settings row={item} scope={scope} />
+            {item.settings === 'registered' && ui.Settings ? <ui.Settings row={item} scope={scope} />
               : <NativeSettings api={api} row={item} scope={scope} ui={ui} onSaved={refresh} />}
           </div>}
         </li>
@@ -147,8 +148,8 @@ export function ScopePanel({ api, scope, sessionId = null, Page, ui }: MenuProps
     </ul>
     </Fragment>)}
     {notice && <p className="tiered-notice" role="status">{notice}</p>}
-    {pending && <ConfirmEnable row={pending} scope={scope} onCancel={() => setPending(null)}
-      onConfirm={() => { setPending(null); void configure(pending, 'on', true) }} />}
+    {pending && <ConfirmEnable plan={pending} onCancel={() => setPending(null)}
+      onConfirm={() => { setPending(null); void execute(pending) }} />}
   </>
 }
 
