@@ -1,9 +1,11 @@
 import type { RemoteResult, TypertCodec, TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
-import type { MenuContext, Scope, PluginConfig, PluginRow, ChangeMode, ChangePlan } from './shared.ts'
+import type { ChildSettings, MenuContext, Scope, PluginConfig, PluginRow, ChangeMode, ChangePlan } from './shared.ts'
 
 export interface MenuRemote {
   context(sessionId: string | null): Promise<RemoteResult<MenuContext>>
   list(scope: Scope): Promise<RemoteResult<PluginRow[]>>
+  childSettings(scope: Scope): Promise<RemoteResult<ChildSettings>>
+  setChildSettings(scope: Scope, independent: boolean): Promise<RemoteResult<void>>
   plan(scope: Scope, id: string, mode: ChangeMode): Promise<RemoteResult<ChangePlan>>
   change(scope: Scope, id: string, mode: ChangeMode, signature: string): Promise<RemoteResult<void>>
   call(scope: Scope, id: string, namespace: string, method: string, args: PluginConfig): Promise<RemoteResult<unknown>>
@@ -19,6 +21,7 @@ const codec = (kind: string): TypertCodec => ({ mode: 'strict', typeSymbol: kind
   parse(value: unknown) {
     const valid = kind === 'session' ? value === null || typeof value === 'string'
       : kind === 'scope' ? !!value && typeof value === 'object' && ['client', 'workspace', 'session'].includes((value as Scope).level) && typeof (value as Scope).id === 'string'
+        && ((value as Scope).children === undefined || typeof (value as Scope).children === 'boolean')
       : kind === 'config' ? value !== null && typeof value === 'object' && !Array.isArray(value)
         : kind === 'args' ? Array.isArray(value) : typeof value === kind
     if (!valid) throw new TypeError(`参数应为 ${kind}`)
@@ -31,6 +34,8 @@ export const remoteContribution: TypertRemoteContribution = {
   descriptors: [
     ['context', [['sessionId', 'session']]],
     ['list', [['scope', 'scope']]],
+    ['childSettings', [['scope', 'scope']]],
+    ['setChildSettings', [['scope', 'scope'], ['independent', 'boolean']]],
     ['plan', [['scope', 'scope'], ['id', 'string'], ['mode', 'string']]],
     ['change', [['scope', 'scope'], ['id', 'string'], ['mode', 'string'], ['signature', 'string']]],
     ['call', [['scope', 'scope'], ['id', 'string'], ['namespace', 'string'], ['method', 'string'], ['args', 'config']]],

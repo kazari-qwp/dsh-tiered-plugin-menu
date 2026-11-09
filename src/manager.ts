@@ -3,12 +3,13 @@ import { isVolatile } from '@deepseek-ai/cosmokit'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
 import type {} from '@deepseek-ai/dsh-agent'
+import type { Agent, SessionStartSource } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-workspace'
 import type {} from '@deepseek-ai/dsh-config-editor'
 import { ConfigStore } from './store.ts'
 import { installedPlugins, type InstalledPlugin } from './catalog.ts'
 import { attachRoute, installRouting, routing } from './routing.ts'
-import { clientScope, scopeKey, type MenuContext, type PluginConfig, type PluginRow, type Scope } from './shared.ts'
+import { childScope, clientScope, isClientScope, ownScope, scopeKey, type ChildSettings, type MenuContext, type PluginConfig, type PluginRow, type Scope } from './shared.ts'
 import type { ChangeResult } from '@deepseek-ai/dsh-plugin-manager'
 import { ScopedServices, scopedServiceNames } from './scoped-services.ts'
 import { isolateProvidedServices } from './isolation.ts'
@@ -89,9 +90,9 @@ export class PluginManager {
       const source = this.source(scope, item.id)
       result.push({ id: item.id, name: item.options.id, provides: [...declared.provides],
         requires: [...declared.requires].filter(name => !declared.provides.has(name)),
-        enabled: source.level === 'client' ? this.clientEnabled(item.id) : this.store.get(source, item.id)!.enabled })
+        enabled: isClientScope(source) ? this.clientEnabled(item.id) : this.store.get(source, item.id)!.enabled })
     }
-    if (scope.level !== 'client') return result
+    if (!isClientScope(scope)) return result
     const provided = new Set(result.flatMap(node => node.provides))
     const known = new Set([...this.plugins.values()].flatMap(item => this.entries(item.id)))
     // Native components can depend on third-party services too (for example, agent presets).
@@ -105,7 +106,7 @@ export class PluginManager {
 
   async plan(scope: Scope, id: string, mode: ChangeMode): Promise<ChangePlan> {
     await this.refresh()
-    if (mode === 'inherit' && scope.level === 'client') throw new Error('客户端没有上级配置')
+    if (mode === 'inherit' && isClientScope(scope)) throw new Error('客户端没有上级配置')
     const targets = this.targets(id).map(item => item.id)
     const nodes = await this.dependencyNodes(scope)
     const provided = new Set(nodes.flatMap(node => node.provides))
@@ -114,7 +115,7 @@ export class PluginManager {
     const missing: string[] = []
     const on = targets.filter(target => mode === 'on' || mode === 'inherit' && (() => {
       const parent = this.chain(scope).slice(1).find(candidate => this.store.get(candidate, target)) ?? clientScope
-      return parent.level === 'client' ? this.clientEnabled(target) : this.store.get(parent, target)!.enabled
+      return isClientScope(parent) ? this.clientEnabled(target) : this.store.get(parent, target)!.enabled
     })())
     for (const [selection, enabled] of [[on, true], [targets.filter(target => !on.includes(target)), false]] as const) {
       if (!selection.length) continue
@@ -128,7 +129,7 @@ export class PluginManager {
         const change = changes.find(item => item.id === id && scopeKey(item.scope) === scopeKey(candidate))
         if (change?.mode === 'inherit') continue
         if (change) return change.mode === 'on'
-        if (candidate.level === 'client') return this.clientEnabled(id)
+        if (isClientScope(candidate)) return this.clientEnabled(id)
         const saved = this.store.get(candidate, id)
         if (saved) return saved.enabled
       }
@@ -139,7 +140,7 @@ export class PluginManager {
       ...this.store.scopes(),
       ...this.ctx.workspaceRegistry.list().map(workspace => ({ level: 'workspace' as const, id: String(workspace.id) })),
       ...this.ctx.agents.list().map(agent => ({ level: 'session' as const, id: String(agent.id) })),
-    ]) if (scopeKey(child) !== scopeKey(scope) && this.chain(child).some(parent => scopeKey(parent) === scopeKey(scope))) children.set(scopeKey(child), child)
+    ]) if (!scope.children && scopeKey(child) !== scopeKey(scope) && this.chain(child).some(parent => scopeKey(parent) === scopeKey(scope))) children.set(scopeKey(child), child)
     // A session may keep an explicit consumer while inheriting its provider from a workspace.
     for (const child of [...children.values()].sort((a, b) => Number(a.level === 'session') - Number(b.level === 'session'))) {
       const childNodes = await this.dependencyNodes(child)
@@ -158,8 +159,8 @@ export class PluginManager {
       }
     }
     const dependencies = changes.filter(change => scopeKey(change.scope) !== scopeKey(scope) || !targets.includes(change.id))
-    const unverified = changes.filter(change => change.mode === 'on' && change.scope.level !== 'client'
-      && !change.id.startsWith('@entry:') && !this.adapter(change.id).verifiedScopes.includes(change.scope.level)
+    const unverified = changes.filter(change => change.mode === 'on' && !isClientScope(change.scope)
+      && !change.id.startsWith('@entry:') && !this.adapter(change.id).supportsChildInstances
       && !this.store.get(change.scope, change.id)?.enabled).map(change => change.name)
     const signature = JSON.stringify([changes, missing, unverified, nodes.map(node => [node.id, node.enabled])])
     return { scope, id, mode, changes, dependencies, missing, unverified, signature }
@@ -200,7 +201,7 @@ export class PluginManager {
           this.checkChange(await this.ctx.pluginManager.setPluginEnabled(change.id.slice('@entry:'.length) as never, change.mode !== 'on'))
           continue
         }
-        if (change.scope.level === 'client') {
+        if (isClientScope(change.scope)) {
           const row = rows.get(key(change))!
           await this.configure(change.scope, change.id, row.enabled, row.config, true)
         } else {
@@ -224,15 +225,60 @@ export class PluginManager {
     const workspace = sessionId ? workspaces.find(w => w.sessionIds.includes(SessionId(sessionId))) : undefined
     return {
       workspaces: workspaces.map(({ id, title, path }) => ({ id: String(id), title, path })),
-      workspaceId: workspace ? String(workspace.id) : null,
+      workspaceId: workspace ? String(workspace.id) : sessionId ? this.sessionParents(sessionId).find(scope => scope.level === 'workspace')?.id ?? null : null,
     }
   }
 
+  private sessionParents(sessionId: string): Scope[] {
+    const parent = this.store.parent({ level: 'session', id: sessionId })
+    if (!parent) return []
+    return [parent, ...(parent.level === 'session' ? this.sessionParents(parent.id) : [])]
+  }
+
   private chain(scope: Scope): Scope[] {
+    if (scope.children) {
+      const policy = this.childSettings(ownScope(scope)).source
+      return [scope, ...(policy && scopeKey(policy) !== scopeKey(ownScope(scope)) ? [childScope(policy)] : []), ...this.chain(ownScope(scope))]
+    }
     if (scope.level === 'client') return [clientScope]
     if (scope.level === 'workspace') return [scope, clientScope]
     const workspaceId = this.context(scope.id).workspaceId
-    return [scope, ...(workspaceId ? [{ level: 'workspace' as const, id: workspaceId }] : []), clientScope]
+    return [scope, ...this.sessionParents(scope.id).filter(parent => parent.level === 'session'),
+      ...(workspaceId ? [{ level: 'workspace' as const, id: workspaceId }] : []), clientScope]
+  }
+
+  childSettings(scope: Scope): ChildSettings {
+    scope = ownScope(scope)
+    const candidates = [scope, ...(scope.level === 'session' ? this.sessionParents(scope.id).filter(parent => parent.level === 'session') : [])]
+    return { independent: this.store.children(scope).independent,
+      source: candidates.find(candidate => this.store.children(candidate).independent) ?? null }
+  }
+
+  setChildSettings(scope: Scope, independent: boolean): void { this.store.setChildren(scope, independent) }
+
+  private async initialize(scope: Scope, parent: Scope): Promise<void> {
+    const policy = this.childSettings(parent).source
+    this.store.initialize(scope, parent, policy ? this.store.children(policy).plugins : {})
+    for (const plugin of this.plugins.values()) if (this.store.get(scope, plugin.id)) await this.manage(plugin.id)
+  }
+
+  private async agentParent(agent: Agent): Promise<Scope> {
+    const owner = this.ctx.agents.list().find(parent => this.ctx.agents.isOwnedBy(agent.id, parent))
+    const header = agent.session.header
+    const parentId = owner?.id ?? (header.origin === 'subagent' ? header.parentSession : undefined)
+    if (parentId) return { level: 'session', id: String(parentId) }
+    const workspaceId = this.context(String(agent.id)).workspaceId
+    if (workspaceId) return { level: 'workspace', id: workspaceId }
+    const workspace = header.cwd ? await this.ctx.workspaceRegistry.resolveByPath(header.cwd) : undefined
+    return workspace ? { level: 'workspace', id: String(workspace.id) } : clientScope
+  }
+
+  async agentCreated(agent: Agent, source: SessionStartSource): Promise<void> {
+    const scope: Scope = { level: 'session', id: String(agent.id) }
+    const parent = await this.agentParent(agent)
+    if (source === 'startup') await this.initialize(scope, parent)
+    else this.store.remember(scope, parent)
+    await this.sync()
   }
 
   private source(scope: Scope, id: string): Scope {
@@ -260,7 +306,7 @@ export class PluginManager {
     const components = await Promise.all([...this.plugins.values()].map(async adapter => {
       const entry = this.entry(adapter.id)
       const source = this.source(scope, adapter.id)
-      const saved = source.level === 'client'
+      const saved = isClientScope(source)
         ? { enabled: this.clientEnabled(adapter.id), config: entry?.options.config ?? {} }
         : this.store.get(source, adapter.id)!
       return {
@@ -269,10 +315,10 @@ export class PluginManager {
         configNamespace: adapter.options.id,
         routes: this.services.get(adapter.id)?.paths() ?? [],
         managed: this.managed.has(adapter.id),
-        verified: adapter.verifiedScopes.includes(scope.level),
+        verified: adapter.supportsChildInstances,
         settings: 'registered' as const,
-        own: scope.level === 'client' || !!this.store.get(scope, adapter.id), source,
-        active: saved.enabled && (source.level === 'client' ? this.entries(adapter.id).some(entry => entry.fiber?.state === 2) : this.instance(source, adapter.id)?.plugin.state === 2),
+        own: isClientScope(scope) || !!this.store.get(scope, adapter.id), source,
+        active: !scope.children && saved.enabled && (isClientScope(source) ? this.entries(adapter.id).some(entry => entry.fiber?.state === 2) : this.instance(source, adapter.id)?.plugin.state === 2),
       }
     }))
     const result: PluginRow[] = []
@@ -332,6 +378,19 @@ export class PluginManager {
 
   async start(): Promise<void> {
     await this.refresh()
+    const registry = this.ctx.workspaceRegistry
+    for (const workspace of registry.list()) this.store.remember({ level: 'workspace', id: String(workspace.id) }, clientScope)
+    for (const agent of this.ctx.agents.list()) this.store.remember({ level: 'session', id: String(agent.id) }, await this.agentParent(agent))
+    // 工作区没有创建事件；包装公开创建方法，在返回新工作区前写入默认值。
+    const created = async (workspace: Awaited<ReturnType<typeof registry.create>> | undefined) => {
+      if (workspace) { await this.initialize({ level: 'workspace', id: String(workspace.id) }, clientScope); await this.sync() }
+      return workspace
+    }
+    const create = registry.create
+    const initializeDefault = registry.initializeDefault
+    registry.create = async (...args) => (await created(await create.apply(registry, args)))!
+    registry.initializeDefault = async (...args) => created(await initializeDefault.apply(registry, args))
+    this.ctx.effect(() => () => { registry.create = create; registry.initializeDefault = initializeDefault })
     installRouting(this.ctx)
     this.ctx.on('loader/patch-context', async (entry, next) => { this.markEntry(entry); await next() })
     for (const adapter of this.plugins.values()) if (this.store.hasScoped(adapter.id)) await this.manage(adapter.id)
@@ -358,7 +417,7 @@ export class PluginManager {
       if (plan.missing.length) throw new Error(`缺少依赖，无法启用：${plan.missing.join('、')}`)
       if (plan.dependencies.length) throw new Error(`需要先${enabled ? '启用' : '关闭'}依赖组件：${plan.dependencies.map(change => change.name).join('、')}；请通过菜单确认`)
     }
-    if (scope.level === 'client') {
+    if (isClientScope(scope)) {
       if (!adapter.bundle.enabled) {
         if (!enabled) return
         this.checkChange(await this.ctx.pluginManager.setBundleEnabled(adapter.package, true))
@@ -378,14 +437,19 @@ export class PluginManager {
       return
     }
     const previous = this.store.get(scope, id)
-    if (enabled && !previous?.enabled && !adapter.verifiedScopes.includes(scope.level) && !confirmed) {
+    if (enabled && !previous?.enabled && !adapter.supportsChildInstances && !confirmed) {
       throw new Error('该插件尚未验证此层级的兼容性，请确认后再启用')
     }
     const definition = await this.definition(id)
     if ((definition as Plugin.Object).apply === this.ctx.fiber.runtime?.callback) {
       throw new Error('分级菜单不能在自身管理的作用域内再次加载自己')
     }
-    const normalized = await this.normalize(id, config)
+    await this.normalize(id, config)
+    if (scope.children) {
+      if (!this.store.children(scope).independent) throw new Error('请先切换为独立下级设置')
+      this.store.set(scope, id, { enabled, config })
+      return
+    }
     await this.manage(id)
     this.store.set(scope, id, { enabled, config })
     try {
@@ -410,7 +474,7 @@ export class PluginManager {
   }
 
   async inherit(scope: Scope, id: string, applyingPlan = false): Promise<void> {
-    if (scope.level === 'client') throw new Error('客户端没有上级配置')
+    if (isClientScope(scope)) throw new Error('客户端没有上级配置')
     if (!applyingPlan) {
       const plan = await this.plan(scope, id, 'inherit')
       if (plan.missing.length || plan.dependencies.length) throw new Error('继承会改变组件依赖，请通过菜单确认完整的启停列表')
@@ -418,6 +482,7 @@ export class PluginManager {
     const targets = this.targets(id)
     if (targets.length > 1) { for (const target of targets) await this.inherit(scope, target.id, applyingPlan); return }
     this.store.remove(scope, id)
+    if (scope.children) return
     await this.sync()
     await this.services.get(id)?.refresh()
   }
@@ -452,8 +517,7 @@ export class PluginManager {
 
   private async mount(scope: Scope, adapter: InstalledPlugin, config: PluginConfig): Promise<void> {
     const key = scopeKey(scope)
-    const workspaceId = scope.level === 'session' ? this.context(scope.id).workspaceId : null
-    const parentLabels = workspaceId ? this.realms.get(scopeKey({ level: 'workspace', id: workspaceId })) ?? this.ctx[Context.isolate] : this.ctx[Context.isolate]
+    const parentLabels = this.chain(scope).slice(1).map(parent => this.realms.get(scopeKey(parent))).find(Boolean) ?? this.ctx[Context.isolate]
     let labels = this.realms.get(key)
     if (!labels) { labels = Object.create(parentLabels); this.realms.set(key, labels!) }
     else Object.setPrototypeOf(labels, parentLabels)
@@ -501,6 +565,7 @@ export class PluginManager {
 
   async call(scope: Scope, id: string, namespace: string, method: string, args: PluginConfig, peer: PeerScope, signal: AbortSignal) {
     id = this.adapter(id).id
+    scope = ownScope(scope)
     const source = this.source(scope, id)
     const context = source.level === 'client' ? this.entry(id)?.fiber?.ctx : this.instance(source, id)?.plugin.ctx
     if (!context) throw new Error('此作用域没有运行中的插件实例')

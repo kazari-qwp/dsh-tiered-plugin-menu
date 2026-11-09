@@ -22,7 +22,7 @@ test('原生插件清单：禁用包仍被发现，兼容状态只取元数据�
   const custom = join(root, 'node_modules', 'declared-test-plugin')
   mkdirSync(custom, { recursive: true })
   const manifest = { name: 'declared-test-plugin', version: '1.0.0', main: 'index.js',
-    dsh: { bundle: { patch: './cordis.patch.yml' }, tieredPluginMenu: { verifiedScopes: ['workspace'] } } }
+    dsh: { bundle: { patch: './cordis.patch.yml' }, tieredPluginMenu: { supportsChildInstances: true } } }
   writeFileSync(join(custom, 'package.json'), JSON.stringify(manifest))
   writeFileSync(join(custom, 'index.js'), 'module.exports = {}')
   writeFileSync(join(custom, 'cordis.patch.yml'), '- insert:\n    - id: declared-test-plugin\n      name: declared-test-plugin\n')
@@ -44,15 +44,14 @@ test('原生插件清单：禁用包仍被发现，兼容状态只取元数据�
     const found = await installedPlugins(ctx)
     assert.deepEqual(found.map(plugin => plugin.package).sort(), packages.sort())
     for (const name of ['dsh-temporary-messages', 'dsh-context', 'dsh-tiered-plugin-menu']) {
-      assert.deepEqual(found.find(plugin => plugin.package === name)!.verifiedScopes, [])
+      assert.equal(found.find(plugin => plugin.package === name)!.supportsChildInstances, false)
     }
     assert.equal(found.find(plugin => plugin.package === 'dsh-context')!.bundle.enabled, false)
     const declared = found.find(plugin => plugin.package === manifest.name)!
-    assert.equal(declared.verifiedScopes.includes('workspace'), true)
-    assert.equal(declared.verifiedScopes.includes('session'), false)
-    manifest.dsh.tieredPluginMenu.verifiedScopes = []
+    assert.equal(declared.supportsChildInstances, true)
+    manifest.dsh.tieredPluginMenu.supportsChildInstances = false
     writeFileSync(join(custom, 'package.json'), JSON.stringify(manifest))
-    assert.deepEqual((await installedPlugins(ctx)).find(plugin => plugin.package === manifest.name)!.verifiedScopes, [])
+    assert.equal((await installedPlugins(ctx)).find(plugin => plugin.package === manifest.name)!.supportsChildInstances, false)
   } finally { await ctx.fiber.dispose() }
 })
 

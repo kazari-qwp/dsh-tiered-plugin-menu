@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useId, useState, type ComponentType } from 'react'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { MenuRemote } from '../remote-contract.ts'
-import { clientScope, scopeKey, type MenuContext, type PluginRow, type Scope, type ChangePlan, type ChangeMode } from '../shared.ts'
+import { childScope, clientScope, isClientScope, scopeKey, type ChildSettings, type MenuContext, type PluginRow, type Scope, type ChangePlan, type ChangeMode } from '../shared.ts'
 
 export const labels = { client: '客户端', workspace: '工作区', session: '会话' }
 function value<T>(result: RemoteResult<T>): T {
@@ -31,7 +31,7 @@ export function NativeSettings({ api, row, scope, ui, onSaved }: {
     } catch (error) { setNotice(String(error)) }
   }
   return <>
-    <label className="tiered-hint">本层独立配置（JSON）
+    <label className="tiered-hint">{scope.children ? '下级默认配置（JSON）' : '本层独立配置（JSON）'}
       <textarea className="tiered-config-json" aria-label="本层独立配置（JSON）" value={text} onChange={event => setText(event.target.value)} />
     </label>
     <button type="button" className="tiered-action" onClick={() => void save()}>保存设置</button>
@@ -59,7 +59,7 @@ function ConfirmEnable({ plan, onCancel, onConfirm }: {
       <div id={`${id}-body`}>
         {plan.dependencies.length > 0 && <><p>{plan.dependencies.some(item => item.mode === 'on') ? '继续启用需要同时启用：' : '仍有以下组件依赖它，必须先关闭：'}</p>
           <ul>{plan.dependencies.map(item => <li key={`${scopeKey(item.scope)}/${item.id}`}>{item.name}（{labels[item.scope.level]}）</li>)}</ul></>}
-        {plan.unverified.length > 0 && <p>{plan.unverified.join('、')} 尚未声明支持{labels[plan.scope.level]}级隔离。尝试启用可能发生配置串用、重复注册或运行错误。</p>}
+        {plan.unverified.length > 0 && <p>{plan.unverified.join('、')} 尚未声明支持下级独立实例。尝试启用可能发生配置串用、重复注册或运行错误。</p>}
       </div>
       <div className="tiered-confirm-actions">
         <button type="button" className="tiered-action" autoFocus onClick={onCancel}>取消</button>
@@ -69,7 +69,7 @@ function ConfirmEnable({ plan, onCancel, onConfirm }: {
   </div>
 }
 
-export function ScopePanel({ api, scope, sessionId = null, Page, ui }: MenuProps & { scope: Scope; sessionId?: string | null }) {
+export function ScopePanel({ api, scope, sessionId = null, Page, ui, disabled = false }: MenuProps & { scope: Scope; sessionId?: string | null; disabled?: boolean }) {
   const panelId = useId()
   const [rows, setRows] = useState<PluginRow[]>([])
   const [selected, setSelected] = useState<string | null>(null)
@@ -98,7 +98,7 @@ export function ScopePanel({ api, scope, sessionId = null, Page, ui }: MenuProps
   }
   const packageRow = rows.find(row => row.id === details)
   const shown = packageRow ? packageRow.components ?? [packageRow] : rows
-  const groups = scope.level === 'client' ? [{ id: 'all', rows: shown }] : [
+  const groups = isClientScope(scope) ? [{ id: 'all', rows: shown }] : [
     { id: 'verified', rows: shown.filter(item => item.verified) },
     { id: 'unverified', rows: shown.filter(item => !item.verified) },
   ]
@@ -114,7 +114,7 @@ export function ScopePanel({ api, scope, sessionId = null, Page, ui }: MenuProps
         const expanded = selected === item.id && item.own && item.enabled
         const settingsId = `${panelId}-${item.id}-settings`
         const descriptionId = `${panelId}-${item.id}-description`
-        const inheritHint = scope.level === 'client' ? '客户端没有上级'
+        const inheritHint = isClientScope(scope) ? '客户端没有上级'
           : item.own ? '继承上级配置' : `继承自${labels[item.source.level]}（${item.enabled ? '启用' : '关闭'}）`
         return <li className="tiered-plugin-card" key={item.id}>
           <div className="tiered-row-head">
@@ -127,14 +127,14 @@ export function ScopePanel({ api, scope, sessionId = null, Page, ui }: MenuProps
             <div className="tiered-controls">
               <div className="tiered-mode" role="group" aria-label={`${item.name}配置方式`}>
                 {modes.map(option => <button type="button" key={option.value} data-mode={option.value}
-                  aria-pressed={mode === option.value} disabled={busy || scope.level === 'client' && option.value === 'inherit'}
+                  aria-pressed={mode === option.value} disabled={disabled || busy || isClientScope(scope) && option.value === 'inherit'}
                   title={option.value === 'inherit' ? inheritHint : undefined}
                   onClick={() => {
                     if (mode === option.value) return
                     void configure(item, option.value)
                   }}>{option.label}</button>)}
               </div>
-              <button type="button" className="tiered-expand" disabled={!item.components && (!item.own || !item.enabled)}
+              <button type="button" className="tiered-expand" disabled={disabled || !item.components && (!item.own || !item.enabled)}
                 aria-expanded={expanded} aria-controls={settingsId}
                 onClick={() => item.components ? setDetails(item.id) : setSelected(expanded ? null : item.id)}>设置<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7" /></svg></button>
             </div>
@@ -150,6 +150,50 @@ export function ScopePanel({ api, scope, sessionId = null, Page, ui }: MenuProps
     {notice && <p className="tiered-notice" role="status">{notice}</p>}
     {pending && <ConfirmEnable plan={pending} onCancel={() => setPending(null)}
       onConfirm={() => { setPending(null); void execute(pending) }} />}
+  </>
+}
+
+function ChildPanel({ api, scope, Page, ui }: MenuProps & { scope: Scope }) {
+  const [settings, setSettings] = useState<ChildSettings>()
+  const [notice, setNotice] = useState('')
+  const [busy, setBusy] = useState(false)
+  const target = { client: '新工作区及无工作区的新会话', workspace: '新会话', session: '新子 agent（包括后续各级子 agent）' }[scope.level]
+  const refresh = async () => setSettings(value(await api.childSettings(scope)))
+  useEffect(() => { void refresh().catch(error => setNotice(String(error))) }, [api, scopeKey(scope)])
+  const select = async (independent: boolean) => {
+    setBusy(true)
+    try { value(await api.setChildSettings(scope, independent)); await refresh(); setNotice('已保存') }
+    catch (error) { setNotice(String(error)) } finally { setBusy(false) }
+  }
+  return <>
+    <div className="tiered-child-heading">
+      <p className="tiered-hint">{target}的默认配置，只在新建时应用。</p>
+      <div className="tiered-mode" role="group" aria-label="下级默认配置方式">
+        {([{ value: false, label: '继承' }, { value: true, label: '独立' }] as const).map(option => <button type="button" key={option.label}
+          aria-pressed={settings?.independent === option.value} disabled={!settings || busy}
+          onClick={() => { if (settings?.independent !== option.value) void select(option.value) }}>{option.label}</button>)}
+      </div>
+    </div>
+    {settings && <>
+      {!settings.independent && <p className="tiered-hint">{settings.source ? '沿用父会话的下级默认设置。' : '沿用本级的有效配置。'}切换为「独立」后可以单独设置。</p>}
+      <ScopePanel key={String(settings.independent)} api={api} scope={childScope(scope)} Page={Page} ui={ui} disabled={!settings.independent || busy} />
+    </>}
+    {notice && <p className="tiered-notice" role="status">{notice}</p>}
+  </>
+}
+
+export function ScopeTabs(props: MenuProps & { scope: Scope; sessionId?: string | null }) {
+  const [tab, setTab] = useState<'own' | 'children'>('own')
+  const id = useId()
+  return <>
+    <div className="tiered-tabs" role="tablist" aria-label="配置范围">
+      {([{ value: 'own', label: '本级' }, { value: 'children', label: '下级' }] as const).map(option => <button type="button" key={option.value}
+        role="tab" id={`${id}-${option.value}`} aria-selected={tab === option.value} aria-controls={`${id}-panel`}
+        onClick={() => setTab(option.value)}>{option.label}</button>)}
+    </div>
+    <div role="tabpanel" id={`${id}-panel`} aria-labelledby={`${id}-${tab}`}>
+      {tab === 'own' ? <ScopePanel {...props} /> : <ChildPanel {...props} />}
+    </div>
   </>
 }
 
@@ -175,7 +219,7 @@ export function LevelSettings({ api, Page, ui, close }: MenuProps & { close(): v
     {tab === 'workspace' && <label>工作区 <select aria-label="选择工作区" value={workspaceId} onChange={event => setWorkspaceId(event.target.value)}>
       {context.workspaces.map(workspace => <option key={workspace.id} value={workspace.id}>{workspace.title} — {workspace.path}</option>)}
     </select></label>}
-    {tab === 'workspace' && !workspaceId ? <p>还没有工作区。</p> : <ScopePanel key={scopeKey(scope)} api={api} scope={scope} Page={Page} ui={scopeUi} />}
+    {tab === 'workspace' && !workspaceId ? <p>还没有工作区。</p> : <ScopeTabs key={scopeKey(scope)} api={api} scope={scope} Page={Page} ui={scopeUi} />}
     {notice && <p role="status">{notice}</p>}
   </section>
 }
@@ -189,7 +233,7 @@ export function MenuDialog({ api, Page, ui, target, onClose }: MenuProps & { tar
   return <div className="tiered-menu"><style>{styles}</style>
     <div className="tiered-backdrop"><section className="tiered-panel" role="dialog" aria-modal="true" aria-label={title}>
       <div className="tiered-heading"><h2>{title}</h2><button type="button" className="tiered-close" aria-label="关闭" onClick={onClose}>关闭</button></div>
-      <ScopePanel key={scopeKey(scope)} api={api} scope={scope} sessionId={sessionId} Page={Page} ui={ui} />
+      <ScopeTabs key={scopeKey(scope)} api={api} scope={scope} sessionId={sessionId} Page={Page} ui={ui} />
     </section></div>
   </div>
 }
@@ -206,6 +250,8 @@ const styles = `
 .tiered-menu select option { color: var(--dsw-alias-label-primary, #ededee); background: var(--dsw-alias-bg-layer-2, #252527); }
 .tiered-menu .tiered-tabs { display: flex; gap: 6px; padding-bottom: 14px; margin: 0 0 14px; border-bottom: 1px solid var(--dsw-alias-border-l3, #ffffff15); }
 .tiered-menu .tiered-tabs [aria-selected="true"] { background: var(--dsw-alias-interactive-bg-active, #ffffff12); }
+.tiered-menu .tiered-child-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+.tiered-menu .tiered-child-heading .tiered-hint { margin: 0; }
 .tiered-menu .tiered-plugin-list { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
 .tiered-menu .tiered-divider { display: flex; align-items: center; gap: 12px; margin: 18px 0 10px; color: var(--dsw-alias-label-tertiary, #a4a6ad); font-size: 12px; }
 .tiered-menu .tiered-divider::before, .tiered-menu .tiered-divider::after { content: ''; height: 1px; flex: 1; background: var(--dsw-alias-border-l3, #ffffff20); }

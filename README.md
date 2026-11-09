@@ -23,7 +23,7 @@ Workspace and session buttons appear on hover, so they are hidden on the unhover
 Download the prebuilt `.tgz` from [Releases](https://github.com/kazari-qwp/dsh-tiered-plugin-menu/releases), then add it in DSH's plugin page or run:
 
 ```sh
-dsh plugin --profile desktop add ./dsh-tiered-plugin-menu-0.2.1.tgz
+dsh plugin --profile desktop add ./dsh-tiered-plugin-menu-0.3.0.tgz
 ```
 
 For Web, use your profile name (usually `web`). Restart DSH if hot reload is disabled. No companion plugin is required.
@@ -43,6 +43,20 @@ The release includes compiled host/browser code, the bundle patch and licenses. 
 
 Example: client configuration A, workspace B, session C. That session uses C, inheriting sessions in its workspace use B, and other workspaces inherit A.
 
+## Defaults for new children
+
+Every menu opens on **This level (本级)** and has a **Children (下级)** tab. Children default to **Inherit (继承)**. Select **Independent (独立)** to edit plugin switches and reuse the original configuration cards for new children.
+
+| Parent menu | Defaults apply to |
+| --- | --- |
+| Client | New workspaces, and new sessions without a workspace |
+| Workspace | New ordinary sessions |
+| Session | New subagents, recursively including their descendants |
+
+Explicit on/off entries are copied into each new child; plugins left on Inherit continue to use their parent. Editing defaults starts no preview instance and changes no existing workspace, session or subagent. Resuming sessions, restarting DSH and reopening workspaces do not reapply defaults.
+
+Subagents follow their actual parent chain to the nearest independent child policy. Without their own override, they use the parent's child defaults for later descendants. Each new instance receives its own configuration copy. An ordinary conversation fork is not classified as a subagent just because it records a parent session ID.
+
 Scope settings live in `$DSH_HOME/plugins/tiered-plugin-menu.json`; the menu's `dataFile` option overrides that location. Client settings are persisted through DSH's native profile editor. Existing package-level settings migrate to component keys.
 
 ## Dependencies
@@ -58,7 +72,7 @@ Confirmation applies to switches operated through this menu; DSH's own plugin pa
 
 ## Compatibility
 
-Current version: **0.2.1**. Tested with **DSH 0.2.2-rc.1** and Node.js 24. Package/component controls and dependency confirmation use shared DSH mechanisms, without adapters named after individual plugins or changes to DSH and third-party source code.
+Current version: **0.3.0**. Tested with **DSH 0.2.2-rc.1** and Node.js 24. Package/component controls and dependency confirmation use shared DSH mechanisms, without adapters named after individual plugins or changes to DSH and third-party source code.
 
 Installed packages are discovered automatically. Unverified packages appear below a separator at lower scopes and require confirmation. Successful startup does not mark them verified.
 
@@ -76,19 +90,19 @@ This is configuration/lifecycle isolation, **not a security sandbox**. Plugin-ow
 
 ## Compatibility declaration
 
-Plugin authors can declare verified lower scopes in their `package.json`:
+Plugin authors can declare support for independent child instances with a boolean in `package.json`:
 
 ```json
 {
   "dsh": {
     "tieredPluginMenu": {
-      "verifiedScopes": ["workspace", "session"]
+      "supportsChildInstances": true
     }
   }
 }
 ```
 
-This is this menu's convention, not official DSH certification. Missing metadata means unverified, including for our companion plugin. The menu never writes verification metadata for another package.
+`true` declares support for independent instances at workspace, session and subagent scopes. `false` or an omitted field means unverified and retains the enable confirmation. This is this menu's convention, not official DSH certification. Our companion plugin follows the same rule. The menu never writes declarations for another package.
 
 ## Development
 
@@ -98,7 +112,7 @@ npm run check
 npm pack
 ```
 
-The checkout is self-contained. `vendor/` holds an unchanged MIT test fixture; no private repository access is needed. `check` covers type checking, building and 23 tests with real DSH services/plugins and React/jsdom. It uses neither browser automation nor paid model requests.
+The checkout is self-contained. `vendor/` holds an unchanged MIT test fixture; no private repository access is needed. `check` covers type checking, building and 25 tests with real DSH services/plugins and React/jsdom. It uses neither browser automation nor paid model requests. Child defaults cover new/reopened workspaces, ordinary sessions, recursive subagents, component dependencies, native configuration cards and restart persistence.
 
 The broader third-party matrix runs in a disposable offline VM; see [reproduction instructions](docs/COMPATIBILITY.md#reproduce). No sample packages are installed into a personal DSH profile by these instructions.
 

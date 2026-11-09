@@ -13,7 +13,7 @@ export interface InstalledPlugin {
   bundle: BundleInfo
   options: EntryOptions
   parentId: string
-  verifiedScopes: readonly string[]
+  supportsChildInstances: boolean
 }
 
 export async function installedPlugins(ctx: Context): Promise<InstalledPlugin[]> {
@@ -42,7 +42,7 @@ export async function installedPlugins(ctx: Context): Promise<InstalledPlugin[]>
       id: rows.length === 1 ? parentId : `${bundle.name}#${row.rowId}`,
       parentId, package: bundle.name, description: bundle.description ?? '', bundle: { ...bundle, rows: [row] },
       options: declared.get(row.rowId) ?? { id: row.rowId, name: row.moduleName },
-      verifiedScopes: Array.isArray(metadata?.verifiedScopes) ? metadata.verifiedScopes : [],
+      supportsChildInstances: metadata?.supportsChildInstances === true,
     }))
   })
 }

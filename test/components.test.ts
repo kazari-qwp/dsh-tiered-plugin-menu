@@ -8,7 +8,7 @@ import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { mountWorkspaces } from './workspaces.ts'
 import * as menu from '../src/index.ts'
-import { clientScope, type Scope } from '../src/shared.ts'
+import { childScope, clientScope, type Scope } from '../src/shared.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
 
 test('package switches, component switches and dependency confirmation use the same independent instances', { timeout: 15000 }, async () => {
@@ -78,6 +78,18 @@ test('package switches, component switches and dependency confirmation use the s
     assert.ok(crossScope.dependencies.some(change => change.scope.id === session.id && change.id === 'sample#consumer'))
     await manager.change(scope, crossScope.id, crossScope.mode, crossScope.signature)
     assert.equal(manager.instance(session, 'sample#consumer'), undefined)
+    manager.setChildSettings(scope, true)
+    const defaults = childScope(scope)
+    const childPlan = await manager.plan(defaults, 'sample#consumer', 'on')
+    assert.deepEqual(childPlan.dependencies.map(item => item.id), ['sample#provider'])
+    await manager.change(defaults, childPlan.id, childPlan.mode, childPlan.signature)
+    assert.equal(manager.instance(defaults, 'sample#provider'), undefined)
+    assert.equal(manager.instance(scope, 'sample#provider'), undefined)
+    const child = await ctx.agents.create({ sessionId: SessionId('new-dependent-session'), meta: { cwd: directory } })
+    const childView: Scope = { level: 'session', id: child.agent.id }
+    assert.equal(manager.instance(childView, 'sample#consumer')!.plugin.ctx.get('sampleResult'), manager.instance(childView, 'sample#provider')!.plugin.ctx.get('sampleData'))
+    assert.equal((await manager.rows(session))[0]!.components!.find(row => row.id === 'sample#consumer')!.enabled, false)
+    await child.dispose()
     await handle.dispose()
     modules['sample/consumer'].inject = ['notInstalledService']
     const missing = await manager.plan(scope, 'sample#consumer', 'on')

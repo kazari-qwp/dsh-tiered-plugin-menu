@@ -19,6 +19,8 @@ class MenuService extends TypertRemoteService {
   constructor(ctx: Context) { super(ctx, 'tieredPluginMenu') }
   context(sessionId: string | null) { return this.ctx.tieredPlugins.context(sessionId) }
   list(scope: Scope) { return this.ctx.tieredPlugins.rows(scope) }
+  childSettings(scope: Scope) { return this.ctx.tieredPlugins.childSettings(scope) }
+  setChildSettings(scope: Scope, independent: boolean) { return this.ctx.tieredPlugins.setChildSettings(scope, independent) }
   plan(scope: Scope, id: string, mode: ChangeMode) { return this.ctx.tieredPlugins.plan(scope, id, mode) }
   change(scope: Scope, id: string, mode: ChangeMode, signature: string) { return this.ctx.tieredPlugins.change(scope, id, mode, signature) }
   call(scope: Scope, id: string, namespace: string, method: string, args: PluginConfig, signal: AbortSignal) {
@@ -34,7 +36,7 @@ export async function apply(ctx: Context, config: { dataFile: string }): Promise
   const manager = new PluginManager(ctx, new ConfigStore(config.dataFile))
   ctx.provide('tieredPlugins', manager)
   ctx.effect(() => () => manager.dispose())
-  ctx.on('agent/created', async () => { await manager.sync() })
+  ctx.on('agent/created', async ({ agent, source }) => { await manager.agentCreated(agent, source) })
   ctx.on('agent/disposed', async ({ agent }) => { await manager.releaseSession(String(agent.id)) })
   await manager.start()
   await ctx.plugin(MenuService)

@@ -17,7 +17,7 @@ import * as plugin from '../src/index.ts'
 import { remoteContribution } from '../src/remote-contract.ts'
 import { mountWorkspaces } from './workspaces.ts'
 import { mountPluginManagement } from './plugins.ts'
-import type { Scope } from '../src/shared.ts'
+import { childScope, type Scope } from '../src/shared.ts'
 
 test('官方 Client Remote → Host Gateway：工作区与会话配置、继承、转发原插件预览', { timeout: 15000 }, async () => {
   mkdirSync('work', { recursive: true })
@@ -78,5 +78,17 @@ test('官方 Client Remote → Host Gateway：工作区与会话配置、继承�
     assert.ok(inherited.ok)
     assert.equal(inherited.value[0]!.own, false)
     assert.equal(inherited.value[0]!.config.template, 'WORKSPACE RPC')
+    assert.deepEqual(await api.childSettings(wsScope), { ok: true, value: { independent: false, source: null } })
+    assert.ok((await api.setChildSettings(wsScope, true)).ok)
+    assert.ok((await api.configure(childScope(wsScope), 'temporary-messages', true, { template: 'CHILD RPC' }, true)).ok)
+    const defaults = await api.list(childScope(wsScope))
+    assert.ok(defaults.ok)
+    assert.equal(defaults.value[0]!.config.template, 'CHILD RPC')
+    assert.equal(defaults.value[0]!.active, false)
+    assert.equal(host.tieredPlugins.instance(childScope(wsScope), 'temporary-messages'), undefined)
+    const child = await host.agents.create({ sessionId: SessionId('rpc-new-session'), meta: { cwd: workspace.path } })
+    const childRows = await api.list({ level: 'session', id: child.agent.id })
+    assert.ok(childRows.ok)
+    assert.equal(childRows.value[0]!.config.template, 'CHILD RPC')
   } finally { await client.fiber.dispose(); await host.fiber.dispose() }
 })

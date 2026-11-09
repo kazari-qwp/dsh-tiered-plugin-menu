@@ -1,10 +1,15 @@
 export type Level = 'client' | 'workspace' | 'session'
-export interface Scope { level: Level; id: string }
+export interface Scope { level: Level; id: string; children?: boolean }
 export const clientScope: Scope = { level: 'client', id: '' }
-export const scopeKey = (scope: Scope): string => `${scope.level}:${scope.id}`
+export const scopeKey = (scope: Scope): string => `${scope.children ? 'children:' : ''}${scope.level}:${scope.id}`
+export const ownScope = ({ level, id }: Scope): Scope => ({ level, id })
+export const childScope = (scope: Scope): Scope => ({ ...ownScope(scope), children: true })
+export const isClientScope = (scope: Scope): boolean => scope.level === 'client' && !scope.children
 export type PluginConfig = Record<string, unknown>
 
 export interface SavedConfig { enabled: boolean; config: PluginConfig }
+export interface ChildDefaults { independent: boolean; plugins: Record<string, SavedConfig> }
+export interface ChildSettings { independent: boolean; source: Scope | null }
 export interface PluginRow extends SavedConfig {
   id: string
   name: string
@@ -40,7 +45,7 @@ export interface ChangePlan {
   signature: string
 }
 
-/** package.json 中由插件作者声明；未声明的层级保持未验证。 */
+/** 插件作者在 package.json 中声明是否支持下级独立实例。 */
 export interface TieredPluginMetadata {
-  verifiedScopes?: ('workspace' | 'session')[]
+  supportsChildInstances?: boolean
 }

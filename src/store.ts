@@ -1,30 +1,65 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { scopeKey, type SavedConfig, type Scope } from './shared.ts'
+import { ownScope, scopeKey, type ChildDefaults, type SavedConfig, type Scope } from './shared.ts'
+
+interface StoredData {
+  version: 2
+  configs: Record<string, Record<string, SavedConfig>>
+  children: Record<string, ChildDefaults>
+  parents: Record<string, Scope>
+}
 
 export class ConfigStore {
-  private data: Record<string, Record<string, SavedConfig>>
+  private data: StoredData
 
   constructor(readonly filename: string) {
-    this.data = existsSync(filename) ? JSON.parse(readFileSync(filename, 'utf8')) : {}
+    const saved = existsSync(filename) ? JSON.parse(readFileSync(filename, 'utf8')) : {}
+    this.data = saved.version === 2 ? saved : { version: 2, configs: saved, children: {}, parents: {} }
   }
 
   get(scope: Scope, id: string): SavedConfig | undefined {
-    return this.data[scopeKey(scope)]?.[id]
+    if (!scope.children) return this.data.configs[scopeKey(scope)]?.[id]
+    const defaults = this.children(scope)
+    return defaults.independent ? defaults.plugins[id] : undefined
   }
 
   hasScoped(id: string): boolean {
-    return Object.entries(this.data).some(([key, configs]) => key !== 'client:' && !!configs[id])
+    return Object.entries(this.data.configs).some(([key, configs]) => key !== 'client:' && !!configs[id])
   }
 
   scopes(): Scope[] {
-    return Object.keys(this.data).map(key => ({ level: key.slice(0, key.indexOf(':')) as Scope['level'], id: key.slice(key.indexOf(':') + 1) }))
+    return Object.keys(this.data.configs).map(key => ({ level: key.slice(0, key.indexOf(':')) as Scope['level'], id: key.slice(key.indexOf(':') + 1) }))
+  }
+
+  children(scope: Scope): ChildDefaults {
+    return this.data.children[scopeKey(ownScope(scope))] ?? { independent: false, plugins: {} }
+  }
+
+  setChildren(scope: Scope, independent: boolean): void {
+    this.data.children[scopeKey(ownScope(scope))] = { ...this.children(scope), independent }
+    this.save()
+  }
+
+  parent(scope: Scope): Scope | undefined { return this.data.parents[scopeKey(ownScope(scope))] }
+
+  remember(scope: Scope, parent: Scope): void {
+    const previous = this.parent(scope)
+    if (previous && scopeKey(previous) === scopeKey(parent)) return
+    this.data.parents[scopeKey(scope)] = parent
+    this.save()
+  }
+
+  initialize(scope: Scope, parent: Scope, defaults: Record<string, SavedConfig>): void {
+    if (this.parent(scope)) return
+    this.data.configs[scopeKey(scope)] = { ...structuredClone(defaults), ...this.data.configs[scopeKey(scope)] }
+    this.data.parents[scopeKey(scope)] = parent
+    this.save()
   }
 
   migrate(packageName: string, componentIds: string[]): void {
     if (componentIds.includes(packageName)) return
     let changed = false
-    for (const configs of Object.values(this.data)) {
+    for (const configs of [...Object.values(this.data.configs), ...Object.values(this.data.children).map(value => value.plugins)]) {
       const previous = configs[packageName]
       if (!previous) continue
       for (const id of componentIds) configs[id] ??= previous
@@ -35,13 +70,16 @@ export class ConfigStore {
   }
 
   set(scope: Scope, id: string, config: SavedConfig): void {
-    const configs = this.data[scopeKey(scope)] ??= {}
+    const configs = scope.children
+      ? (this.data.children[scopeKey(ownScope(scope))] ??= { independent: true, plugins: {} }).plugins
+      : this.data.configs[scopeKey(scope)] ??= {}
     configs[id] = config
     this.save()
   }
 
   remove(scope: Scope, id: string): void {
-    delete this.data[scopeKey(scope)]?.[id]
+    if (scope.children) delete this.children(scope).plugins[id]
+    else delete this.data.configs[scopeKey(scope)]?.[id]
     this.save()
   }
 

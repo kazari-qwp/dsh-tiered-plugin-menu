@@ -11,7 +11,7 @@ import { LevelSettings, MenuDialog } from '../src/client/menu.tsx'
 import type { MenuRemote } from '../src/remote-contract.ts'
 import { withChangePlans } from './menu-api.ts'
 import { ContextClient, RegisteredSettings } from '../src/client/context-client.tsx'
-import { clientScope, scopeKey, type PluginRow, type Scope } from '../src/shared.ts'
+import { childScope, clientScope, isClientScope, scopeKey, type PluginRow, type Scope } from '../src/shared.ts'
 
 function originalClient(): Plugin {
   const require = createRequire(import.meta.url)
@@ -40,7 +40,7 @@ test('复用原设置页：工作区/会话独立入口分别保存，取消覆�
     const api = withChangePlans({
       context: async () => ({ ok: true, value: { workspaceId: 'one', workspaces: [{ id: 'one', title: '工作区一', path: '/one' }] } }),
       list: async scope => ({ ok: true, value: [{ ...structuredClone(saved.get(scopeKey(scope)) ??
-        (scope.level === 'session' ? saved.get(scopeKey(workspace)) : undefined) ?? base), own: scope.level === 'client' || saved.has(scopeKey(scope)) }] }),
+        (scope.level === 'session' ? saved.get(scopeKey(workspace)) : undefined) ?? base), own: isClientScope(scope) || saved.has(scopeKey(scope)) }] }),
       inherit: async scope => { saved.delete(scopeKey(scope)); return { ok: true, value: undefined } },
       configure: async (scope, _id, enabled, config) => {
         saved.set(scopeKey(scope), { ...base, source: scope, own: true, enabled, config })
@@ -102,6 +102,18 @@ test('复用原设置页：工作区/会话独立入口分别保存，取消覆�
     assert.equal(tree!.root.findByProps({ 'aria-label': '选择工作区' }).props.value, 'one')
     await act(async () => { button('设置').props.onClick() })
     assert.equal(tree!.root.findByProps({ id: 'temporary-template' }).props.value, 'WORKSPACE ONE')
+    await act(async () => { button('下级').props.onClick() })
+    assert.equal(tree!.root.findByProps({ 'aria-label': '下级默认配置方式' }).findAllByType('button')[0]!.props['aria-pressed'], true)
+    assert.equal(tree!.root.findByProps({ 'data-mode': 'on' }).props.disabled, true)
+    await act(async () => { button('独立').props.onClick() })
+    await mode('on')
+    await act(async () => { button('仍然启用').props.onClick() })
+    await saveTemplate('NEW SESSIONS ONLY')
+    assert.equal(saved.get(scopeKey(childScope(workspace)))!.config.template, 'NEW SESSIONS ONLY')
+    assert.equal(saved.get(scopeKey(workspace))!.config.template, 'WORKSPACE ONE')
+    await act(async () => { button('本级').props.onClick() })
+    await act(async () => { button('设置').props.onClick() })
+    assert.equal(tree!.root.findByProps({ id: 'temporary-template' }).props.value, 'WORKSPACE ONE')
     await captured.dispose()
   } finally { await act(async () => { tree?.unmount() }); await controller?.dispose(); await ctx.fiber.dispose() }
 })
@@ -114,7 +126,7 @@ test('两份配置表修改互不影响', async () => {
   assert.equal(b.getSnapshot().value?.template, 'B')
 })
 
-test('分组和二次确认：取消无写入，确认才启用，客户端不弹确认，兼容声明按层级生效', async () => {
+test('分组和二次确认：取消无写入，确认才启用，客户端不弹确认，兼容声明统一适用下级', async () => {
   const calls: { scope: Scope; id: string; confirmed: boolean }[] = []
   const saved = new Set<string>()
   const ui = { Artwork: () => createElement('svg'), openDetails() {} }
@@ -125,7 +137,7 @@ test('分组和二次确认：取消无写入，确认才启用，客户端不�
       id, name: id, package: id, description: id, source: scope, config: {}, active: false,
       own: scope.level === 'client' || saved.has(`${scopeKey(scope)}/${id}`),
       enabled: saved.has(`${scopeKey(scope)}/${id}`),
-      verified: id === 'declared' && scope.level === 'workspace', settings: 'native' as const,
+      verified: id === 'declared', settings: 'native' as const,
     })) }),
     configure: async (scope, id, _enabled, _config, confirmed) => {
       calls.push({ scope, id, confirmed })
@@ -166,8 +178,7 @@ test('分组和二次确认：取消无写入，确认才启用，客户端不�
     assert.deepEqual(calls.at(-1), { scope: workspace, id: 'declared', confirmed: false })
     await open({ level: 'session', id: 'A' })
     await enable('declared')
-    assert.equal(tree!.root.findAllByProps({ role: 'alertdialog' }).length, 1)
-    await choose('取消')
+    assert.equal(tree!.root.findAllByProps({ role: 'alertdialog' }).length, 0)
     await open(clientScope)
     assert.equal(tree!.root.findAllByProps({ role: 'separator' }).length, 0)
     assert.equal(tree!.root.findAllByType('ul').length, 1)
