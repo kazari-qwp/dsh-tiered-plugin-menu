@@ -23,7 +23,7 @@ Workspace and session buttons appear on hover, so they are hidden on the unhover
 Download the prebuilt `.tgz` from [Releases](https://github.com/kazari-qwp/dsh-tiered-plugin-menu/releases), then add it in DSH's plugin page or run:
 
 ```sh
-dsh plugin --profile desktop add ./dsh-tiered-plugin-menu-0.5.1.tgz
+dsh plugin --profile desktop add ./dsh-tiered-plugin-menu-0.5.2.tgz
 ```
 
 For Web, use your profile name (usually `web`). Restart DSH if hot reload is disabled. No companion plugin is required.
@@ -91,11 +91,13 @@ Data lives beside the menu configuration file in `<config-filename>.data/`, sepa
 
 ## Compatibility
 
-Current version: **0.5.1**. Tested with **DSH 0.2.2-rc.1** and Node.js 24. Package/component controls and dependency confirmation use shared DSH mechanisms, without adapters named after individual plugins or changes to DSH and third-party source code.
+Current version: **0.5.2**. Tested with **DSH 0.2.2-rc.1** and Node.js 24. Package/component controls and dependency confirmation use shared DSH mechanisms, without adapters named after individual plugins or changes to DSH and third-party source code.
 
 Installed packages are discovered automatically. Unverified packages appear below a separator at lower scopes and require confirmation. Successful startup does not mark them verified.
 
 The implementation isolates provided services per scope and routes shared DSH registries such as tools, prompts, commands, skills, projections and HTTP handlers. Lower instances are real Loader entries, so DSH can load the **installed package's original frontend and CSS**, even when its client-level instance is disabled. The menu embeds no third-party frontend copies.
+
+Different plugins can also register same-named skill providers and skills. Discovery selects contributions visible to the current session, then DSH resolves skill priorities; unloading one contribution preserves the others. [Skill isolation and 0.5.2 regression results](docs/SKILLS.md).
 
 Agent preset declarations are also scoped: identical preset IDs can have different workspace/session configurations without duplicate registration. Native preset IDs and revision leases are preserved, including a subagent retaining its parent's revision. The adapter uses the declaration table of the pinned DSH version; this is not a cross-version API guarantee. See [Superagent validation](docs/SUPERAGENT.md) for the tested workflow and remaining upstream issues.
 
@@ -135,7 +137,7 @@ npm run check
 npm pack
 ```
 
-The checkout is self-contained. `vendor/` holds an unchanged MIT test fixture; no private repository access is needed. `check` covers type checking, building and 35 tests with real DSH services/plugins and React/jsdom. It uses neither browser automation nor paid model requests. Coverage includes child defaults, deep workspace trees, live inheritance changes, preset isolation and revision leases, session disposal/resume, native configuration cards and restart persistence.
+The checkout is self-contained. `vendor/` holds an unchanged MIT test fixture; no private repository access is needed. `check` covers type checking, building and 37 tests with real DSH services/plugins and React/jsdom. It uses neither browser automation nor paid model requests. Coverage includes child defaults, deep workspace trees, live inheritance changes, preset isolation and revision leases, session disposal/resume, native configuration cards and restart persistence.
 
 The broader third-party matrix runs in a disposable offline VM; see [reproduction instructions](docs/COMPATIBILITY.md#reproduce). No sample packages are installed into a personal DSH profile by these instructions.
 

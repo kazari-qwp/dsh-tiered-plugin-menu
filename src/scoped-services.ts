@@ -6,12 +6,16 @@ import type { ConnectionFetchRoute } from '@deepseek-ai/dsh-client-connection'
 import { z } from 'zod'
 import { scopeKey, type Scope } from './shared.ts'
 import type { ToolDefinition, ToolRegistrationOptions } from '@deepseek-ai/dsh-tools'
-import type { SkillProvider, SkillProviderControl, SkillRegistration, SkillViewOptions } from '@deepseek-ai/dsh-skill'
+import type { SkillCandidate, SkillProvider, SkillProviderControl, SkillRegistration, SkillViewOptions } from '@deepseek-ai/dsh-skill'
 
 interface Owner { scope: Scope; accepts(sessionId: string): boolean; configKey(): string }
 interface Contribution<T> { owner: Owner; value: T }
 type Definition = ProjectionDefinition<any, any>
 interface ProjectionState { sessionId: string; owner: string | null; config: string; value: any }
+interface SkillGroup { entries: Contribution<SkillProvider>[]; dispose(): void; invalidate(): void }
+
+// Different plugin brokers share the host registration, while retaining each provider's owner.
+const hostSkills = new WeakMap<Context, Map<string, SkillGroup>>()
 
 /** Unchanged operations keep the native implementation; only registrations are routed. */
 function forwardService(facade: object, root: Context, name: string) {
@@ -39,9 +43,13 @@ export class ScopedServices {
   private projections = new Map<string, {
     entries: Contribution<Definition>[]; handle?: ProjectionHandle<ProjectionState>; pending: Promise<void>
   }>()
-  private skills = new Map<string, { entries: Contribution<SkillProvider>[]; dispose(): void; invalidate(): void }>()
+  private skills: Map<string, SkillGroup>
 
-  constructor(private root: Context) {}
+  constructor(private root: Context) {
+    let skills = hostSkills.get(root)
+    if (!skills) { skills = new Map(); hostSkills.set(root, skills) }
+    this.skills = skills
+  }
 
   private pick<T>(entries: Contribution<T>[], sessionId?: string) {
     return entries.find(entry => sessionId ? entry.owner.accepts(sessionId) : entry.owner.scope.level === 'client')
@@ -58,13 +66,38 @@ export class ScopedServices {
         group = this.skills.get(provider.name)
         if (!group) {
           const entries: Contribution<SkillProvider>[] = []
+          const sources = new WeakMap<SkillCandidate, { entry: Contribution<SkillProvider>; candidate: SkillCandidate }>()
           let invalidate!: () => void
-          const selected = (options: SkillViewOptions) => this.pick(entries, (options.scope as { id?: string })?.id)?.value
+          const visible = (entry: Contribution<SkillProvider>, options: SkillViewOptions) => {
+            const id = (options.scope as { id?: string })?.id
+            return id ? entry.owner.accepts(id) : entry.owner.scope.level === 'client'
+          }
           const dispose = (this.root.get('skills') as Context['skills']).registerProvider(control => {
             invalidate = control.invalidate
             return { name: provider.name,
-              list: options => selected(options)?.list(options) ?? Promise.resolve([]),
-              get: (candidate, options) => selected(options)?.get(candidate, options) ?? Promise.resolve(undefined),
+              list: async options => {
+                const parts = await Promise.all(entries.filter(entry => visible(entry, options)).map(async entry => {
+                  try {
+                    const result = await entry.value.list(options)
+                    const observation = 'candidates' in result ? result : { candidates: result, complete: true }
+                    return { ...observation, candidates: observation.candidates.map(candidate => {
+                      const routed = { ...candidate }
+                      sources.set(routed, { entry, candidate })
+                      return routed
+                    }) }
+                  } catch (error) {
+                    if (options.signal?.aborted) throw error
+                    this.root.logger.warn(`skill provider "${provider.name}" skipped: ${String(error)}`)
+                    return { candidates: [], complete: false }
+                  }
+                }))
+                return { candidates: parts.flatMap(part => part.candidates), complete: parts.every(part => part.complete) }
+              },
+              get: async (candidate, options) => {
+                const source = sources.get(candidate)
+                if (!source || !entries.includes(source.entry) || !visible(source.entry, options)) return undefined
+                return source.entry.value.get(source.candidate, options)
+              },
             }
           })
           group = { entries, dispose, invalidate }; this.skills.set(provider.name, group)

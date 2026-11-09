@@ -60,3 +60,81 @@ test('runtime skills keep per-instance content and disappear from disabled scope
     assert.equal(await ctx.skills.get('runtime-fixture'),undefined)
   } finally { await ctx.fiber.dispose() }
 })
+
+async function mountPlugin(ctx: Context, id: string) {
+  const broker = new ScopedServices(ctx)
+  let isolated = ctx
+  for (const name of scopedServiceNames) isolated = isolated.isolate(name)
+  const owner = await broker.mount(isolated, {
+    scope: { level: 'session', id }, accepts: sessionId => sessionId === id || sessionId === 'both', configKey: () => id,
+  })
+  return { owner, skills: owner.ctx.get('skills') as Context['skills'] }
+}
+
+test('different plugins can register the same runtime skill in separate and overlapping sessions', async()=>{
+  const ctx = new Context()
+  await ctx.plugin(SkillRegistry)
+  try {
+    const a = await mountPlugin(ctx, 'a'), b = await mountPlugin(ctx, 'b')
+    a.skills.register({ name: 'shared-skill', description: 'A', content: 'A', source: 'runtime' })
+    b.skills.register({ name: 'shared-skill', description: 'B', content: 'B', source: 'runtime' })
+    const both = { scope: scope('both') }
+    assert.equal((await ctx.skills.get('shared-skill', { scope: scope('a') }))?.content, 'A')
+    assert.equal((await ctx.skills.get('shared-skill', { scope: scope('b') }))?.content, 'B')
+    assert.equal((await ctx.skills.get('shared-skill', both))?.content, 'A')
+    assert.deepEqual(await ctx.skills.list(), [])
+    assert.deepEqual(await ctx.skills.list({ scope: scope('off') }), [])
+    await a.owner.dispose()
+    assert.equal((await ctx.skills.get('shared-skill', both))?.content, 'B')
+    assert.equal(await ctx.skills.get('shared-skill', { scope: scope('a') }), undefined)
+    await b.owner.dispose()
+    assert.deepEqual(await ctx.skills.list(both), [])
+  } finally { await ctx.fiber.dispose() }
+})
+
+test('same-name providers preserve candidates, rank, partial discovery and independent disposal across plugins', async()=>{
+  const ctx = new Context()
+  await ctx.plugin(SkillRegistry)
+  try {
+    const a = await mountPlugin(ctx, 'a'), b = await mountPlugin(ctx, 'b')
+    const controls: SkillProviderControl[] = []
+    let failA = false
+    const candidates = ['A', 'B'].map((id, index) => ({
+      name: 'shared-skill', description: id, source: 'bundled', provider: 'fixture',
+      rank: index ? 100 : 600, locator: { id }, invocation,
+    }))
+    for (const [index, plugin] of [a, b].entries()) {
+      const candidate = candidates[index]!
+      plugin.skills.registerProvider(control => {
+        controls.push(control)
+        return { name: 'fixture', list: async () => {
+          if (index === 0 && failA) throw new Error('fixture A failed')
+          return index ? { candidates: [candidate], complete: true } : [candidate]
+        }, get: async found => {
+          assert.equal(found, candidate, 'The originating provider receives its original candidate')
+          return { ...found, content: candidate.description }
+        } }
+      })
+    }
+    const both = { scope: scope('both') }
+    assert.equal((await ctx.skills.get('shared-skill', { scope: scope('a') }))?.content, 'A')
+    assert.equal((await ctx.skills.get('shared-skill', { scope: scope('b') }))?.content, 'B')
+    assert.equal((await ctx.skills.get('shared-skill', both))?.content, 'B', 'Higher priority wins')
+    assert.equal((await ctx.skills.list(both))[0]?.provider, 'fixture')
+    assert.deepEqual(await ctx.skills.list(), [])
+    assert.deepEqual(await ctx.skills.list({ scope: scope('off') }), [])
+    candidates[1]!.rank = 600
+    controls[1]!.invalidate()
+    assert.equal((await ctx.skills.get('shared-skill', both))?.content, 'A', 'First registration wins a tie')
+    failA = true
+    controls[0]!.invalidate()
+    assert.equal((await ctx.skills.snapshot(both)).complete, false)
+    assert.equal((await ctx.skills.get('shared-skill', both))?.content, 'B', 'A failed provider does not hide B')
+    failA = false
+    assert.equal((await ctx.skills.get('shared-skill', both))?.content, 'A', 'Incomplete discovery is not cached')
+    await a.owner.dispose()
+    assert.equal(controls[0]!.signal.aborted, true)
+    assert.equal(controls[1]!.signal.aborted, false)
+    assert.equal((await ctx.skills.get('shared-skill', both))?.content, 'B')
+  } finally { await ctx.fiber.dispose() }
+})
