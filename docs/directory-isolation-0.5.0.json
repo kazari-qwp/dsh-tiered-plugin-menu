@@ -1,0 +1,152 @@
+{
+  "date": "2026-11-09",
+  "menu": "0.5.0",
+  "dsh": "0.2.2-rc.1",
+  "node": "24.21.0",
+  "platform": "Windows",
+  "source": {
+    "repository": "https://github.com/deepseek-ai/dsh-superagent-prototype",
+    "commit": "8c32a9dc5d72c033816c6a8110b37f40cf94fba4",
+    "version": "0.1.0",
+    "filesChecked": 216,
+    "changed": [],
+    "archiveSha256": "7b6d0d0accc0a2b7f5cc0b16939db9366a35bc2ae0678bd009a23a2b08ce5687"
+  },
+  "coreTests": {
+    "passed": 33,
+    "failed": 0
+  },
+  "integration": {
+    "passed": 20,
+    "expectedNativeFailures": 2,
+    "modelRequests": 16,
+    "fixedModelReplies": true,
+    "externalAccounts": false,
+    "routerBashPlaceholder": true,
+    "sameConfiguredDirectory": true,
+    "separateDirectoryLocks": true,
+    "separateSQLite": true,
+    "scopedDataPersists": true,
+    "checks": [
+      {
+        "name": "Windows absolute stateDir",
+        "passed": false,
+        "error": "ValidationError: invalid config:"
+      },
+      {
+        "name": "same-directory slash path startup",
+        "passed": true
+      },
+      {
+        "name": "create router",
+        "passed": true
+      },
+      {
+        "name": "create workerA",
+        "passed": true
+      },
+      {
+        "name": "create workerB",
+        "passed": true
+      },
+      {
+        "name": "configure router",
+        "passed": true
+      },
+      {
+        "name": "configure workerA",
+        "passed": true
+      },
+      {
+        "name": "configure workerB",
+        "passed": true
+      },
+      {
+        "name": "request router",
+        "passed": true
+      },
+      {
+        "name": "request workerA",
+        "passed": true
+      },
+      {
+        "name": "request workerB",
+        "passed": true
+      },
+      {
+        "name": "read original Worker transcript resource",
+        "passed": false,
+        "error": "TypeError: host.context.sessionController.inspect is not a function"
+      },
+      {
+        "name": "Superagent workspace tree: inheritance, nearest override and live toggle",
+        "passed": true
+      },
+      {
+        "name": "Superagent with unchanged inherited stateDir starts independently",
+        "passed": true
+      },
+      {
+        "name": "Automatic directory, lock and SQLite isolation workerA",
+        "passed": true
+      },
+      {
+        "name": "Automatic directory, lock and SQLite isolation workerB",
+        "passed": true
+      },
+      {
+        "name": "full Superagent bundle enabled at session level",
+        "passed": true
+      },
+      {
+        "name": "second complete Superagent bundle and scoped preset configs",
+        "passed": true
+      },
+      {
+        "name": "workspace-only presets create and resume independent Workers",
+        "passed": true
+      },
+      {
+        "name": "menu unload restores global presets and reload restores scoped declarations",
+        "passed": true
+      },
+      {
+        "name": "session-only preset survives unloading and resuming its Agent",
+        "passed": true
+      },
+      {
+        "name": "scoped HTTP requests use separate Superagent data",
+        "passed": true
+      }
+    ]
+  },
+  "nativeControls": [
+    {
+      "name": "Windows absolute stateDir",
+      "passed": false,
+      "error": "ValidationError: invalid config:"
+    },
+    {
+      "name": "read original Worker transcript resource",
+      "passed": false,
+      "error": "TypeError: host.context.sessionController.inspect is not a function"
+    },
+    {
+      "name": "native duplicate stateDir control",
+      "passed": false,
+      "error": "Error: Lock file is already being held"
+    },
+    {
+      "name": "native duplicate preset control",
+      "passed": false,
+      "error": "Error: Duplicate agent preset: dsh-superagent-worker"
+    }
+  ],
+  "nativeWindowsControl": [
+    {
+      "name": "create router",
+      "passed": false,
+      "error": "RemoteError: failed to create session: Error: tools.restrict() names unknown global tool \"bash\"; known global tools: job_kill, job_list, job_output, pwsh, read, read_image, skill, working_directory"
+    }
+  ]
+}

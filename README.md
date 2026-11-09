@@ -23,7 +23,7 @@ Workspace and session buttons appear on hover, so they are hidden on the unhover
 Download the prebuilt `.tgz` from [Releases](https://github.com/kazari-qwp/dsh-tiered-plugin-menu/releases), then add it in DSH's plugin page or run:
 
 ```sh
-dsh plugin --profile desktop add ./dsh-tiered-plugin-menu-0.4.0.tgz
+dsh plugin --profile desktop add ./dsh-tiered-plugin-menu-0.5.0.tgz
 ```
 
 For Web, use your profile name (usually `web`). Restart DSH if hot reload is disabled. No companion plugin is required.
@@ -81,9 +81,17 @@ Before changing switches, the menu calculates the complete affected set:
 
 Confirmation applies to switches operated through this menu; DSH's own plugin page remains native.
 
+## Automatic directory isolation
+
+When a lower instance creates or ensures a directory through Node's file APIs, the menu assigns it a private directory. Identical logical paths can hold different data in different instances. Inheritance shares the ancestor's instance and directory; explicit enablement uses an independent instance. Configured paths remain unchanged, with no field-name guesses or plugin-name adapters.
+
+Relative paths and `..` resolve in the original logical namespace before redirection. `realpath` returns logical paths, so subsequent child/parent lookups keep their meaning. Tests cover ordinary file APIs and SQLite opening paths; two Superagent instances using the same `stateDir` hold separate directory locks and databases.
+
+Data lives beside the menu configuration file in `<config-filename>.data/`, separated by scope and package. Menu restarts and session resumes reuse it. First use creates fresh private data; existing directories are neither moved nor deleted. See [test results and coverage](docs/DIRECTORY_ISOLATION.md).
+
 ## Compatibility
 
-Current version: **0.4.0**. Tested with **DSH 0.2.2-rc.1** and Node.js 24. Package/component controls and dependency confirmation use shared DSH mechanisms, without adapters named after individual plugins or changes to DSH and third-party source code.
+Current version: **0.5.0**. Tested with **DSH 0.2.2-rc.1** and Node.js 24. Package/component controls and dependency confirmation use shared DSH mechanisms, without adapters named after individual plugins or changes to DSH and third-party source code.
 
 Installed packages are discovered automatically. Unverified packages appear below a separator at lower scopes and require confirmation. Successful startup does not mark them verified.
 
@@ -99,7 +107,7 @@ A second batch adds eight packages: Better Sidebar, Agent Teams, another memory 
 
 `@fooxe/dsh-memory` has a reproducible native HTTP-route cleanup problem without this menu. Starting with its native instance disabled avoids that leftover registration in the tested lower-scope cases. This menu does not repair upstream native registrations.
 
-This is configuration/lifecycle isolation, **not a security sandbox**. Plugin-owned global files, module variables and hardcoded TCP ports are not virtualized. Not every third-party tool, UI action or remote endpoint has been exercised; custom frontends that bypass the tested DSH interfaces may need further work.
+This isolates configuration, lifecycle and the file access described above; it is **not a security sandbox**. Global files outside private mounts, hardcoded TCP ports, native addons and external-process file access are outside this layer. Not every third-party tool, UI action or remote endpoint has been exercised; custom frontends that bypass the tested DSH interfaces may need further work.
 
 ## Compatibility declaration
 
@@ -125,7 +133,7 @@ npm run check
 npm pack
 ```
 
-The checkout is self-contained. `vendor/` holds an unchanged MIT test fixture; no private repository access is needed. `check` covers type checking, building and 30 tests with real DSH services/plugins and React/jsdom. It uses neither browser automation nor paid model requests. Coverage includes child defaults, deep workspace trees, live inheritance changes, preset isolation and revision leases, session disposal/resume, native configuration cards and restart persistence.
+The checkout is self-contained. `vendor/` holds an unchanged MIT test fixture; no private repository access is needed. `check` covers type checking, building and 33 tests with real DSH services/plugins and React/jsdom. It uses neither browser automation nor paid model requests. Coverage includes child defaults, deep workspace trees, live inheritance changes, preset isolation and revision leases, session disposal/resume, native configuration cards and restart persistence.
 
 The broader third-party matrix runs in a disposable offline VM; see [reproduction instructions](docs/COMPATIBILITY.md#reproduce). No sample packages are installed into a personal DSH profile by these instructions.
 

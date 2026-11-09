@@ -16,6 +16,9 @@ import { isolateProvidedServices } from './isolation.ts'
 import { RuntimeTree } from './runtime-tree.ts'
 import { parentWorkspace } from './workspace-tree.ts'
 import { ScopedPresets } from './scoped-presets.ts'
+import { ScopedModules } from './scoped-modules.ts'
+import { createRequire } from 'node:module'
+import { pathToFileURL } from 'node:url'
 import { dependencyPlan, type DependencyNode } from './dependencies.ts'
 import type { ChangeMode, ChangePlan } from './shared.ts'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
@@ -41,10 +44,14 @@ export class PluginManager {
   private realms = new Map<string, Record<string, symbol>>()
   private declarations = new Map<string, { provides: Set<string>; requires: Set<string> }>()
   private presets?: ScopedPresets
+  private modules: ScopedModules
   private resuming = new Map<string, number>()
   private clientOwners: { entry: NonNullable<ReturnType<PluginManager['entry']>>; owner: Fiber; isolation: any; labels: Record<string, symbol> }[] = []
 
-  constructor(private ctx: Context, readonly store: ConfigStore) { this.runtime = new RuntimeTree(ctx) }
+  constructor(private ctx: Context, readonly store: ConfigStore) {
+    this.runtime = new RuntimeTree(ctx)
+    this.modules = new ScopedModules(`${store.filename}.data`)
+  }
 
   private async refresh(): Promise<void> {
     this.plugins = new Map((await installedPlugins(this.ctx)).map(item => [item.id, item]))
@@ -636,7 +643,17 @@ export class PluginManager {
       const original = this.entry(adapter.id)
       const tree = original?.parent.tree ?? this.ctx.loader
       const entry = await this.runtime.mount(owner.ctx, encodeURIComponent(`${scopeKey(scope)}/${adapter.id}`),
-        { ...adapter.options, config }, name => tree.import(name))
+        { ...adapter.options, config }, async name => {
+          const namespace = await tree.import(name)
+          // Cordis builtins and in-memory plugin factories have no file module graph.
+          if ((namespace as any)?.[Symbol.toStringTag] !== 'Module') return namespace
+          const parent = tree.ctx.baseUrl ?? pathToFileURL(this.ctx.profileContext.installAnchor).href
+          const loader = this.ctx.loader.internal
+          const url = loader?.version === 'v2' ? loader.resolveSync(parent, { specifier: name }).url
+            : loader?.version === 'v1' ? loader.resolveSync(name, parent, {}).url
+              : pathToFileURL(createRequire(parent).resolve(name)).href
+          return url.startsWith('file:') ? this.modules.import(`${scopeKey(scope)}/${adapter.package}`, url, adapter.peers) : namespace
+        })
       plugin = entry.fiber!
       const error = (await Promise.all(failures)).find(Boolean)
       if (error) throw error
@@ -690,6 +707,7 @@ export class PluginManager {
     }
     this.clientOwners = []
     this.presets?.dispose()
+    this.modules.dispose()
     if (errors.length) throw new AggregateError(errors, '部分客户端插件恢复失败')
   }
 }

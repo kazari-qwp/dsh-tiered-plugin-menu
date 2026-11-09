@@ -14,18 +14,21 @@ export interface InstalledPlugin {
   options: EntryOptions
   parentId: string
   supportsChildInstances: boolean
+  peers: string[]
 }
 
 export async function installedPlugins(ctx: Context): Promise<InstalledPlugin[]> {
   const bundles = await ctx.pluginManager.listBundles()
   return bundles.filter(bundle => bundle.installed).flatMap(bundle => {
     let metadata: TieredPluginMetadata | undefined
+    let peers: string[] = []
     const declared = new Map<string, EntryOptions>()
     try {
       const profile = ctx.profileContext
       const directory = resolveBundleDir('dsh', bundle.name, profile.installAnchor, profile.dir)
       const manifest = JSON.parse(readFileSync(join(directory, 'package.json'), 'utf8'))
       metadata = manifest.dsh?.tieredPluginMenu
+      peers = Object.keys(manifest.peerDependencies ?? {})
       for (const filename of bundlePatchPaths(directory, manifest.dsh.bundle)) {
         const collect = (patches: any[]) => {
           for (const patch of patches) {
@@ -43,6 +46,7 @@ export async function installedPlugins(ctx: Context): Promise<InstalledPlugin[]>
       parentId, package: bundle.name, description: bundle.description ?? '', bundle: { ...bundle, rows: [row] },
       options: declared.get(row.rowId) ?? { id: row.rowId, name: row.moduleName },
       supportsChildInstances: metadata?.supportsChildInstances === true,
+      peers,
     }))
   })
 }

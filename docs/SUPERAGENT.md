@@ -1,5 +1,7 @@
 # Superagent validation / Superagent 实测
 
+**Update / 更新:** Menu 0.5.0 now passes the same-directory multi-instance case through generic directory redirection. The earlier 0.4.0 results below are historical. See [directory isolation validation / 目录隔离实测](DIRECTORY_ISOLATION.md).
+
 Menu **0.4.0**, DSH **0.2.2-rc.1**, Node **24.21.0**, Windows; tested **2026-11-09**.
 Official prototype: [deepseek-ai/dsh-superagent-prototype](https://github.com/deepseek-ai/dsh-superagent-prototype/tree/8c32a9dc5d72c033816c6a8110b37f40cf94fba4), package **0.1.0**, commit `8c32a9dc5d72c033816c6a8110b37f40cf94fba4`.
 

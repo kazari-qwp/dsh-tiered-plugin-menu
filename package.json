@@ -1,6 +1,6 @@
 {
   "name": "dsh-tiered-plugin-menu",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Per-client, workspace and session plugin configuration for DeepSeek Harness",
   "type": "module",
   "license": "MIT",
@@ -32,7 +32,7 @@
   },
   "engines": {
     "dsh": "0.2.2-rc.1",
-    "node": ">=22"
+    "node": "^22.19.0 || >=24.0.0"
   },
   "dsh": {
     "bundle": {
