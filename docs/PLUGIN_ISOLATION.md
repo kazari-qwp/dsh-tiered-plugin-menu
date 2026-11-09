@@ -37,6 +37,18 @@ The 54-case functional matrix completed during implementation. Subsequent frozen
 
 实测发现并修复：新装插件未自动隔离、HTTP 路径前缀不符合原生要求、原生预设的服务依赖被隔断、恢复全局服务时的释放顺序、根级易变配置与冻结字典无法再次提交、设置页 Remote 调用取错描述表，以及技能列表中的公开名称无法原样传回读取接口。每项修复均有失败复现后的验证。
 
+## 0.6.1 session restoration fix
+
+An installed menu owns the helper contexts used for isolation. The 0.6.0 dependency scan mistakenly counted those private services as package exports, then redirected host registries to them. This could stop session services when loading a session, leaving its cached transcript visible while its title, sidebar entry and input became unavailable. Cold startup could also hang. Session logs and workspace membership were not deleted in the reproduced case.
+
+The scan now accepts runtime provisions only when their isolation key matches the package entry's visible key. Cross-package dependency aliases are limited to entries actually managed by the isolation layer; the menu's native services remain native. This is a scope-based fix with no third-party package name branches.
+
+The original mixed-plugin harness inserted the menu by file URL, outside the installed package inventory. That missed this failure. The harness now installs the menu as a bundle, and a local regression covers discovery, native service identities, existing and newly opened Agents, and menu removal/re-enabling. All **43 local tests** pass. On Windows, five copied persisted sessions were restored one at a time with isolation enabled; all five stayed listed and available with their original titles. No model requests or original-session edits were needed.
+
+0.6.1 修复了菜单把自身私有辅助服务误当成对外服务、继而替换 DSH 全局服务的问题。之前的混装测试将菜单按文件路径加载，未把它加入已安装插件清单，漏掉了这个条件；现在已改用真实安装方式。Windows 下逐个恢复五个会话副本，五个均保留且可用，本地 43 项测试通过。
+
+The corrected offline-VM harness also passes the 26-package isolated client startup, **33/33** isolated lower-scope checks, **32/32** switch-off control checks, and **5/5** conflicting-memory-tool checks. The same four native presets wait only in runs that deliberately disable their client-level provider. [0.6.1 results and package versions](reports/session-restoration-0.6.1.json). 修正测试安装方式后的混装回归也已通过；此次未重新运行完整的 54 组模型功能矩阵。
+
 ## Limits and data
 
 Private data is stored beside the menu settings in `<config-filename>.data/`. First activation starts with fresh private directories. Existing global directories are left in place; turning the switch off and restarting returns client entries to them. The two sets of data are not automatically merged.

@@ -81,7 +81,7 @@ export async function toolScopes(ctx, report, home, save) {
     assert.equal(tool(b), two)
   })
   await check('menu disable and re-enable release and restore scoped tools', async () => {
-    const entry = [...ctx.loader.entries()].find(entry => entry.options.id === 'compat-menu')
+    const entry = [...ctx.loader.entries()].find(entry => entry.options.name === 'dsh-tiered-plugin-menu')
     const previous = entry.fiber
     await entry.update({ disabled: true }); await previous.await(); await ctx.loader.await()
     for (const agent of [a, b, sibling, off]) assert.equal(tool(agent), undefined)

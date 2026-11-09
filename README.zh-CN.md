@@ -23,7 +23,7 @@
 从 [Releases](https://github.com/kazari-qwp/dsh-tiered-plugin-menu/releases) 下载构建好的 `.tgz`，在 DSH 插件页添加，或执行：
 
 ```sh
-dsh plugin --profile desktop add ./dsh-tiered-plugin-menu-0.6.0.tgz
+dsh plugin --profile desktop add ./dsh-tiered-plugin-menu-0.6.1.tgz
 ```
 
 Web 版换成自己的 profile 名称，通常是 `web`。未开启热重载时重启 DSH。不需要预先安装临时消息等其他插件。
@@ -101,7 +101,9 @@ Web 版换成自己的 profile 名称，通常是 `web`。未开启热重载时�
 
 ## 兼容情况
 
-当前版本 **0.6.0**，测试环境为 **DSH 0.2.2-rc.1**、Node.js 24。支持整包、组件开关和依赖确认，通过 DSH 的通用机制实现，不按具体插件名称写适配，不修改 DSH 或第三方插件源码。
+当前版本 **0.6.1**，测试环境为 **DSH 0.2.2-rc.1**、Node.js 24。支持整包、组件开关和依赖确认，通过 DSH 的通用机制实现，不按具体插件名称写适配，不修改 DSH 或第三方插件源码。
+
+0.6.1 修复开启实验性隔离后，点击旧会话导致侧栏条目消失的问题：私有辅助服务不再错误替换宿主服务。原会话文件未丢失，更新后重启 DSH 即可重新加载。[原因与回归检查](docs/PLUGIN_ISOLATION.md#061-session-restoration-fix)。
 
 自动识别已安装的包。下两级中，未声明自兼容性的插件放在「未验证自兼容性」分组，启用前需要确认；不会因为启动成功就自动标记已验证。
 

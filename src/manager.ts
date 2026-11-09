@@ -101,7 +101,10 @@ export class PluginManager {
       const entry = this.entry(item.id)
       for (const runtime of this.ctx.registry.values()) for (const fiber of runtime.fibers) {
         if (!entry || fiber.ctx.fiber.entry !== entry) continue
-        for (const provision of fiber.provisions) declared.provides.add(provision.name)
+        // Private helpers are not services exported by the package entry.
+        for (const provision of fiber.provisions) {
+          if (provision.isolate === entry.ctx[Context.isolate][provision.name]) declared.provides.add(provision.name)
+        }
         // An unserved ctx.inject callback may be an optional integration (for example, GUI settings).
         if (fiber.state === 2) for (const name of Object.keys(fiber.inject)) declared.requires.add(name)
       }
@@ -652,6 +655,7 @@ export class PluginManager {
   /** Explicit service dependencies cross package boundaries; unrelated providers stay private. */
   private connectDependencies(scopes: Scope[]): void {
     const candidatesFor = (scope: Scope, name: string) => [...this.plugins.values()].filter(candidate => {
+      if (!this.managed.has(candidate.id)) return false
       if (!this.declarations.get(candidate.id)?.provides.has(name)) return false
       const source = this.source(scope, candidate.id)
       return source.level === 'client' ? this.clientEnabled(candidate.id) : this.store.get(source, candidate.id)?.enabled

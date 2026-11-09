@@ -178,3 +178,55 @@ test('experimental isolation preserves explicit package dependencies, restart an
     assert.equal(ctx.tools.get('late_tool', agent), undefined)
   } finally { await ctx.fiber.dispose() }
 })
+
+test('an installed menu keeps its private helper services out of the host dependency graph', async () => {
+  const lab = fs.mkdtempSync(path.resolve('work/installed-menu-isolation-'))
+  for (const name of ['menu-fixture', 'service-fixture']) {
+    const directory = path.join(lab, 'node_modules', name)
+    fs.mkdirSync(directory, { recursive: true })
+    fs.writeFileSync(path.join(directory, 'package.json'), JSON.stringify({ name, version: '1.0.0', type: 'module', main: 'index.js' }))
+    fs.writeFileSync(path.join(directory, 'index.js'), `export function apply(ctx) { ctx.provide('publicValue', 'public'); ctx.isolate('privateValue').provide('privateValue', 'private') }`)
+  }
+  fs.writeFileSync(path.join(lab, 'package.json'), JSON.stringify({ name: 'test-profile', dependencies: { 'menu-fixture': '*', 'service-fixture': '*' } }))
+  const dataFile = path.join(lab, 'menu.json')
+  new ConfigStore(dataFile).setPluginIsolation(true)
+  const ctx = new Context()
+  try {
+    ctx.baseUrl = pathToFileURL(path.join(lab, 'cordis.yml')).href
+    await mountAgentLoopTestDependencies(ctx)
+    await mountWorkspaces(ctx)
+    await ctx.plugin(TypertRegistry)
+    await ctx.plugin(Loader)
+    mountPluginManagement(ctx, lab)
+    await mountAgentLoopTestHarness(ctx)
+    const nativeImport = ctx.loader.import.bind(ctx.loader)
+    ctx.loader.import = async name => name === 'menu-fixture' ? menu : nativeImport(name)
+    const names = ['tools', 'sessions', 'systemPrompt', 'sessionProjections', 'typert'] as const
+    const labels = names.map(name => ctx[Context.isolate][name])
+    const first = (await ctx.agents.create({ sessionId: SessionId('already-open') })).agent
+    // The menu must appear in the installed package inventory, as it does in DSH.
+    await ctx.loader.root.update([
+      { id: 'menu-fixture', name: 'menu-fixture', config: { dataFile } },
+      { id: 'service-fixture', name: 'service-fixture' },
+    ])
+    await ctx.loader.await()
+    const manager = ctx.tieredPlugins
+    const plan = await manager.plan(clientScope, 'service-fixture', 'on')
+    assert.deepEqual(plan.missing, [])
+    const declarations = (manager as any).declarations as Map<string, { provides: Set<string> }>
+    assert.deepEqual([...declarations.get('menu-fixture')!.provides].sort(), ['tieredPluginMenu', 'tieredPlugins'])
+    assert.deepEqual([...declarations.get('service-fixture')!.provides], ['publicValue'])
+    const second = (await ctx.agents.create({ sessionId: SessionId('opened-later') })).agent
+    await manager.sync()
+    assert.deepEqual(names.map(name => ctx[Context.isolate][name]), labels)
+    assert.equal(ctx.agents.get(first.id), first)
+    assert.equal(ctx.agents.get(second.id), second)
+    assert.ok(names.every(name => ctx.get(name)))
+    await ctx.loader.resolve('menu-fixture')!.update({ disabled: true })
+    assert.deepEqual(names.map(name => ctx[Context.isolate][name]), labels)
+    assert.equal(ctx.agents.get(first.id), first)
+    await ctx.loader.resolve('menu-fixture')!.update({ disabled: false })
+    assert.deepEqual(names.map(name => ctx[Context.isolate][name]), labels)
+    assert.equal(ctx.agents.get(second.id), second)
+  } finally { await ctx.fiber.dispose() }
+})

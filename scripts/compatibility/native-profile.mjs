@@ -18,19 +18,34 @@ if (process.argv.includes('--plugin-isolation')) fs.writeFileSync(path.join(home
 }))
 const dir = path.join(home, 'profiles', 'test')
 fs.mkdirSync(dir, { recursive: true })
-fs.symlinkSync(path.join(root, 'node_modules'), path.join(dir, 'node_modules'), 'dir')
 const extra = names.filter(name => name !== 'dsh-tiered-plugin-menu')
+const withMenu = names.includes('dsh-tiered-plugin-menu')
+fs.mkdirSync(path.join(dir, 'node_modules'))
+for (const name of extra) {
+  const target = path.join(dir, 'node_modules', name)
+  fs.mkdirSync(path.dirname(target), { recursive: true })
+  fs.symlinkSync(path.join(root, 'node_modules', name), target, 'dir')
+}
+if (withMenu) {
+  const entry = path.resolve(process.env.COMPAT_MENU_ENTRY ?? path.join(root, 'dist/index.js'))
+  const source = path.dirname(path.dirname(entry))
+  const installed = path.join(dir, 'node_modules/dsh-tiered-plugin-menu')
+  fs.mkdirSync(installed)
+  for (const file of ['package.json', 'cordis.patch.yml', 'dist']) {
+    fs.cpSync(path.join(source, file), path.join(installed, file), { recursive: true })
+  }
+}
 const fromPackage = (moduleName, packageName) => moduleName === packageName || moduleName.startsWith(packageName + '/')
 const fromSample = moduleName => extra.some(name => fromPackage(moduleName, name))
 fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: 'compat-test', private: true,
-  dependencies: Object.fromEntries(extra.map(name => [name, '*'])),
-  dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', ...extra] } },
+  dependencies: Object.fromEntries(names.map(name => [name, '*'])),
+  dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', ...(withMenu ? ['dsh-tiered-plugin-menu'] : []), ...extra] } },
 }))
 fs.writeFileSync(path.join(dir, 'cordis.yml'), '[]\n')
-const startupPatches = names.includes('dsh-tiered-plugin-menu') ? [{ insert: [{
-  id: 'compat-menu', name: pathToFileURL(path.resolve(process.env.COMPAT_MENU_ENTRY ?? path.join(root, 'dist/index.js'))).href,
+const startupPatches = withMenu ? [{
+  id: 'tiered-plugin-menu',
   config: { dataFile: path.join(home, 'menu.json') },
-}] }] : []
+}] : []
 fs.writeFileSync(path.join(dir, 'cordis.patch.yml'), JSON.stringify(startupPatches))
 process.env.DSH_HOME = home
 process.env.DSH_TELEMETRY_DISABLED = '1'

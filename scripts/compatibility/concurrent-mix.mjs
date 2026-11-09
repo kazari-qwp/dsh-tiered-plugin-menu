@@ -125,7 +125,7 @@ export async function concurrentMix(ctx, report, names, home, save) {
     })
   }
   await check('menu disable and re-enable release and restore all lower instances',async()=>{
-    const entry = [...ctx.loader.entries()].find(entry=>entry.options.id==='compat-menu')
+    const entry = [...ctx.loader.entries()].find(entry=>entry.options.name==='dsh-tiered-plugin-menu')
     const previous = entry.fiber
     await entry.update({disabled:true}); await previous.await(); await ctx.loader.await()
     assert.equal(ctx.get('tieredPlugins'),undefined)
