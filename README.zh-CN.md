@@ -23,10 +23,12 @@
 从 [Releases](https://github.com/kazari-qwp/dsh-tiered-plugin-menu/releases) 下载构建好的 `.tgz`，在 DSH 插件页添加，或执行：
 
 ```sh
-dsh plugin --profile desktop add ./dsh-tiered-plugin-menu-0.6.1.tgz
+dsh plugin --profile desktop add ./dsh-tiered-plugin-menu-0.6.2.tgz
 ```
 
 Web 版换成自己的 profile 名称，通常是 `web`。未开启热重载时重启 DSH。不需要预先安装临时消息等其他插件。
+
+**从 0.6.0/0.6.1 升级：** 安装 0.6.2 后重启 DSH。此版修复实际安装环境中找不到 SDK 依赖的问题；该问题会导致下级插件启动失败、菜单启用时报 `fiber state 4`，或点击会话后从侧栏消失。已有会话日志不需要改写。[原因与验证](docs/PLUGIN_ISOLATION.md#062-installed-profile-module-resolution)。
 
 发行包包含宿主、浏览器构建产物、bundle patch 与许可，不需要安装时运行构建脚本。GitHub 源码需要先构建，直接安装请使用 Release 的 tarball。这是 [DSH 官方打包教程](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/develop/basic/publish.zh.md)支持的分发方式。
 

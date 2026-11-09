@@ -49,6 +49,22 @@ The original mixed-plugin harness inserted the menu by file URL, outside the ins
 
 The corrected offline-VM harness also passes the 26-package isolated client startup, **33/33** isolated lower-scope checks, **32/32** switch-off control checks, and **5/5** conflicting-memory-tool checks. The same four native presets wait only in runs that deliberately disable their client-level provider. [0.6.1 results and package versions](reports/session-restoration-0.6.1.json). 修正测试安装方式后的混装回归也已通过；此次未重新运行完整的 54 组模型功能矩阵。
 
+## 0.6.2 installed-profile module resolution
+
+0.6.1 did **not** resolve all reported session and activation failures. Its Windows profile copies were placed inside the development repository, where ancestor `node_modules` could supply missing SDK imports. The mixed-plugin lab also has development dependencies available. Those runs did not establish compatibility with a standalone desktop installation.
+
+The private module hook called Node's next resolver directly, below DSH's package routing. Consequently, a plugin installed outside the repository could import normally through DSH but fail when the menu loaded its isolated instance. In a standalone copy using the installed desktop runtime (DSH 0.2.2-rc.1, Electron 44.7.0, Node 24.21.0), this reproduced:
+
+- An enabled `dsh-context` client entry stuck at `fiber state 4`, and failure when enabling the menu again.
+- Three persisted sessions with scoped plugins failing activation and emitting `api-session/removed`, while their historical transcript remained readable.
+- Missing SDK packages when enabling a session-level plugin.
+
+The loader now resolves each dependency through DSH's existing module resolver, using the original importing file. SDK/peer modules remain shared and ordinary plugin modules remain private. No DSH or third-party plugin code was changed, and no package-specific fallback was added.
+
+With the same standalone copies, isolation **on and off** both passed: all six persisted sessions activated, no session-removal notifications occurred, and two complete menu off/on cycles succeeded. Two sessions independently enabled Temporary Messages with different templates; their previews returned `42` and `43` before and after the cycles. All **43 local tests**, type checking and build passed, including a new subprocess regression with a runtime-only SDK dependency outside the repository. This patch did not rerun the 26-package VM matrix or automate the desktop UI. [Machine-readable results](reports/module-resolution-0.6.2.json).
+
+0.6.2 修复隔离加载绕过 DSH 依赖解析的问题。此前把 Windows 测试副本放在开发仓库内，借用了仓库依赖，掩盖了真实安装环境的失败。移到仓库外后，已复现 Context 启动异常、菜单重启失败，以及三个会话恢复失败后被移出实时列表。修复后，隔离开关开、关两种状态下的六个会话均能恢复，菜单开关和两个会话的独立临时消息配置均通过验证。没有改写原会话日志；安装更新后重启 DSH 即可重新加载。
+
 ## Limits and data
 
 Private data is stored beside the menu settings in `<config-filename>.data/`. First activation starts with fresh private directories. Existing global directories are left in place; turning the switch off and restarting returns client entries to them. The two sets of data are not automatically merged.

@@ -1,0 +1,32 @@
+{
+  "version": "0.6.2",
+  "date": "2026-11-09",
+  "environment": {
+    "platform": "Windows x64",
+    "dsh": "0.2.2-rc.1",
+    "electron": "44.7.0",
+    "node": "24.21.0",
+    "profileLocation": "outside repository and its node_modules ancestry",
+    "plugins": { "dsh-context": "0.83.0", "dsh-temporary-messages": "0.1.10" },
+    "data": "copies of six persisted sessions and profile/menu configuration, without credentials"
+  },
+  "before": {
+    "contextClientFiberState": 4,
+    "sessionActivationFailures": 3,
+    "sessionRemovedNotifications": 3,
+    "menuReenableFailures": 2,
+    "cause": "isolated imports bypassed DSH package resolution; SDK not found"
+  },
+  "after": {
+    "isolationOn": { "sessionsActivated": 6, "sessionErrors": 0, "sessionRemovedNotifications": 0, "menuOffOnCycles": 2, "menuActivationErrors": 0, "independentTemplatePreviews": ["42", "43"], "settingsPreservedAcrossCycles": true },
+    "isolationOff": { "sessionsActivated": 6, "sessionErrors": 0, "sessionRemovedNotifications": 0, "menuOffOnCycles": 2, "menuActivationErrors": 0, "independentTemplatePreviews": ["42", "43"], "settingsPreservedAcrossCycles": true },
+    "typecheck": "passed",
+    "build": "passed",
+    "localTestCases": { "passed": 43, "failed": 0 },
+    "newRegression": "runtime-only SDK static/dynamic/createRequire/import.meta.resolve imports share host identity while instance state stays private"
+  },
+  "originalSessionFilesModified": false,
+  "paidModelCalls": 0,
+  "desktopUiAutomated": false,
+  "vm26PackageMatrixRerun": false
+}

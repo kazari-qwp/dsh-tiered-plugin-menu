@@ -18,8 +18,14 @@ interface Namespace {
   peers: Set<string>
   common: Record<string, NodeModule>
   builtins: Map<string, any>
+  loader?: EntryTree['ctx']['loader']['internal']
 }
 interface Source { namespace: Namespace; original: string; builtin?: string }
+
+function resolveModule(loader: NonNullable<Namespace['loader']>, specifier: string, parent: string, attributes = {}) {
+  return loader.version === 'v2' ? loader.resolveSync(parent, { specifier, attributes })
+    : loader.resolveSync(specifier, parent, attributes)
+}
 
 /** Private module graphs give cached fs imports and dependency-local locks the same instance lifetime. */
 export class ScopedModules {
@@ -46,7 +52,11 @@ export class ScopedModules {
           this.sources.set(url, { namespace: parent.namespace, original: `node:${name}`, builtin: name })
           return { shortCircuit: true, url }
         }
-        const resolved = next(specifier, originalContext)
+        // Re-enter DSH's package resolver with the real importer. next() alone
+        // sits below that resolver and cannot find SDK packages in desktop installs.
+        const loader = parent.namespace.loader
+        const resolved = loader ? { ...resolveModule(loader, specifier, parent.original, context.importAttributes), shortCircuit: true }
+          : next(specifier, originalContext)
         if (!resolved.url.startsWith('file:') || resolved.url.endsWith('.node') || this.shared(parent.namespace, specifier)) return resolved
         return { ...resolved, shortCircuit: true, url: this.url(parent.namespace, resolved.url) }
       },
@@ -155,11 +165,11 @@ export class ScopedModules {
     } catch (error) { delete namespace.common[filename]; throw error }
   }
 
-  async import(key: string, original: string, peers: string[] = []): Promise<any> {
+  async import(key: string, original: string, peers: string[] = [], loader?: Namespace['loader']): Promise<any> {
     let namespace = this.namespaces.get(key)
     if (!namespace) {
       const prefix = path.join(this.virtual, hash(key))
-      namespace = { prefix, peers: new Set(peers), common: Object.create(null), builtins: new Map(), view: undefined! }
+      namespace = { prefix, peers: new Set(peers), common: Object.create(null), builtins: new Map(), view: undefined!, loader }
       namespace.view = new DirectoryView(path.join(this.root, hash(key)), file => this.original(namespace!, file))
       this.namespaces.set(key, namespace)
     }
@@ -173,10 +183,8 @@ export class ScopedModules {
     if (namespace?.[Symbol.toStringTag] !== 'Module') return namespace
     const parent = tree.ctx.baseUrl ?? pathToFileURL(tree.ctx.profileContext.installAnchor).href
     const loader = tree.ctx.loader.internal
-    const url = loader?.version === 'v2' ? loader.resolveSync(parent, { specifier: name }).url
-      : loader?.version === 'v1' ? loader.resolveSync(name, parent, {}).url
-        : pathToFileURL(createRequire(parent).resolve(name)).href
-    return url.startsWith('file:') ? this.import(key, url, peers) : namespace
+    const url = loader ? resolveModule(loader, name, parent).url : pathToFileURL(createRequire(parent).resolve(name)).href
+    return url.startsWith('file:') ? this.import(key, url, peers, loader) : namespace
   }
 
   bind(entry: Entry, key: string, peers: string[]): () => void {
