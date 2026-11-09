@@ -11,6 +11,10 @@ export function scopePluginFetch() {
     if (!row) return previous(input, init)
     const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined))
     headers.set('x-dsh-tiered-scope', row.enabled ? scopeKey(row.source) : 'disabled')
+    if (row.routePrefix) {
+      url.pathname = row.routePrefix + url.pathname
+      input = input instanceof Request ? new Request(url, input) : url
+    }
     return previous(input, { ...init, headers })
   }
   globalThis.fetch = fetch

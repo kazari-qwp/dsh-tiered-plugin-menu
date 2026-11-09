@@ -4,6 +4,8 @@ import { createHash, randomUUID } from 'node:crypto'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { createRequire, findPackageJSON, isBuiltin, Module, registerHooks, type ModuleHooks } from 'node:module'
 import { DirectoryView } from './directory-view.ts'
+import { AsyncLocalStorage } from 'node:async_hooks'
+import type { Entry, EntryTree } from '@deepseek-ai/cordis-plugin-loader'
 
 const nativeRequire = createRequire(import.meta.url)
 const bridgeKey = Symbol.for('dsh-tiered-plugin-menu.module-values')
@@ -25,6 +27,8 @@ export class ScopedModules {
   private sources = new Map<string, Source>()
   private namespaces = new Map<string, Namespace>()
   private hook: ModuleHooks
+  private loading = new AsyncLocalStorage<{ entry: Entry; key: string; peers: string[] }>()
+  private trees = new Map<EntryTree, { original: EntryTree['import']; entries: Set<Entry> }>()
 
   constructor(readonly root: string) {
     this.virtual = path.join(path.resolve(root), '.modules', randomUUID())
@@ -160,6 +164,41 @@ export class ScopedModules {
       this.namespaces.set(key, namespace)
     }
     return import(this.url(namespace, original))
+  }
+
+  /** Client entries and lower instances load through the same private module graph. */
+  async load(tree: EntryTree, name: string, key: string, peers: string[], importModule = tree.import.bind(tree)) {
+    const namespace = await importModule(name)
+    // In-memory factories and Cordis builtins have no file module graph.
+    if (namespace?.[Symbol.toStringTag] !== 'Module') return namespace
+    const parent = tree.ctx.baseUrl ?? pathToFileURL(tree.ctx.profileContext.installAnchor).href
+    const loader = tree.ctx.loader.internal
+    const url = loader?.version === 'v2' ? loader.resolveSync(parent, { specifier: name }).url
+      : loader?.version === 'v1' ? loader.resolveSync(name, parent, {}).url
+        : pathToFileURL(createRequire(parent).resolve(name)).href
+    return url.startsWith('file:') ? this.import(key, url, peers) : namespace
+  }
+
+  bind(entry: Entry, key: string, peers: string[]): () => void {
+    const tree = entry.parent.tree
+    let bound = this.trees.get(tree)
+    if (!bound) {
+      const original = tree.import
+      bound = { original, entries: new Set() }; this.trees.set(tree, bound)
+      tree.import = async (name, ...args) => {
+        const request = this.loading.getStore()
+        if (!request || request.entry.parent.tree !== tree || request.entry.options.name !== name) return original.call(tree, name, ...args)
+        return this.load(tree, name, request.key, request.peers, original.bind(tree))
+      }
+    }
+    bound.entries.add(entry)
+    const init = entry.init
+    entry.init = () => this.loading.run({ entry, key, peers }, () => init.call(entry))
+    return () => {
+      entry.init = init
+      bound.entries.delete(entry)
+      if (!bound.entries.size) { tree.import = bound.original; this.trees.delete(tree) }
+    }
   }
 
   view(key: string): DirectoryView | undefined { return this.namespaces.get(key)?.view }

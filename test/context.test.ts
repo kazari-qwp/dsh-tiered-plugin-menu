@@ -14,8 +14,10 @@ import * as menu from '../src/index.ts'
 import { clientScope } from '../src/shared.ts'
 import { mountWorkspaces } from './workspaces.ts'
 import { mountPluginManagement } from './plugins.ts'
+import { ConfigStore } from '../src/store.ts'
+import { resourceName } from '../src/resource-names.ts'
 
-test('原版 dsh-context：客户端、两工作区和会话同时启用，提示词、统计、接口按生效实例路由', async () => {
+for (const pluginIsolation of [false, true]) test(`原版 dsh-context：多层配置、统计、HTTP 和卸载恢复（隔离 ${pluginIsolation}）`, { timeout: 15000 }, async () => {
   mkdirSync('work', { recursive: true })
   const root = resolve(mkdtempSync('work/context-test-'))
   const ctx = new Context()
@@ -54,6 +56,7 @@ test('原版 dsh-context：客户端、两工作区和会话同时启用，提�
       await workspace.attachSession(SessionId(name)); agents.push(agent)
     }
     const dataFile = resolve(root, 'settings.json')
+    new ConfigStore(dataFile).setPluginIsolation(pluginIsolation)
     let fiber = await ctx.plugin(menu, { dataFile })
     const manager = ctx.tieredPlugins
     const one = { level: 'workspace' as const, id: String(workspaces[0]!.id) }
@@ -73,8 +76,10 @@ test('原版 dsh-context：客户端、两工作区和会话同时启用，提�
       assert.deepEqual(prompt(id!).match(/PREFIX_\w+/g), [`PREFIX_${prefix}`])
     }
     const post = async (path: string, id: string) => {
-      const route = (ctx.connection as any).fetchRoutes.get('/api/dsh-context/' + path)
-      const response = await route.fetch(new Request('http://localhost/api/dsh-context/' + path, {
+      const row = (await ctx.tieredPlugins.rows({ level: 'session', id }))[0]!
+      const url = (row.routePrefix ?? '') + '/api/dsh-context/' + path
+      const route = (ctx.connection as any).fetchRoutes.get(url)
+      const response = await route.fetch(new Request('http://localhost' + url, {
         method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sessionId: id }),
       }))
       return response.json()
@@ -89,14 +94,15 @@ test('原版 dsh-context：客户端、两工作区和会话同时启用，提�
     const savedB = ctx.sessionProjections.checkpoint(agents[1]!.session)
     await manager.configure(one, 'dsh-context', true, { promptPrefix: 'PREFIX_UPDATED', maxRequestSteps: 4 })
     assert.equal((await post('detail', 'B')).value.requests.length, 4)
-    assert.ok(ctx.sessionProjections.viewCheckpoint(savedA).contextTimeline, '不相关作用域的缓存仍然可用')
-    assert.equal(ctx.sessionProjections.viewCheckpoint(savedB).contextTimeline, undefined, '本层配置变化使旧缓存失效')
+    const projectionKey = pluginIsolation ? resourceName('dsh-context', 'contextTimeline') : 'contextTimeline'
+    assert.ok(Reflect.get(ctx.sessionProjections.viewCheckpoint(savedA), projectionKey), '不相关作用域的缓存仍然可用')
+    assert.equal(Reflect.get(ctx.sessionProjections.viewCheckpoint(savedB), projectionKey), undefined, '本层配置变化使旧缓存失效')
     await manager.configure(two, 'dsh-context', false, {})
     await manager.configure(clientScope, 'dsh-context', false, {})
     await round()
     assert.equal(prompt('C').includes('PREFIX_'), false)
     assert.equal(prompt('D').includes('PREFIX_'), false)
-    assert.equal(ctx.sessionProjections.snapshot(agents[2]!.session).values.contextTimeline, null)
+    assert.equal(Reflect.get(ctx.sessionProjections.snapshot(agents[2]!.session).values, projectionKey), null)
     assert.equal((await post('detail', 'C')).error.code, 'plugin-disabled')
     await manager.inherit(a, 'dsh-context')
     await round()
@@ -111,6 +117,7 @@ test('原版 dsh-context：客户端、两工作区和会话同时启用，提�
       assert.equal(current.instances.size, 0)
       assert.equal(ctx.get('tieredPlugins'), undefined)
       assert.equal((ctx.connection as any).fetchRoutes.has('/api/dsh-context/detail'), false, '全局未启用时，下级 HTTP 注册一起释放')
+      assert.equal((ctx.connection as any).fetchRoutes.has('/api/__tiered/dsh-context/api/dsh-context/detail'), false)
       assert.equal(readFileSync(dataFile, 'utf8'), saved, '卸载不删除持久化配置')
       await round()
       for (const agent of agents) assert.equal(prompt(String(agent.id)).includes('PREFIX_'), false)

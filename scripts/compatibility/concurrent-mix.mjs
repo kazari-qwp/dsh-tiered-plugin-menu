@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import assert from 'node:assert/strict'
 import { configFor } from './scoped-mix.mjs'
+import { resourceName } from '../../src/resource-names.ts'
 
 export async function concurrentMix(ctx, report, names, home, save) {
   report.concurrent = []
@@ -29,6 +30,8 @@ export async function concurrentMix(ctx, report, names, home, save) {
   const manager = () => ctx.tieredPlugins
   const rows = async selected => (await manager().rows(selected)).flatMap(row=>row.components ?? [row])
   const configured = []
+  const named = (packageName, name) => process.argv.includes('--plugin-isolation')
+    ? resourceName(configured.find(item => item.name === packageName).id, name) : name
   for (const name of names.filter(name=>name !== 'dsh-tiered-plugin-menu')) {
     const group = (await manager().rows(client)).find(row=>row.package===name)
     if (!group) { await check(`discover ${name}`, ()=>{throw Error('not discovered')}); continue }
@@ -64,22 +67,22 @@ export async function concurrentMix(ctx, report, names, home, save) {
     for(const agent of [a,b]) {
       const options = {scope:agent,cwd:agent.session.header.cwd}
       const listed = await ctx.skills.list(options)
-      const packaged = listed.find(skill=>skill.provider==='dsh-genui')
+      const packaged = listed.find(skill=>skill.provider===named('@changfenhuang/dsh-genui','dsh-genui'))
       assert.ok(packaged,'GenUI provider is visible')
       assert.ok((await ctx.skills.get(packaged.name,options))?.content.length)
-      assert.ok((await ctx.skills.get('normify-gen',options))?.content.length)
+      assert.ok((await ctx.skills.get(named('@dsh-external/dsh-normify','normify-gen'),options))?.content.length)
     }
     const off = handles[3].agent
     const disabled = await ctx.skills.list({scope:off,cwd:outside.path})
-    assert.equal(disabled.some(skill=>skill.provider==='dsh-genui'||skill.name==='normify-gen'),false)
+    assert.equal(disabled.some(skill=>skill.provider===named('@changfenhuang/dsh-genui','dsh-genui')||skill.name===named('@dsh-external/dsh-normify','normify-gen')),false)
     const genui = configured.find(item=>item.name==='@changfenhuang/dsh-genui')
     await manager().configure(session(a),genui.id,false,{})
-    assert.equal((await ctx.skills.list({scope:a,cwd:nested.path})).some(skill=>skill.provider==='dsh-genui'),false)
-    assert.equal((await ctx.skills.list({scope:b,cwd:other.path})).some(skill=>skill.provider==='dsh-genui'),true)
+    assert.equal((await ctx.skills.list({scope:a,cwd:nested.path})).some(skill=>skill.provider===named('@changfenhuang/dsh-genui','dsh-genui')),false)
+    assert.equal((await ctx.skills.list({scope:b,cwd:other.path})).some(skill=>skill.provider===named('@changfenhuang/dsh-genui','dsh-genui')),true)
     await manager().inherit(session(a),genui.id)
   })
   const call = async (agent, name, args={}) => {
-    const tool = ctx.tools.get(name, agent)
+    const tool = ctx.tools.get(named('dsh-npm',name), agent)
     assert.ok(tool, `${name} is registered`)
     return tool.execute(args, { agent })
   }
@@ -126,7 +129,7 @@ export async function concurrentMix(ctx, report, names, home, save) {
     const previous = entry.fiber
     await entry.update({disabled:true}); await previous.await(); await ctx.loader.await()
     assert.equal(ctx.get('tieredPlugins'),undefined)
-    if(npm)assert.equal(ctx.tools.get('npm_status',a),undefined)
+    if(npm)assert.equal(ctx.tools.get(named('dsh-npm','npm_status'),a),undefined)
     await entry.update({disabled:false}); await ctx.loader.await()
     if(npm){
       assert.equal((await call(a,'npm_status')).registry,'https://session-a.invalid/')

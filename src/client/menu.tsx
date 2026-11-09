@@ -199,10 +199,14 @@ export function ScopeTabs(props: MenuProps & { scope: Scope; sessionId?: string 
 
 export function LevelSettings({ api, ui }: Pick<MenuProps, 'api' | 'ui'>) {
   const [enabled, setEnabled] = useState<boolean>()
+  const [isolation, setIsolation] = useState<boolean>()
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
   useEffect(() => {
-    void api.settings().then(result => setEnabled(value(result).inheritWorkspaceTree)).catch(error => setNotice(String(error)))
+    void api.settings().then(result => {
+      const settings = value(result)
+      setEnabled(settings.inheritWorkspaceTree); setIsolation(settings.pluginIsolation)
+    }).catch(error => setNotice(String(error)))
   }, [api])
   const toggle = async () => {
     setBusy(true)
@@ -211,6 +215,14 @@ export function LevelSettings({ api, ui }: Pick<MenuProps, 'api' | 'ui'>) {
       setEnabled(!enabled)
       ui.changed?.()
       setNotice('已保存')
+    } catch (error) { setNotice(String(error)) } finally { setBusy(false) }
+  }
+  const toggleIsolation = async () => {
+    setBusy(true)
+    try {
+      value(await api.setPluginIsolation(!isolation))
+      setIsolation(!isolation)
+      setNotice('已保存，重启 DSH 后生效')
     } catch (error) { setNotice(String(error)) } finally { setBusy(false) }
   }
   return <section className="tiered-menu"><style>{styles}</style>
@@ -222,6 +234,14 @@ export function LevelSettings({ api, ui }: Pick<MenuProps, 'api' | 'ui'>) {
       <button id="tiered-workspace-tree" type="button" role="switch" className="tiered-switch"
         aria-label="按工作区树继承" aria-checked={enabled ?? false} disabled={enabled === undefined || busy}
         onClick={() => void toggle()}><span /></button>
+    </div>
+    <div className="tiered-tree-setting">
+      <div><label htmlFor="tiered-plugin-isolation">插件隔离（实验性）</label>
+        <p className="tiered-hint">给插件提供相对独立的环境，可能能修复一些兼容性问题，但也可能带来更多兼容性问题。</p>
+      </div>
+      <button id="tiered-plugin-isolation" type="button" role="switch" className="tiered-switch"
+        aria-label="插件隔离（实验性）" aria-checked={isolation ?? false} disabled={isolation === undefined || busy}
+        onClick={() => void toggleIsolation()}><span /></button>
     </div>
     {notice && <p role="status">{notice}</p>}
   </section>

@@ -24,10 +24,15 @@ export class ConfigStore {
     return defaults.independent ? defaults.plugins[id] : undefined
   }
 
-  settings(): MenuSettings { return this.data.settings ?? { inheritWorkspaceTree: true } }
+  settings(): MenuSettings { return { inheritWorkspaceTree: true, pluginIsolation: false, ...this.data.settings } }
 
   setWorkspaceTreeInheritance(enabled: boolean): void {
-    this.data.settings = { inheritWorkspaceTree: enabled }
+    this.data.settings = { ...this.settings(), inheritWorkspaceTree: enabled }
+    this.save()
+  }
+
+  setPluginIsolation(enabled: boolean): void {
+    this.data.settings = { ...this.settings(), pluginIsolation: enabled }
     this.save()
   }
 

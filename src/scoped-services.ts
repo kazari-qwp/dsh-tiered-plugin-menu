@@ -9,6 +9,7 @@ import type { ToolDefinition, ToolRegistrationOptions } from '@deepseek-ai/dsh-t
 import type { SkillCandidate, SkillProvider, SkillProviderControl, SkillRegistration, SkillViewOptions } from '@deepseek-ai/dsh-skill'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { createScope, type Scope as RegistrationScope } from '@deepseek-ai/dsh-scope'
+import { resourceName } from './resource-names.ts'
 
 interface Owner { scope: Scope; accepts(sessionId: string): boolean; configKey(): string }
 interface Contribution<T> { owner: Owner; value: T }
@@ -50,10 +51,20 @@ export class ScopedServices {
   }>()
   private skills: Map<string, SkillGroup>
 
-  constructor(private root: Context) {
+  constructor(private root: Context, private namespace?: string) {
     let skills = hostSkills.get(root)
     if (!skills) { skills = new Map(); hostSkills.set(root, skills) }
     this.skills = skills
+  }
+
+  name(name: string) { return this.namespace ? resourceName(this.namespace, name) : name }
+  get routePrefix() { return this.namespace ? `/api/__tiered/${encodeURIComponent(this.namespace)}` : '' }
+  private path(path: string) { return this.routePrefix + path }
+  private request(request: Request): Request {
+    if (!this.namespace) return request
+    const url = new URL(request.url)
+    url.pathname = url.pathname.slice(this.routePrefix.length)
+    return new Request(url, request)
   }
 
   private pick<T>(entries: Contribution<T>[], sessionId?: string) {
@@ -67,7 +78,23 @@ export class ScopedServices {
       const lifecycle = new AbortController()
       let group: ReturnType<typeof this.skills.get>
       try {
-        const provider = create({ signal: lifecycle.signal, invalidate: () => { if (!lifecycle.signal.aborted) group?.invalidate() } })
+        const original = create({ signal: lifecycle.signal, invalidate: () => { if (!lifecycle.signal.aborted) group?.invalidate() } })
+        const candidates = new WeakMap<SkillCandidate, SkillCandidate>()
+        const provider: SkillProvider = !this.namespace ? original : { ...original, name: this.name(original.name),
+          list: async options => {
+            const result = await original.list(options)
+            const observation = 'candidates' in result ? result : { candidates: result, complete: true }
+            return { ...observation, candidates: observation.candidates.map(candidate => {
+              const named = { ...candidate, name: this.name(candidate.name), provider: this.name(original.name) }
+              candidates.set(named, candidate)
+              return named
+            }) }
+          },
+          get: async (candidate, options) => {
+            const skill = await original.get(candidates.get(candidate)!, options)
+            return skill && { ...skill, name: this.name(skill.name), provider: this.name(original.name) }
+          },
+        }
         group = this.skills.get(provider.name)
         if (!group) {
           const entries: Contribution<SkillProvider>[] = []
@@ -167,7 +194,8 @@ export class ScopedServices {
           this.toolScopes.set(agent, scope); target = scope.ctx
         }
         const { definition, options } = entry.value
-        const dispose = (target.get('tools') as Context['tools']).register(agent ? definition : { ...definition,
+        const publicDefinition = this.namespace ? { ...definition, name: this.name(definition.name) } : definition
+        const dispose = (target.get('tools') as Context['tools']).register(agent ? publicDefinition : { ...publicDefinition,
           execute: (args, exec) => {
             if (exec.agent && !entry.owner.accepts(exec.agent.id)) throw new Error('此会话未启用该工具')
             return definition.execute(args, exec)
@@ -180,6 +208,10 @@ export class ScopedServices {
     for (const [agent, scope] of this.toolScopes) if (![...this.tools.values()].some(group => group.mounted.has(agent))) {
       this.toolScopes.delete(agent); void scope.dispose()
     }
+  }
+
+  localTool(name: string, owner: Owner) {
+    return this.namespace ? this.tools.get(name)?.entries.find(entry => entry.owner === owner)?.value.definition : undefined
   }
 
   releaseTools(sessionId: string) {
@@ -201,11 +233,14 @@ export class ScopedServices {
           const scope = request.headers instanceof Headers ? request.headers.get('x-dsh-tiered-scope') : request.headers['x-dsh-tiered-scope']
           return scope ? entries.find(entry => scopeKey(entry.owner.scope) === scope) : this.pick(entries)
         }
-        const route = { ...value,
-          ...(value.resource ? { resource: (request: Request, peer: unknown) => pick(request)?.value.resource(request, peer) ?? new Response('Plugin disabled', { status: 404 }) }
+        const route = { ...value, path: this.path(value.path),
+          ...(value.resource ? { resource: (request: Request, peer: unknown) => pick(request)?.value.resource(this.request(request), peer) ?? new Response('Plugin disabled', { status: 404 }) }
             : { handler: (request: any, response: any, ...args: any[]) => {
               const selected = pick(request)
-              if (selected) return selected.value.handler(request, response, ...args)
+              if (selected) {
+                if (this.namespace) request.url = request.url.slice(this.routePrefix.length)
+                return selected.value.handler(request, response, ...args)
+              }
               if ('writeHead' in response) response.writeHead(404)
               response.end()
             } }),
@@ -264,7 +299,7 @@ export class ScopedServices {
         if (!selected || group.mounted.has(agent.id)) continue
         const fiber = agent.ctx.inject(['commands'], child => {
           const commands = child.get('commands') as any
-          commands.register({ ...selected.value, handler: (request: any) => {
+          commands.register({ ...selected.value, name: this.name(selected.value.name), handler: (request: any) => {
             const current = this.pick(group.entries, request.agent.id)
             return current ? current.value.handler(request) : { kind: 'error', message: '此会话未启用该命令' }
           } })
@@ -281,7 +316,7 @@ export class ScopedServices {
       let group = this.prompts.get(key)
       if (!group) {
         const entries: Contribution<PromptSection | PromptContext>[] = []
-        const dispose = (this.root.get('systemPrompt') as Context['systemPrompt'])[kind]({ ...value, text: context => {
+        const dispose = (this.root.get('systemPrompt') as Context['systemPrompt'])[kind]({ ...value, name: this.name(value.name), text: context => {
           const selected = this.pick(entries, (context.scope as { id?: string })?.id)?.value
           return selected ? typeof selected.text === 'function' ? selected.text(context) : selected.text : ''
         } } as PromptSection)
@@ -302,7 +337,7 @@ export class ScopedServices {
       let group = this.routes.get(value.path)
       if (!group) {
         const entries: Contribution<ConnectionFetchRoute>[] = []
-        const dispose = (this.root.get('connection') as Context['connection']).fetch.register({ ...value, fetch: async request => {
+        const dispose = (this.root.get('connection') as Context['connection']).fetch.register({ ...value, path: this.path(value.path), fetch: async request => {
           // 读副本，原请求仍交给插件解析。会话型接口按请求中的 sessionId 选择实例。
           const body = request.headers.get('content-type')?.includes('json')
             ? await request.clone().json().catch(() => null) : null
@@ -310,7 +345,7 @@ export class ScopedServices {
           const scope = request.headers.get('x-dsh-tiered-scope')
           const selected = scope ? entries.find(entry => scopeKey(entry.owner.scope) === scope) : this.pick(entries, sessionId)
           if (!selected) return Response.json({ ok: false, error: { code: 'plugin-disabled', message: '此会话未启用插件' } }, { status: 404 })
-          return selected.value.fetch(request)
+          return selected.value.fetch(this.request(request))
         } })
         group = { entries, dispose }
         this.routes.set(value.path, group)
@@ -355,7 +390,7 @@ export class ScopedServices {
       if (!group.entries.length) return
       const example = group.entries[0]!.value
       group.handle = await (this.root.get('sessionProjections') as Context['sessionProjections']).register({
-        key,
+        key: this.name(key),
         // 保持重启后的缓存版本稳定；归属或配置变化的缓存才需要重算。
         stateVersion: 1_000_000 + example.stateVersion,
         stateSchema: z.object({ sessionId: z.string(), owner: z.string().nullable(), config: z.string(), value: z.unknown() })
@@ -422,7 +457,7 @@ export class ScopedServices {
 class ToolsFacade extends Service {
   constructor(ctx: Context, private broker: ScopedServices, private owner: Owner, private root: Context) { super(ctx, 'tools'); forwardService(this, root, 'tools') }
   register(value: ToolDefinition, options?: ToolRegistrationOptions) { return this.broker.tool(this.ctx, this.owner, value, options) }
-  get(name: string, scope?: any) { return (this.root.get('tools') as Context['tools']).get(name, scope) }
+  get(name: string, scope?: any) { return this.broker.localTool(name, this.owner) ?? (this.root.get('tools') as Context['tools']).get(name, scope) }
   definitions(scope?: any) { return (this.root.get('tools') as Context['tools']).definitions(scope) }
   schemas(scope?: any) { return (this.root.get('tools') as Context['tools']).schemas(scope) }
 }
@@ -433,9 +468,15 @@ class CommandsFacade extends Service {
 }
 
 class SkillsFacade extends Service {
-  constructor(ctx: Context, private broker: ScopedServices, private owner: Owner, root: Context) { super(ctx, 'skills'); forwardService(this, root, 'skills') }
+  constructor(ctx: Context, private broker: ScopedServices, private owner: Owner, private root: Context) { super(ctx, 'skills'); forwardService(this, root, 'skills') }
   registerProvider(create: (control: SkillProviderControl) => SkillProvider) { return this.broker.skillProvider(this.ctx, this.owner, create) }
   register(value: SkillRegistration) { return this.broker.runtimeSkill(this.ctx, this.owner, value) }
+  async get(name: string, options?: SkillViewOptions) {
+    const skills = this.root.get('skills') as Context['skills']
+    const local = this.broker.name(name)
+    if (local === name) return skills.get(name, options)
+    return await skills.get(local, options) ?? skills.get(name, options)
+  }
 }
 
 class WebFacade extends Service {

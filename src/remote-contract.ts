@@ -4,6 +4,7 @@ import type { ChildSettings, MenuContext, MenuSettings, Scope, PluginConfig, Plu
 export interface MenuRemote {
   settings(): Promise<RemoteResult<MenuSettings>>
   setWorkspaceTreeInheritance(enabled: boolean): Promise<RemoteResult<void>>
+  setPluginIsolation(enabled: boolean): Promise<RemoteResult<void>>
   context(sessionId: string | null): Promise<RemoteResult<MenuContext>>
   list(scope: Scope): Promise<RemoteResult<PluginRow[]>>
   childSettings(scope: Scope): Promise<RemoteResult<ChildSettings>>
@@ -36,6 +37,7 @@ export const remoteContribution: TypertRemoteContribution = {
   descriptors: [
     ['settings', []],
     ['setWorkspaceTreeInheritance', [['enabled', 'boolean']]],
+    ['setPluginIsolation', [['enabled', 'boolean']]],
     ['context', [['sessionId', 'session']]],
     ['list', [['scope', 'scope']]],
     ['childSettings', [['scope', 'scope']]],

@@ -19,6 +19,7 @@ class MenuService extends TypertRemoteService {
   constructor(ctx: Context) { super(ctx, 'tieredPluginMenu') }
   settings() { return this.ctx.tieredPlugins.settings() }
   setWorkspaceTreeInheritance(enabled: boolean) { return this.ctx.tieredPlugins.setWorkspaceTreeInheritance(enabled) }
+  setPluginIsolation(enabled: boolean) { return this.ctx.tieredPlugins.setPluginIsolation(enabled) }
   context(sessionId: string | null) { return this.ctx.tieredPlugins.context(sessionId) }
   list(scope: Scope) { return this.ctx.tieredPlugins.rows(scope) }
   childSettings(scope: Scope) { return this.ctx.tieredPlugins.childSettings(scope) }

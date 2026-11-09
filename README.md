@@ -23,7 +23,7 @@ Workspace and session buttons appear on hover, so they are hidden on the unhover
 Download the prebuilt `.tgz` from [Releases](https://github.com/kazari-qwp/dsh-tiered-plugin-menu/releases), then add it in DSH's plugin page or run:
 
 ```sh
-dsh plugin --profile desktop add ./dsh-tiered-plugin-menu-0.5.4.tgz
+dsh plugin --profile desktop add ./dsh-tiered-plugin-menu-0.6.0.tgz
 ```
 
 For Web, use your profile name (usually `web`). Restart DSH if hot reload is disabled. No companion plugin is required.
@@ -37,7 +37,7 @@ The release includes compiled host/browser code, the bundle patch and licenses. 
 - Click a package to open its component list. Control components individually there; a mixed package displays **partially enabled**.
 - **Settings** expands the original plugin configuration cards when available, with a JSON editor as fallback. Cards from both Settings and plugin details are shown separately, divided by a line.
 - Disabling a scope blocks the inherited instance. An explicitly enabled child can still override a disabled parent.
-- Client scope uses the original DSH instance and native switch. Lower scopes create separate instances. Leaving a view does not stop background agents.
+- Client scope uses the original DSH entries and native switches; lower scopes create separate instances. The optional experimental isolation switch also gives client entries private environments. Leaving a view does not stop background agents.
 - Disabling this menu releases its lower-scope instances, endpoints and UI while preserving saved settings for re-enabling. The original frontend is restored only for plugins enabled at client scope.
 - Choosing another session changes the active frontend binding; visiting Insights or Settings keeps that binding.
 - Updating an installed plugin replaces its scoped frontend and open configuration cards after DSH finishes reloading its module and CSS, keeping the selected session and its settings.
@@ -46,11 +46,21 @@ Example: client configuration A, workspace B, session C. That session uses C, in
 
 ## Workspace tree inheritance
 
-The menu's own Settings page contains one switch: **Inherit along workspace tree (按工作区树继承)**, enabled by default. Changes save and take effect immediately. The sidebar menus still edit plugins at each level.
+The menu's own Settings page includes **Inherit along workspace tree (按工作区树继承)**, enabled by default. Changes save and take effect immediately. The sidebar menus still edit plugins at each level.
 
 The nearest registered ancestor directory is the parent, matching DSH's **Workspace Tree** grouping. Missing intermediate workspace registrations are skipped. Each plugin resolves its nearest explicit configuration; inheritance shares that ancestor's instance. Turning the switch off makes every workspace inherit directly from the client, while preserving explicit configurations and new-child defaults. Changing or deleting an ancestor also reconnects consumers of its services.
 
 This describes directory hierarchy, not Agent ownership: a Superagent Worker can inherit its Router's workspace configuration when its directory is below the Router's directory, even though the Worker is not a native DSH subagent.
+
+## Experimental plugin isolation
+
+**Plugin isolation (experimental / 插件隔离（实验性）)** is the second switch in the menu's Settings. It is **off by default**, including on upgrade. Changes save immediately and take effect after restarting DSH.
+
+It gives plugins relatively independent environments. This may fix some compatibility issues, but may also introduce new ones.
+
+When enabled, isolation starts at client scope. It reuses the module loading, directory redirection, service routing and lifecycle handling of workspace/session instances. Tools, skills, commands, prompt sections and projection keys receive stable plugin-qualified names, so two plugins with the same tool name can both serve **the same session**. Explicit service dependencies remain connected; unrelated services stay private.
+
+Private client data starts fresh in `<config-filename>.data/`; existing plugin directories stay in place. Turning isolation off and restarting returns client entries to their original data. Fixed ports, external processes, conflicting preset IDs, and plugin code that requires another plugin's original public names are not covered. [Tested behavior and limits](docs/PLUGIN_ISOLATION.md).
 
 ## Defaults for new children
 
@@ -91,7 +101,7 @@ Data lives beside the menu configuration file in `<config-filename>.data/`, sepa
 
 ## Compatibility
 
-Current version: **0.5.4**. Tested with **DSH 0.2.2-rc.1** and Node.js 24. Package/component controls and dependency confirmation use shared DSH mechanisms, without adapters named after individual plugins or changes to DSH and third-party source code.
+Current version: **0.6.0**. Tested with **DSH 0.2.2-rc.1** and Node.js 24. Package/component controls and dependency confirmation use shared DSH mechanisms, without adapters named after individual plugins or changes to DSH and third-party source code.
 
 Installed packages are discovered automatically. Packages without declared self-compatibility appear below the **Unverified self-compatibility (未验证自兼容性)** separator at lower scopes and require confirmation. Successful startup does not mark them verified.
 
@@ -99,7 +109,7 @@ The implementation isolates provided services per scope and routes shared DSH re
 
 Different plugins can also register same-named skill providers and skills. Discovery selects contributions visible to the current session, then DSH resolves skill priorities; unloading one contribution preserves the others. [Skill isolation and 0.5.2 regression results](docs/SKILLS.md).
 
-Plugins with same-named tools can run in separate workspaces or sessions. Lower-instance tools use DSH's native per-agent registrations, keeping their own parameter schemas, executors and output renderers. Conflicting plugins enabled in the same session retain DSH's native behavior. [Tool isolation and 0.5.3 results](docs/TOOLS.md).
+Plugins with same-named tools can run in separate workspaces or sessions. Lower-instance tools use DSH's native per-agent registrations, keeping their own parameter schemas, executors and output renderers. The optional experimental switch extends this to same-session tool conflicts using distinct public names. [Tool isolation and 0.5.3 results](docs/TOOLS.md), [experimental isolation](docs/PLUGIN_ISOLATION.md).
 
 Agent preset declarations are also scoped: identical preset IDs can have different workspace/session configurations without duplicate registration. Native preset IDs and revision leases are preserved, including a subagent retaining its parent's revision. The adapter uses the declaration table of the pinned DSH version; this is not a cross-version API guarantee. See [Superagent validation](docs/SUPERAGENT.md) for the tested workflow and remaining upstream issues.
 
@@ -141,7 +151,7 @@ npm run check
 npm pack
 ```
 
-The checkout is self-contained. `vendor/` holds an unchanged MIT test fixture; no private repository access is needed. `check` covers type checking, building and 38 tests with real DSH services/plugins and React/jsdom. It uses neither browser automation nor paid model requests. Coverage includes child defaults, deep workspace trees, live inheritance changes, preset isolation and revision leases, session disposal/resume, native configuration cards and restart persistence.
+The checkout is self-contained. `vendor/` holds an unchanged MIT test fixture; no private repository access is needed. `check` covers type checking, building and 42 tests with real DSH services/plugins and React/jsdom. It uses neither browser automation nor paid model requests. Coverage includes child defaults, deep workspace trees, live inheritance changes, preset isolation and revision leases, session disposal/resume, native configuration cards and restart persistence.
 
 The broader third-party matrix runs in a disposable offline VM; see [reproduction instructions](docs/COMPATIBILITY.md#reproduce). No sample packages are installed into a personal DSH profile by these instructions.
 

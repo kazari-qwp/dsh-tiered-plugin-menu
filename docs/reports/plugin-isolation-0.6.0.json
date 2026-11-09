@@ -1,0 +1,497 @@
+{
+  "samples": {
+    "dsh-context": "0.82.2",
+    "dsh-temporary-messages": "0.1.10",
+    "@fooxe/dsh-memory": "0.13.10",
+    "dsh-tacit": "0.7.0",
+    "dsh-prompt-setting": "0.2.6",
+    "dsh-notification": "0.1.2",
+    "@deepcodec/dsh-clock": "1.0.0",
+    "@cerbur/clutch-dsh-title": "0.1.7",
+    "billion-context": "0.1.213",
+    "dsh-prompt-history": "1.11.2",
+    "dsh-better-sidebar": "0.30.1",
+    "@nanmicoder/dsh-agent-teams": "0.1.29",
+    "@furongjun1999/dsh-memory": "0.9.23",
+    "@falling-ts/dsh-force-compact": "0.9.1",
+    "dsh-bill": "0.23.1",
+    "@log.li/dsh-automode": "0.18.0",
+    "dsh-workbench": "0.16.1",
+    "@michengai/dsh-simplify": "1.0.7",
+    "dsh-rewind-plugin": "0.21.2",
+    "dsh-taskboard": "0.9.11",
+    "@changfenhuang/dsh-genui": "0.15.0",
+    "meow-memory": "0.32.6",
+    "@ayanehana/dsh-reasoning-effort": "0.9.1",
+    "@dsh-external/dsh-normify": "0.7.1",
+    "dsh-npm": "0.1.4",
+    "@caozeal/dsh-next-git": "0.1.10"
+  },
+  "environment": {
+    "DSH": "0.2.2-rc.1",
+    "Node": "24.22.2",
+    "OS": "Ubuntu 24.04",
+    "network": "loopback only",
+    "user": "unprivileged"
+  },
+  "coreTests": 42,
+  "cases": [
+    {
+      "name": "native-memory-pair",
+      "exit": 13,
+      "elapsedMs": 8080,
+      "ok": true,
+      "childFailures": [
+        {
+          "name": "meow-memory",
+          "error": "Error: tool \"memory_search\" is already registered (for a per-agent variant, register through that agent's `agent.ctx` instead)"
+        }
+      ],
+      "inactive": [
+        {
+          "id": "include:meow-memory",
+          "name": "meow-memory",
+          "state": 3,
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "name": "isolation-memory-pair",
+      "exit": 0,
+      "elapsedMs": 3543,
+      "ok": true,
+      "hostInactive": [],
+      "childFailures": [],
+      "clientIsolation": [
+        {
+          "name": "both conflicting memory tools register in the same session",
+          "ok": true
+        },
+        {
+          "name": "initialize the memory trust gate through its own registered command",
+          "ok": true
+        },
+        {
+          "name": "execute empty-index search in @fooxe/dsh-memory",
+          "ok": true
+        },
+        {
+          "name": "execute empty-index search in meow-memory",
+          "ok": true
+        },
+        {
+          "name": "session override disables only one of the conflicting tools",
+          "ok": true
+        }
+      ],
+      "inactive": []
+    },
+    {
+      "name": "isolation-client-all",
+      "exit": 0,
+      "elapsedMs": 7485,
+      "ok": true,
+      "hostInactive": [],
+      "childFailures": [],
+      "inactive": []
+    },
+    {
+      "name": "isolation-concurrent-all",
+      "exit": 0,
+      "elapsedMs": 57309,
+      "ok": true,
+      "hostInactive": [
+        {
+          "id": "include:preset-standard",
+          "name": "@deepseek-ai/dsh-agent-preset",
+          "state": 0,
+          "waiting": [
+            "biliBasicCompactionPolicy"
+          ]
+        },
+        {
+          "id": "include:preset-ptc",
+          "name": "@deepseek-ai/dsh-agent-preset",
+          "state": 0,
+          "waiting": [
+            "biliBasicCompactionPolicy"
+          ]
+        },
+        {
+          "id": "include:preset-minimal",
+          "name": "@deepseek-ai/dsh-agent-preset",
+          "state": 0,
+          "waiting": [
+            "biliBasicCompactionPolicy"
+          ]
+        },
+        {
+          "id": "include:preset-cordis",
+          "name": "@deepseek-ai/dsh-agent-preset",
+          "state": 0,
+          "waiting": [
+            "biliBasicCompactionPolicy"
+          ]
+        }
+      ],
+      "childFailures": [],
+      "concurrent": [
+        {
+          "name": "mount both workspaces dsh-context",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces dsh-temporary-messages",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces @fooxe/dsh-memory",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces dsh-tacit",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces dsh-prompt-setting",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces dsh-notification",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces @deepcodec/dsh-clock",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces @cerbur/clutch-dsh-title",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces billion-context",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces dsh-prompt-history",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces dsh-better-sidebar",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces @nanmicoder/dsh-agent-teams",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces @furongjun1999/dsh-memory",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces @falling-ts/dsh-force-compact",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces dsh-bill",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces @log.li/dsh-automode",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces dsh-workbench",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces @michengai/dsh-simplify",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces dsh-rewind-plugin",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces dsh-taskboard",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces @changfenhuang/dsh-genui",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces meow-memory",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces @ayanehana/dsh-reasoning-effort",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces @dsh-external/dsh-normify",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces dsh-npm",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces @caozeal/dsh-next-git",
+          "ok": true
+        },
+        {
+          "name": "all packages remain active together and nested workspaces inherit",
+          "ok": true
+        },
+        {
+          "name": "packaged and runtime skills load only in enabled sessions",
+          "ok": true
+        },
+        {
+          "name": "real npm_config writes stay separate at the same logical path",
+          "ok": true
+        },
+        {
+          "name": "independent session storage and inheritance restore",
+          "ok": true
+        },
+        {
+          "name": "parent off keeps explicit session working",
+          "ok": true
+        },
+        {
+          "name": "child defaults create fresh independent data",
+          "ok": true
+        },
+        {
+          "name": "menu disable and re-enable release and restore all lower instances",
+          "ok": true
+        }
+      ],
+      "inactive": []
+    },
+    {
+      "name": "client-without-conflict",
+      "exit": 0,
+      "elapsedMs": 3234,
+      "ok": true,
+      "hostInactive": [],
+      "childFailures": [],
+      "inactive": []
+    },
+    {
+      "name": "concurrent-without-conflict",
+      "exit": 0,
+      "elapsedMs": 47771,
+      "ok": true,
+      "hostInactive": [
+        {
+          "id": "include:preset-standard",
+          "name": "@deepseek-ai/dsh-agent-preset",
+          "state": 0,
+          "waiting": [
+            "biliBasicCompactionPolicy"
+          ]
+        },
+        {
+          "id": "include:preset-ptc",
+          "name": "@deepseek-ai/dsh-agent-preset",
+          "state": 0,
+          "waiting": [
+            "biliBasicCompactionPolicy"
+          ]
+        },
+        {
+          "id": "include:preset-minimal",
+          "name": "@deepseek-ai/dsh-agent-preset",
+          "state": 0,
+          "waiting": [
+            "biliBasicCompactionPolicy"
+          ]
+        },
+        {
+          "id": "include:preset-cordis",
+          "name": "@deepseek-ai/dsh-agent-preset",
+          "state": 0,
+          "waiting": [
+            "biliBasicCompactionPolicy"
+          ]
+        }
+      ],
+      "childFailures": [],
+      "concurrent": [
+        {
+          "name": "mount both workspaces dsh-context",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces dsh-temporary-messages",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces @fooxe/dsh-memory",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces dsh-tacit",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces dsh-prompt-setting",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces dsh-notification",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces @deepcodec/dsh-clock",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces @cerbur/clutch-dsh-title",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces billion-context",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces dsh-prompt-history",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces dsh-better-sidebar",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces @nanmicoder/dsh-agent-teams",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces @furongjun1999/dsh-memory",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces @falling-ts/dsh-force-compact",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces dsh-bill",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces @log.li/dsh-automode",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces dsh-workbench",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces @michengai/dsh-simplify",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces dsh-rewind-plugin",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces dsh-taskboard",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces @changfenhuang/dsh-genui",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces @ayanehana/dsh-reasoning-effort",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces @dsh-external/dsh-normify",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces dsh-npm",
+          "ok": true
+        },
+        {
+          "name": "mount both workspaces @caozeal/dsh-next-git",
+          "ok": true
+        },
+        {
+          "name": "all packages remain active together and nested workspaces inherit",
+          "ok": true
+        },
+        {
+          "name": "packaged and runtime skills load only in enabled sessions",
+          "ok": true
+        },
+        {
+          "name": "real npm_config writes stay separate at the same logical path",
+          "ok": true
+        },
+        {
+          "name": "independent session storage and inheritance restore",
+          "ok": true
+        },
+        {
+          "name": "parent off keeps explicit session working",
+          "ok": true
+        },
+        {
+          "name": "child defaults create fresh independent data",
+          "ok": true
+        },
+        {
+          "name": "menu disable and re-enable release and restore all lower instances",
+          "ok": true
+        }
+      ],
+      "inactive": []
+    },
+    {
+      "name": "isolation-functional-all",
+      "exit": 0,
+      "elapsedMs": 516627,
+      "ok": true,
+      "hostInactive": [],
+      "childFailures": [],
+      "persistence": [
+        {
+          "name": "dsh-temporary-messages",
+          "ok": true
+        },
+        {
+          "name": "dsh-context",
+          "ok": true
+        }
+      ],
+      "requestCount": 72,
+      "inactive": [],
+      "functional": [
+        {
+          "name": "dsh-temporary-messages",
+          "passed": 18,
+          "total": 18,
+          "failures": []
+        },
+        {
+          "name": "dsh-context",
+          "passed": 18,
+          "total": 18,
+          "failures": []
+        },
+        {
+          "name": "dsh-notification",
+          "passed": 18,
+          "total": 18,
+          "failures": []
+        }
+      ]
+    }
+  ]
+}

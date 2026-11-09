@@ -4,6 +4,7 @@ import http from 'node:http'
 import assert from 'node:assert/strict'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { createRequire } from 'node:module'
+import { resourceName } from '../../src/resource-names.ts'
 const local = createRequire(path.join(process.cwd(), 'package.json'))
 const { LlmAdapter, createUserMessage } = local('@deepseek-ai/dsh-llm')
 const { assembleContextFor } = local('@deepseek-ai/dsh-agent')
@@ -105,7 +106,8 @@ export async function functionalMix(ctx, report, home, save) {
         for (const { agent } of handles) {
           if (name === 'dsh-context') {
             const assembly = await ctx.systemPrompt.assemble(assembleContextFor(agent))
-            observed.push(assembly.sections.find(s => s.name === 'dsh-context:prompt-prefix')?.text?.replace('CTX_', '') || null)
+            const section = process.argv.includes('--plugin-isolation') ? resourceName(row.id, 'dsh-context:prompt-prefix') : 'dsh-context:prompt-prefix'
+            observed.push(assembly.sections.find(s => s.name === section)?.text?.replace('CTX_', '') || null)
           } else if (name === 'dsh-temporary-messages') {
             const before = requests.length
             await send(agent)

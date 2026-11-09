@@ -13,6 +13,9 @@ const controls = process.argv.includes('--controls')
 const functional = process.argv.includes('--functional')
 const names = process.argv.slice(2).filter(arg => !arg.startsWith('--'))
 const home = fs.mkdtempSync(path.join(root, 'work/native-mix-'))
+if (process.argv.includes('--plugin-isolation')) fs.writeFileSync(path.join(home, 'menu.json'), JSON.stringify({
+  version: 2, configs: {}, children: {}, parents: {}, settings: { inheritWorkspaceTree: true, pluginIsolation: true },
+}))
 const dir = path.join(home, 'profiles', 'test')
 fs.mkdirSync(dir, { recursive: true })
 fs.symlinkSync(path.join(root, 'node_modules'), path.join(dir, 'node_modules'), 'dir')
@@ -52,6 +55,9 @@ try {
   report.entries = [...ctx.loader.entries()].filter(entry => fromSample(entry.options.name)).map(entry => ({
     id: entry.id, name: entry.options.name, state: entry.fiber?.state, disabled: entry.disabled,
   }))
+  report.hostInactive = [...ctx.loader.entries()].filter(entry => !entry.disabled && !fromSample(entry.options.name) && entry.fiber?.state !== 2)
+    .map(entry => ({ id: entry.id, name: entry.options.name, state: entry.fiber?.state,
+      waiting: Object.keys(entry.fiber?.inject ?? {}).filter(name => entry.fiber.ctx.get(name) === undefined) }))
   report.bundles = await ctx.pluginManager.listBundles()
   report.childFailures = []
   for (const runtime of ctx.registry.values()) for (const fiber of runtime.fibers) {
@@ -102,6 +108,10 @@ try {
   if (process.argv.includes('--tool-scopes')) {
     const { toolScopes } = await import('./tool-scopes.mjs')
     await toolScopes(ctx, report, home, save)
+  }
+  if (process.argv.includes('--client-isolation')) {
+    const { clientIsolation } = await import('./client-isolation.mjs')
+    await clientIsolation(ctx, report, home, save)
   }
   await ctx.fiber.dispose()
 } catch (error) { report.ok = false; report.error = String(error?.stack ?? error) }

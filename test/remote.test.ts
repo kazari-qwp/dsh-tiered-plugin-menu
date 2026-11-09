@@ -18,8 +18,9 @@ import { remoteContribution } from '../src/remote-contract.ts'
 import { mountWorkspaces } from './workspaces.ts'
 import { mountPluginManagement } from './plugins.ts'
 import { childScope, type Scope } from '../src/shared.ts'
+import { ConfigStore } from '../src/store.ts'
 
-test('官方 Client Remote → Host Gateway：工作区与会话配置、继承、转发原插件预览', { timeout: 15000 }, async () => {
+for (const pluginIsolation of [false, true]) test(`官方 Client Remote → Host Gateway：配置、继承、原插件预览（隔离 ${pluginIsolation}）`, { timeout: 15000 }, async () => {
   mkdirSync('work', { recursive: true })
   const host = new Context()
   const client = new Context()
@@ -38,7 +39,9 @@ test('官方 Client Remote → Host Gateway：工作区与会话配置、继承�
     await mountAgentLoopTestHarness(host)
     await host.agents.create({ sessionId: SessionId('rpc-session'), meta: { cwd: workspace.path } })
     await workspace.attachSession(SessionId('rpc-session'))
-    await host.plugin(plugin, { dataFile: resolve(mkdtempSync('work/remote-'), 'config.json') })
+    const dataFile = resolve(mkdtempSync('work/remote-'), 'config.json')
+    new ConfigStore(dataFile).setPluginIsolation(pluginIsolation)
+    await host.plugin(plugin, { dataFile })
     const peer = new Peer(host, { principal: { kind: 'owner' }, interactions: 'none' })
     await client.plugin(TypertRegistry)
     installConnection(client, { interactions: 'none', transport: { rpc: {
@@ -53,9 +56,13 @@ test('官方 Client Remote → Host Gateway：工作区与会话配置、继承�
     await client.plugin(ClientGateway)
     await client.remote.$mount(remoteContribution)
     const api = client.remote.tieredPluginMenu
-    assert.deepEqual(await api.settings(), { ok: true, value: { inheritWorkspaceTree: true } })
+    assert.deepEqual(await api.settings(), { ok: true, value: { inheritWorkspaceTree: true, pluginIsolation } })
+    assert.ok((await api.setPluginIsolation(true)).ok)
+    assert.equal(host.tieredPlugins.settings().pluginIsolation, true)
     assert.ok((await api.setWorkspaceTreeInheritance(false)).ok)
     assert.equal(host.tieredPlugins.settings().inheritWorkspaceTree, false)
+    assert.equal(host.tieredPlugins.settings().pluginIsolation, true)
+    assert.ok((await api.setPluginIsolation(false)).ok)
     assert.ok((await api.setWorkspaceTreeInheritance(true)).ok)
     const wsScope: Scope = { level: 'workspace', id: String(workspace.id) }
     const scope: Scope = { level: 'session', id: 'rpc-session' }

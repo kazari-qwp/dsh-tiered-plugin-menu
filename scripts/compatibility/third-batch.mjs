@@ -16,10 +16,15 @@ const cases = newNames.flatMap(name => [
   { name: `native-${name.replaceAll('/', '-')}`, args: ['--controls', name] },
   { name: `scoped-${name.replaceAll('/', '-')}`, args: ['--scoped', '--start-disabled', name, 'dsh-tiered-plugin-menu'] },
 ])
+cases.push(...names.map(name => ({ name: `isolation-${name.replaceAll('/', '-')}`, args: ['--plugin-isolation', name, 'dsh-tiered-plugin-menu'] })))
 cases.push(
   { name: 'native-all', args: names },
   { name: 'native-memory-pair', args: ['@fooxe/dsh-memory','meow-memory'] },
   { name: 'scoped-memory-pair', args: ['--tool-scopes', '--start-disabled', '@fooxe/dsh-memory', 'meow-memory', 'dsh-tiered-plugin-menu'] },
+  { name: 'isolation-memory-pair', args: ['--plugin-isolation', '--client-isolation', '@fooxe/dsh-memory', 'meow-memory', 'dsh-tiered-plugin-menu'] },
+  { name: 'isolation-client-all', args: ['--plugin-isolation', ...names, 'dsh-tiered-plugin-menu'] },
+  { name: 'isolation-concurrent-all', args: ['--plugin-isolation', '--concurrent', '--start-disabled', ...names, 'dsh-tiered-plugin-menu'] },
+  { name: 'isolation-functional-all', args: ['--plugin-isolation', '--functional', ...names, 'dsh-tiered-plugin-menu'] },
   { name: 'client-all', args: [...names, 'dsh-tiered-plugin-menu'] },
   { name: 'scoped-old', args: ['--scoped', '--start-disabled', ...Object.keys(old), 'dsh-tiered-plugin-menu'] },
   { name: 'scoped-new', args: ['--scoped', '--start-disabled', ...newNames, 'dsh-tiered-plugin-menu'] },
@@ -56,19 +61,20 @@ for (const item of cases.filter(item => process.argv.length === 2 || process.arg
   const failed = (raw.scoped ?? []).flatMap(plugin => plugin.cases?.filter(test => !test.ok).map(test => ({ name: plugin.name, ...test })) ?? [{ name: plugin.name, error: plugin.error }])
   const record = { name: item.name, exit: run.status, signal: run.signal, elapsedMs: Date.now() - started,
     processError: run.error?.message, ok: raw.ok, error: raw.error,
-    graphError: raw.graphError, entries: raw.entries, childFailures: raw.childFailures, controls: raw.controls,
+    graphError: raw.graphError, entries: raw.entries, hostInactive: raw.hostInactive, childFailures: raw.childFailures, controls: raw.controls,
     scoped: raw.scoped?.map(plugin => ({ name: plugin.name, error: plugin.error, cases: plugin.cases,
       frontendInGraph: plugin.clientModules?.includes(plugin.name), separateConfigurations: plugin.separateConfigurations,
       packageComponents: plugin.packageComponents })), functional: raw.functional, persistence: raw.persistence,
-    concurrent: raw.concurrent, toolScopes: raw.toolScopes, requestCount: raw.requestCount }
+    concurrent: raw.concurrent, toolScopes: raw.toolScopes, clientIsolation: raw.clientIsolation, requestCount: raw.requestCount }
   const index = summary.findIndex(previous => previous.name === item.name)
   if (index < 0) summary.push(record); else summary[index] = record
   fs.writeFileSync(summaryFile, clean({ samples, cases: summary }))
   console.log(JSON.stringify({ name: item.name, exit: run.status, elapsedMs: record.elapsedMs,
     processError: record.processError, ok: raw.ok, error: raw.error?.split('\n')[0],
-    inactive: raw.entries?.filter(entry => !entry.disabled && entry.state !== 2), childFailures: raw.childFailures,
+    inactive: raw.entries?.filter(entry => !entry.disabled && entry.state !== 2), hostInactive: raw.hostInactive, childFailures: raw.childFailures,
     nativeFailures: raw.controls?.flatMap(plugin => plugin.cycles.filter(test => !test.ok)).length,
     scopedFailures: failed.map(test => ({ name: test.name, label: test.label, error: test.error?.split('\n')[0] })),
     functionalFailures: raw.functional?.flatMap(plugin => plugin.cases.filter(test => !test.ok)).length,
-    concurrentFailures: raw.concurrent?.filter(test => !test.ok), toolScopeFailures: raw.toolScopes?.filter(test => !test.ok) }))
+    concurrentFailures: raw.concurrent?.filter(test => !test.ok), toolScopeFailures: raw.toolScopes?.filter(test => !test.ok),
+    clientIsolationFailures: raw.clientIsolation?.filter(test => !test.ok) }))
 }

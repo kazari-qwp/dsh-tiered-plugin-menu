@@ -115,7 +115,7 @@ test('复用原设置页：工作区/会话独立入口分别保存，取消覆�
   } finally { await act(async () => { tree?.unmount() }); await controller?.dispose(); await ctx.fiber.dispose() }
 })
 
-test('菜单自身设置页只显示工作区树开关，修改后保存并刷新前端', async () => {
+test('菜单设置独立保存两个开关，插件隔离默认关闭并提示重启', async () => {
   const api = withChangePlans({ context: async () => ({ ok: true, value: { workspaces: [], workspaceId: null } }),
     list: async () => ({ ok: true, value: [] }), inherit: async () => ({ ok: true, value: undefined }),
     configure: async () => ({ ok: true, value: undefined }) })
@@ -124,14 +124,20 @@ test('菜单自身设置页只显示工作区树开关，修改后保存并刷�
   let tree!: ReactTestRenderer
   try {
     await act(async () => { tree = create(createElement(LevelSettings, { api, ui })) })
-    assert.equal(tree.root.findAllByType('button').length, 1)
+    assert.equal(tree.root.findAllByType('button').length, 2)
     assert.equal(tree.root.findAllByProps({ role: 'tablist' }).length, 0)
-    assert.equal(tree.root.findByProps({ role: 'switch' }).props['aria-checked'], true)
-    await act(async () => { tree.root.findByProps({ role: 'switch' }).props.onClick() })
-    assert.deepEqual(await api.settings(), { ok: true, value: { inheritWorkspaceTree: false } })
+    const toggle = (label: string) => tree.root.findByProps({ 'aria-label': label })
+    assert.equal(toggle('按工作区树继承').props['aria-checked'], true)
+    assert.equal(toggle('插件隔离（实验性）').props['aria-checked'], false)
+    await act(async () => { toggle('按工作区树继承').props.onClick() })
+    assert.deepEqual(await api.settings(), { ok: true, value: { inheritWorkspaceTree: false, pluginIsolation: false } })
     assert.equal(changed, 1)
+    await act(async () => { toggle('插件隔离（实验性）').props.onClick() })
+    assert.deepEqual(await api.settings(), { ok: true, value: { inheritWorkspaceTree: false, pluginIsolation: true } })
+    assert.match(JSON.stringify(tree.toJSON()), /重启 DSH 后生效/)
     await act(async () => { tree.unmount(); tree = create(createElement(LevelSettings, { api, ui })) })
-    assert.equal(tree.root.findByProps({ role: 'switch' }).props['aria-checked'], false)
+    assert.equal(toggle('按工作区树继承').props['aria-checked'], false)
+    assert.equal(toggle('插件隔离（实验性）').props['aria-checked'], true)
   } finally { await act(async () => tree.unmount()) }
 })
 

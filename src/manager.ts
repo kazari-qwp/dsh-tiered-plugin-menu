@@ -17,8 +17,6 @@ import { RuntimeTree } from './runtime-tree.ts'
 import { parentWorkspace } from './workspace-tree.ts'
 import { ScopedPresets } from './scoped-presets.ts'
 import { ScopedModules } from './scoped-modules.ts'
-import { createRequire } from 'node:module'
-import { pathToFileURL } from 'node:url'
 import { dependencyPlan, type DependencyNode } from './dependencies.ts'
 import type { ChangeMode, ChangePlan } from './shared.ts'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
@@ -46,11 +44,15 @@ export class PluginManager {
   private presets?: ScopedPresets
   private modules: ScopedModules
   private resuming = new Map<string, number>()
-  private clientOwners: { entry: NonNullable<ReturnType<PluginManager['entry']>>; owner: Fiber; isolation: any; labels: Record<string, symbol> }[] = []
+  private readonly pluginIsolation: boolean
+  private pendingEntries = new Set<() => void>()
+  private hostLabels = new Map<string, PropertyDescriptor | undefined>()
+  private clientOwners: { entry: NonNullable<ReturnType<PluginManager['entry']>>; owner: Fiber; isolation: any; labels: Record<string, symbol>; restore?: () => void; realm?: Record<string, symbol> }[] = []
 
   constructor(private ctx: Context, readonly store: ConfigStore) {
     this.runtime = new RuntimeTree(ctx)
     this.modules = new ScopedModules(`${store.filename}.data`)
+    this.pluginIsolation = store.settings().pluginIsolation
   }
 
   private async refresh(): Promise<void> {
@@ -99,7 +101,7 @@ export class PluginManager {
       const entry = this.entry(item.id)
       for (const runtime of this.ctx.registry.values()) for (const fiber of runtime.fibers) {
         if (!entry || fiber.ctx.fiber.entry !== entry) continue
-        for (const provision of fiber.provisions) if (provision.isolate === this.ctx.root[Context.isolate][provision.name]) declared.provides.add(provision.name)
+        for (const provision of fiber.provisions) declared.provides.add(provision.name)
         // An unserved ctx.inject callback may be an optional integration (for example, GUI settings).
         if (fiber.state === 2) for (const name of Object.keys(fiber.inject)) declared.requires.add(name)
       }
@@ -233,8 +235,10 @@ export class PluginManager {
   }
 
   private async normalize(id: string, config: PluginConfig): Promise<PluginConfig> {
-    const parsed = resolveConfig(await this.definition(id) as unknown as Plugin.Runtime, config) as PluginConfig
-    return Object.fromEntries(Object.entries(parsed ?? {}).map(([key, value]) => [key, isVolatile(value) ? value.get() : value]))
+    const value = resolveConfig(await this.definition(id) as unknown as Plugin.Runtime, config) as PluginConfig
+    const parsed = isVolatile(value) ? value.get() as PluginConfig : value
+    // Volatile snapshots are frozen; schema validators may normalize nested dictionaries in place.
+    return structuredClone(Object.fromEntries(Object.entries(parsed ?? {}).map(([key, value]) => [key, isVolatile(value) ? value.get() : value])))
   }
 
   context(sessionId: string | null): MenuContext {
@@ -257,6 +261,7 @@ export class PluginManager {
   }
 
   settings() { return this.store.settings() }
+  setPluginIsolation(enabled: boolean): void { this.store.setPluginIsolation(enabled) }
 
   async setWorkspaceTreeInheritance(enabled: boolean): Promise<void> {
     this.store.setWorkspaceTreeInheritance(enabled)
@@ -353,6 +358,7 @@ export class PluginManager {
         config: await this.normalize(adapter.id, saved.config),
         configNamespace: adapter.options.id,
         routes: this.services.get(adapter.id)?.paths() ?? [],
+        routePrefix: this.services.get(adapter.id)?.routePrefix || undefined,
         managed: this.managed.has(adapter.id),
         verified: adapter.selfCompatible,
         settings: 'registered' as const,
@@ -381,7 +387,10 @@ export class PluginManager {
   private markEntry(entry: NonNullable<ReturnType<PluginManager['entry']>>): void {
     if (this.stopped || entry.parent?.tree === this.runtime) return
     const mounted = this.clientOwners.find(item => item.entry === entry)
-    if (mounted) Object.assign(entry.ctx[Context.isolate], mounted.labels)
+    if (mounted) {
+      if (mounted.realm) Object.setPrototypeOf(entry.ctx[Context.isolate], mounted.realm)
+      Object.assign(entry.ctx[Context.isolate], mounted.labels)
+    }
     const adapter = [...this.plugins.values()].find(item => this.managed.has(item.id) && item.bundle.rows.some(row => row.moduleName === entry.options.name))
     if (adapter) attachRoute(entry.ctx, { accepts: sessionId => this.accepts(clientScope, adapter.id, sessionId) })
   }
@@ -390,7 +399,7 @@ export class PluginManager {
     if (this.managed.has(id)) return
     this.managed.add(id)
     const adapter = this.adapter(id)
-    this.services.set(id, new ScopedServices(this.ctx))
+    this.services.set(id, new ScopedServices(this.ctx, this.pluginIsolation ? id : undefined))
     for (const entry of this.entries(id)) {
       this.markEntry(entry)
       const broker = this.services.get(id)
@@ -398,15 +407,28 @@ export class PluginManager {
       const disabled = entry.options.disabled ?? null
       if (broker) {
         if (running) await entry.update({ disabled: true })
-        let isolated = this.ctx
+        const realm = this.pluginIsolation ? this.realm(clientScope, adapter.package) : undefined
+        let isolated = realm ? isolateProvidedServices(this.ctx, realm) : this.ctx
         const isolation = entry.ctx[Context.isolate]
         const labels: Record<string, symbol> = {}
-        for (const name of [...scopedServiceNames, 'agentPresets']) { labels[name] = Symbol(name); isolated = isolated.isolate(name, labels[name]) }
-        const owner = await broker.mount(isolated, { scope: clientScope,
+        for (const name of [...scopedServiceNames, 'agentPresets', ...(realm ? ['typert'] : [])]) { labels[name] = Symbol(name); isolated = isolated.isolate(name, labels[name]) }
+        const owner = await isolated.plugin(async child => { if (realm) await child.plugin(TypertRegistry) })
+        await broker.mount(owner.ctx, { scope: clientScope,
           accepts: sessionId => this.accepts(clientScope, id, sessionId), configKey: () => JSON.stringify(entry.options.config ?? {}) })
         this.mountPresets(owner.ctx, clientScope, id)
-        entry.ctx[Context.isolate] = Object.assign(Object.create(isolation), labels)
-        this.clientOwners.push({ entry, owner, isolation, labels })
+        entry.ctx[Context.isolate] = Object.assign(Object.create(realm ?? isolation), labels)
+        let restore: (() => void) | undefined
+        if (realm) {
+          const reflect = Object.getOwnPropertyDescriptor(entry.ctx, 'reflect')
+          Object.defineProperty(entry.ctx, 'reflect', Object.getOwnPropertyDescriptor(isolateProvidedServices(this.ctx, realm), 'reflect')!)
+          const unbind = this.modules.bind(entry, `${scopeKey(clientScope)}/${adapter.package}`, adapter.peers)
+          restore = () => {
+            unbind()
+            if (reflect) Object.defineProperty(entry.ctx, 'reflect', reflect)
+            else delete (entry.ctx as any).reflect
+          }
+        }
+        this.clientOwners.push({ entry, owner, isolation, labels, restore, realm })
       }
       if (running) {
         if (broker) await entry.update({ disabled })
@@ -446,8 +468,42 @@ export class PluginManager {
         (id, resume) => this.withResumingSession(id, resume))
     }).dispose)
     this.ctx.on('loader/patch-context', async (entry, next) => { this.markEntry(entry); await next() })
-    for (const adapter of this.plugins.values()) if (this.store.hasScoped(adapter.id)) await this.manage(adapter.id)
+    if (this.pluginIsolation) await this.dependencyNodes(clientScope)
+    const targets: InstalledPlugin[] = []
+    for (const adapter of this.plugins.values()) {
+      if (!this.pluginIsolation && !this.store.hasScoped(adapter.id)) continue
+      const definition = await this.definition(adapter.id) as Plugin.Object
+      if (definition.apply === this.ctx.fiber.runtime?.callback) continue
+      targets.push(adapter)
+    }
+    // Release the old client registrations together before mounting private ones.
+    const clients = this.pluginIsolation ? targets.flatMap(adapter => this.entries(adapter.id)).map(entry => ({ entry, disabled: entry.options.disabled ?? null })) : []
+    for (const { entry } of clients) await entry.update({ disabled: true })
+    for (const adapter of targets) await this.manage(adapter.id)
+    if (this.pluginIsolation) this.connectDependencies([clientScope])
+    for (const { entry, disabled } of clients) await entry.update({ disabled })
+    if (this.pluginIsolation) await this.dependencyNodes(clientScope)
     await this.sync()
+    if (this.pluginIsolation) this.ctx.on('loader/entry-init', entry => {
+      const init = entry.init
+      const restore = () => { if (entry.init === prepare) entry.init = init; this.pendingEntries.delete(restore) }
+      const prepare = async () => {
+        restore()
+        if (!this.stopped && entry.parent.tree !== this.runtime) {
+          await this.refresh()
+          const plugin = [...this.plugins.values()].find(item => this.entries(item.id).includes(entry))
+          if (plugin) {
+            await this.dependencyNodes(clientScope)
+            await this.manage(plugin.id)
+            this.connectDependencies([clientScope])
+          }
+        }
+        // manage() may have wrapped init with the shared private module loader.
+        return entry.init()
+      }
+      entry.init = prepare
+      this.pendingEntries.add(restore)
+    })
   }
 
   private checkChange(result: ChangeResult): void {
@@ -471,6 +527,7 @@ export class PluginManager {
       if (plan.dependencies.length) throw new Error(`需要先${enabled ? '启用' : '关闭'}依赖组件：${plan.dependencies.map(change => change.name).join('、')}；请通过菜单确认`)
     }
     if (isClientScope(scope)) {
+      if (this.pluginIsolation) await this.manage(id)
       if (!adapter.bundle.enabled) {
         if (!enabled) return
         this.checkChange(await this.ctx.pluginManager.setBundleEnabled(adapter.package, true))
@@ -573,16 +630,61 @@ export class PluginManager {
     }
   }
 
-  private realm(scope: Scope): Record<string, symbol> {
+  private realm(scope: Scope, packageName?: string): Record<string, symbol> {
     let labels = this.ctx[Context.isolate]
-    for (const candidate of this.chain(scope).slice(0, -1).reverse()) {
-      const key = scopeKey(candidate)
+    const privatePackage = this.pluginIsolation && packageName
+    for (const candidate of (privatePackage ? this.chain(scope) : this.chain(scope).slice(0, -1)).reverse()) {
+      const key = scopeKey(candidate) + (privatePackage ? `/${packageName}` : '')
       const current = this.realms.get(key) ?? Object.create(labels)
       Object.setPrototypeOf(current, labels)
       this.realms.set(key, current)
       labels = current
     }
+    if (privatePackage) {
+      const own = [...this.plugins.values()].filter(plugin => plugin.package === packageName)
+      for (const plugin of own) for (const name of this.declarations.get(plugin.id)?.provides ?? []) {
+        if (!Object.hasOwn(labels, name)) labels[name] = Symbol(name)
+      }
+    }
     return labels
+  }
+
+  /** Explicit service dependencies cross package boundaries; unrelated providers stay private. */
+  private connectDependencies(scopes: Scope[]): void {
+    const candidatesFor = (scope: Scope, name: string) => [...this.plugins.values()].filter(candidate => {
+      if (!this.declarations.get(candidate.id)?.provides.has(name)) return false
+      const source = this.source(scope, candidate.id)
+      return source.level === 'client' ? this.clientEnabled(candidate.id) : this.store.get(source, candidate.id)?.enabled
+    })
+    for (const scope of scopes) for (const plugin of this.plugins.values()) {
+      const labels = this.realm(scope, plugin.package)
+      const declaration = this.declarations.get(plugin.id)
+      for (const name of declaration?.requires ?? []) {
+        if (declaration?.provides.has(name)) continue
+        const candidates = candidatesFor(scope, name)
+        const siblings = candidates.filter(candidate => candidate.package === plugin.package)
+        const providers = siblings.length ? siblings : candidates
+        if (providers.length !== 1) continue
+        const provider = providers[0]!
+        labels[name] = this.realm(this.source(scope, provider.id), provider.package)[name]!
+      }
+    }
+    // Native host components may explicitly depend on a third-party service.
+    // Export only unambiguous dependencies; unrelated package services remain private.
+    const entries = new Set([...this.plugins.values()].flatMap(plugin => this.entries(plugin.id)))
+    const required = new Set<string>()
+    for (const runtime of this.ctx.registry.values()) for (const fiber of runtime.fibers) {
+      const entry = fiber.ctx.fiber.entry
+      if (entry && (entries.has(entry) || entry.parent.tree === this.runtime)) continue
+      for (const name of Object.keys(fiber.inject)) required.add(name)
+    }
+    const labels = this.ctx.root[Context.isolate]
+    for (const name of required) {
+      const candidates = candidatesFor(clientScope, name)
+      if (candidates.length !== 1) continue
+      if (!this.hostLabels.has(name)) this.hostLabels.set(name, Object.getOwnPropertyDescriptor(labels, name))
+      labels[name] = this.realm(clientScope, candidates[0]!.package)[name]!
+    }
   }
 
   private async withResumingSession<T>(id: string, resume: () => Promise<T>): Promise<T> {
@@ -605,7 +707,11 @@ export class PluginManager {
     for (const runtime of this.ctx.registry.values()) for (const fiber of runtime.fibers) {
       before.set(fiber, Object.fromEntries(Object.keys(fiber.inject).map(name => [name, fiber.ctx[Context.isolate][name]!])))
     }
-    for (const scope of scopes) this.realm(scope)
+    for (const scope of scopes) {
+      this.realm(scope)
+      if (this.pluginIsolation) for (const plugin of this.plugins.values()) this.realm(scope, plugin.package)
+    }
+    if (this.pluginIsolation) this.connectDependencies([clientScope, ...scopes])
     const changed = new Map<Fiber, string[]>()
     for (const [fiber, labels] of before) {
       const names = Object.keys(labels).filter(name => labels[name] !== fiber.ctx[Context.isolate][name])
@@ -623,7 +729,7 @@ export class PluginManager {
   }
 
   private async mount(scope: Scope, adapter: InstalledPlugin, config: PluginConfig): Promise<void> {
-    let isolated = isolateProvidedServices(this.ctx, this.realm(scope))
+    let isolated = isolateProvidedServices(this.ctx, this.realm(scope, adapter.package))
     for (const service of [...scopedServiceNames, 'settings', 'typert', 'agentPresets']) isolated = isolated.isolate(service)
     const route = { accepts: (sessionId: string) => this.accepts(scope, adapter.id, sessionId) }
     isolated = isolated.extend({ [routing]: route })
@@ -646,17 +752,7 @@ export class PluginManager {
       const original = this.entry(adapter.id)
       const tree = original?.parent.tree ?? this.ctx.loader
       const entry = await this.runtime.mount(owner.ctx, encodeURIComponent(`${scopeKey(scope)}/${adapter.id}`),
-        { ...adapter.options, config }, async name => {
-          const namespace = await tree.import(name)
-          // Cordis builtins and in-memory plugin factories have no file module graph.
-          if ((namespace as any)?.[Symbol.toStringTag] !== 'Module') return namespace
-          const parent = tree.ctx.baseUrl ?? pathToFileURL(this.ctx.profileContext.installAnchor).href
-          const loader = this.ctx.loader.internal
-          const url = loader?.version === 'v2' ? loader.resolveSync(parent, { specifier: name }).url
-            : loader?.version === 'v1' ? loader.resolveSync(name, parent, {}).url
-              : pathToFileURL(createRequire(parent).resolve(name)).href
-          return url.startsWith('file:') ? this.modules.import(`${scopeKey(scope)}/${adapter.package}`, url, adapter.peers) : namespace
-        })
+        { ...adapter.options, config }, name => this.modules.load(tree, name, `${scopeKey(scope)}/${adapter.package}`, adapter.peers))
       plugin = entry.fiber!
       const error = (await Promise.all(failures)).find(Boolean)
       if (error) throw error
@@ -688,21 +784,31 @@ export class PluginManager {
     const source = this.source(scope, id)
     const context = source.level === 'client' ? this.entry(id)?.fiber?.ctx : this.instance(source, id)?.plugin.ctx
     if (!context) throw new Error('此作用域没有运行中的插件实例')
-    // Use the normal DSH descriptor, argument checks, peer and cancellation, in the selected context.
-    const gateway = context.get('typertGateway') as Context['typertGateway']
-    return gateway.invoke({ namespace, method, args, peer, signal })
+    // The host Gateway keeps its authorization/validation, using this instance's descriptors.
+    const invocation = context.extend({ typert: context.get('typert') as Context['typert'] })
+    return invocation.get('typertGateway')!.invoke({ namespace, method, args, peer, signal })
   }
 
   async dispose(): Promise<void> {
     this.stopped = true
+    for (const restore of this.pendingEntries) restore()
     for (const instances of this.instances.values()) for (const instance of instances.values()) await disposeFiber(instance.owner)
     this.instances.clear()
     const errors: unknown[] = []
-    for (const { entry, owner, isolation } of this.clientOwners) {
+    const clients = this.clientOwners.map(client => ({ ...client,
+      running: !!client.entry.fiber?.uid, disabled: client.entry.options.disabled ?? null }))
+    // Release private clients before restoring the native labels and registrations.
+    for (const { entry, running } of clients) {
+      try { if (running) await entry.update({ disabled: true }) }
+      catch (error) { errors.push(error) }
+    }
+    for (const [name, original] of this.hostLabels) {
+      if (original) Object.defineProperty(this.ctx.root[Context.isolate], name, original)
+      else delete this.ctx.root[Context.isolate][name]
+    }
+    for (const { entry, owner, isolation, restore, running, disabled } of clients) {
       try {
-        const running = !!entry.fiber?.uid
-        const disabled = entry.options.disabled ?? null
-        if (running) await entry.update({ disabled: true })
+        restore?.()
         entry.ctx[Context.isolate] = isolation
         // 菜单单独卸载时，把客户端入口交回 DSH；应用退出无需重启入口。
         if (this.ctx.root.fiber.state === 2 && running) { await entry.update({ disabled }); await entry.fiber?.await() }
