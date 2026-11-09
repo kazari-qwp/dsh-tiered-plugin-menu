@@ -1,6 +1,6 @@
 {
   "name": "dsh-tiered-plugin-menu",
-  "version": "0.6.3",
+  "version": "0.6.4",
   "description": "为每个工作区和会话独立开关 DSH 插件、使用不同配置，支持逐级继承与实例隔离。",
   "type": "module",
   "license": "MIT",
