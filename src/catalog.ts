@@ -13,7 +13,7 @@ export interface InstalledPlugin {
   bundle: BundleInfo
   options: EntryOptions
   parentId: string
-  supportsChildInstances: boolean
+  selfCompatible: boolean
   peers: string[]
 }
 
@@ -38,14 +38,14 @@ export async function installedPlugins(ctx: Context): Promise<InstalledPlugin[]>
         }
         collect(loadOverlayPatches('dsh', filename))
       }
-    } catch { /* 元数据不可读仍列出插件，兼容状态为未验证。 */ }
+    } catch { /* 元数据不可读仍列出插件，自兼容状态为未验证。 */ }
     const rows = bundle.rows.length ? bundle.rows : [{ rowId: bundle.name, moduleName: bundle.name }]
     const parentId = rows.length === 1 ? rows[0]!.rowId : bundle.name
     return rows.map(row => ({
       id: rows.length === 1 ? parentId : `${bundle.name}#${row.rowId}`,
       parentId, package: bundle.name, description: bundle.description ?? '', bundle: { ...bundle, rows: [row] },
       options: declared.get(row.rowId) ?? { id: row.rowId, name: row.moduleName },
-      supportsChildInstances: metadata?.supportsChildInstances === true,
+      selfCompatible: metadata?.selfCompatible === true,
       peers,
     }))
   })

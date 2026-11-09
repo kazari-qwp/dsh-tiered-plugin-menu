@@ -55,11 +55,11 @@ function ConfirmEnable({ plan, onCancel, onConfirm }: {
     }
   }}>
     <section className="tiered-confirm" role="alertdialog" aria-modal="true" aria-labelledby={`${id}-title`} aria-describedby={`${id}-body`}>
-      <h3 id={`${id}-title`}>{plan.dependencies.length ? plan.dependencies.some(item => item.mode === 'on') ? '需要启用依赖组件' : '需要先关闭依赖它的组件' : '启用未验证插件？'}</h3>
+      <h3 id={`${id}-title`}>{plan.dependencies.length ? plan.dependencies.some(item => item.mode === 'on') ? '需要启用依赖组件' : '需要先关闭依赖它的组件' : '启用未验证自兼容性的插件？'}</h3>
       <div id={`${id}-body`}>
         {plan.dependencies.length > 0 && <><p>{plan.dependencies.some(item => item.mode === 'on') ? '继续启用需要同时启用：' : '仍有以下组件依赖它，必须先关闭：'}</p>
           <ul>{plan.dependencies.map(item => <li key={`${scopeKey(item.scope)}/${item.id}`}>{item.name}（{labels[item.scope.level]}）</li>)}</ul></>}
-        {plan.unverified.length > 0 && <p>{plan.unverified.join('、')} 尚未声明支持下级独立实例。尝试启用可能发生配置串用、重复注册或运行错误。</p>}
+        {plan.unverified.length > 0 && <p>{plan.unverified.join('、')} 尚未声明自兼容性，多实例运行可能出现配置串用、重复注册或运行错误。</p>}
       </div>
       <div className="tiered-confirm-actions">
         <button type="button" className="tiered-action" autoFocus onClick={onCancel}>取消</button>
@@ -107,7 +107,7 @@ export function ScopePanel({ api, scope, sessionId = null, Page, ui, disabled = 
       <h3>{packageRow.name}</h3><p className="tiered-hint">包含的组件 · {shown.length} 个</p>
       <button type="button" className="tiered-action" onClick={() => ui.openDetails(packageRow.package)}>查看原生插件详情</button></div>}
     {groups.filter(group => group.rows.length).map(group => <Fragment key={group.id}>
-    {group.id === 'unverified' && <div className="tiered-divider" role="separator"><span>未验证兼容性</span></div>}
+    {group.id === 'unverified' && <div className="tiered-divider" role="separator"><span>未验证自兼容性</span></div>}
     <ul className="tiered-plugin-list">
       {group.rows.map(item => {
         const mode = item.partial ? 'partial' : !item.own ? 'inherit' : item.enabled ? 'on' : 'off'

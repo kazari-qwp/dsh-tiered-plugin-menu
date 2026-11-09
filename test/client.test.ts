@@ -143,7 +143,7 @@ test('两份配置表修改互不影响', async () => {
   assert.equal(b.getSnapshot().value?.template, 'B')
 })
 
-test('分组和二次确认：取消无写入，确认才启用，客户端不弹确认，兼容声明统一适用下级', async () => {
+test('分组和二次确认：取消无写入，确认才启用，客户端不弹确认，自兼容声明统一适用下级', async () => {
   const calls: { scope: Scope; id: string; confirmed: boolean }[] = []
   const saved = new Set<string>()
   const ui = { Artwork: () => createElement('svg'), openDetails() {} }
@@ -180,7 +180,7 @@ test('分组和二次确认：取消无写入，确认才启用，客户端不�
     await open(workspace)
     assert.equal(tree!.root.findAllByType('ul').length, 2)
     assert.equal(tree!.root.findAllByProps({ className: 'tiered-card-open' })[0]!.children[0], 'declared')
-    assert.equal(tree!.root.findByProps({ role: 'separator' }).findByType('span').children[0], '未验证兼容性')
+    assert.equal(tree!.root.findByProps({ role: 'separator' }).findByType('span').children[0], '未验证自兼容性')
     await enable('temporary')
     assert.equal(tree!.root.findAllByProps({ role: 'alertdialog' }).length, 1)
     assert.equal(calls.length, 0)

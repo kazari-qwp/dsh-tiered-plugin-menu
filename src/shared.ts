@@ -46,7 +46,7 @@ export interface ChangePlan {
   signature: string
 }
 
-/** 插件作者在 package.json 中声明是否支持下级独立实例。 */
+/** 插件作者在 package.json 中声明自兼容性：同一插件的多个独立实例能否共存。 */
 export interface TieredPluginMetadata {
-  supportsChildInstances?: boolean
+  selfCompatible?: boolean
 }

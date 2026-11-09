@@ -23,7 +23,7 @@ Workspace and session buttons appear on hover, so they are hidden on the unhover
 Download the prebuilt `.tgz` from [Releases](https://github.com/kazari-qwp/dsh-tiered-plugin-menu/releases), then add it in DSH's plugin page or run:
 
 ```sh
-dsh plugin --profile desktop add ./dsh-tiered-plugin-menu-0.5.3.tgz
+dsh plugin --profile desktop add ./dsh-tiered-plugin-menu-0.5.4.tgz
 ```
 
 For Web, use your profile name (usually `web`). Restart DSH if hot reload is disabled. No companion plugin is required.
@@ -91,9 +91,9 @@ Data lives beside the menu configuration file in `<config-filename>.data/`, sepa
 
 ## Compatibility
 
-Current version: **0.5.3**. Tested with **DSH 0.2.2-rc.1** and Node.js 24. Package/component controls and dependency confirmation use shared DSH mechanisms, without adapters named after individual plugins or changes to DSH and third-party source code.
+Current version: **0.5.4**. Tested with **DSH 0.2.2-rc.1** and Node.js 24. Package/component controls and dependency confirmation use shared DSH mechanisms, without adapters named after individual plugins or changes to DSH and third-party source code.
 
-Installed packages are discovered automatically. Unverified packages appear below a separator at lower scopes and require confirmation. Successful startup does not mark them verified.
+Installed packages are discovered automatically. Packages without declared self-compatibility appear below the **Unverified self-compatibility (未验证自兼容性)** separator at lower scopes and require confirmation. Successful startup does not mark them verified.
 
 The implementation isolates provided services per scope and routes shared DSH registries such as tools, prompts, commands, skills, projections and HTTP handlers. Lower instances are real Loader entries, so DSH can load the **installed package's original frontend and CSS**, even when its client-level instance is disabled. The menu embeds no third-party frontend copies.
 
@@ -115,21 +115,23 @@ The 0.5.1 third batch mixes eight new packages with the previous eighteen. Exclu
 
 This isolates configuration, lifecycle and the file access described above; it is **not a security sandbox**. Global files outside private mounts, hardcoded TCP ports, native addons and external-process file access are outside this layer. Not every third-party tool, UI action or remote endpoint has been exercised; custom frontends that bypass the tested DSH interfaces may need further work.
 
-## Compatibility declaration
+## Self-compatibility declaration
 
-Plugin authors can declare support for independent child instances with a boolean in `package.json`:
+Self-compatibility means that multiple independent instances of the same plugin can coexist, with separate configurations and runtime state. Plugin authors can declare it with a boolean in `package.json`:
 
 ```json
 {
   "dsh": {
     "tieredPluginMenu": {
-      "supportsChildInstances": true
+      "selfCompatible": true
     }
   }
 }
 ```
 
-`true` declares support for independent instances at workspace, session and subagent scopes. `false` or an omitted field means unverified and retains the enable confirmation. This is this menu's convention, not official DSH certification. Our companion plugin follows the same rule. The menu never writes declarations for another package.
+`true` declares self-compatibility at workspace, session and subagent scopes. `false` or an omitted field means unverified and retains the enable confirmation. It does not declare compatibility with other plugins. This is this menu's convention, not official DSH certification. Our companion plugin follows the same rule. The menu never writes declarations for another package.
+
+In 0.5.4, `selfCompatible` replaces `supportsChildInstances`. Packages declaring the old field should rename it; the old field is no longer read.
 
 ## Development
 

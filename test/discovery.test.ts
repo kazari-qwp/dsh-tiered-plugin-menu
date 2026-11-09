@@ -16,13 +16,13 @@ import { clientScope } from '../src/shared.ts'
 import { mountWorkspaces } from './workspaces.ts'
 import { mountPluginManagement } from './plugins.ts'
 
-test('原生插件清单：禁用包仍被发现，兼容状态只取元数据，自有插件没有特例', async () => {
+test('原生插件清单：禁用包仍被发现，自兼容状态只取元数据，自有插件没有特例', async () => {
   mkdirSync('work', { recursive: true })
   const root = resolve(mkdtempSync('work/discovery-'))
   const custom = join(root, 'node_modules', 'declared-test-plugin')
   mkdirSync(custom, { recursive: true })
   const manifest = { name: 'declared-test-plugin', version: '1.0.0', main: 'index.js',
-    dsh: { bundle: { patch: './cordis.patch.yml' }, tieredPluginMenu: { supportsChildInstances: true } } }
+    dsh: { bundle: { patch: './cordis.patch.yml' }, tieredPluginMenu: { selfCompatible: true } } }
   writeFileSync(join(custom, 'package.json'), JSON.stringify(manifest))
   writeFileSync(join(custom, 'index.js'), 'module.exports = {}')
   writeFileSync(join(custom, 'cordis.patch.yml'), '- insert:\n    - id: declared-test-plugin\n      name: declared-test-plugin\n')
@@ -44,14 +44,14 @@ test('原生插件清单：禁用包仍被发现，兼容状态只取元数据�
     const found = await installedPlugins(ctx)
     assert.deepEqual(found.map(plugin => plugin.package).sort(), packages.sort())
     for (const name of ['dsh-temporary-messages', 'dsh-context', 'dsh-tiered-plugin-menu']) {
-      assert.equal(found.find(plugin => plugin.package === name)!.supportsChildInstances, false)
+      assert.equal(found.find(plugin => plugin.package === name)!.selfCompatible, false)
     }
     assert.equal(found.find(plugin => plugin.package === 'dsh-context')!.bundle.enabled, false)
     const declared = found.find(plugin => plugin.package === manifest.name)!
-    assert.equal(declared.supportsChildInstances, true)
-    manifest.dsh.tieredPluginMenu.supportsChildInstances = false
+    assert.equal(declared.selfCompatible, true)
+    manifest.dsh.tieredPluginMenu.selfCompatible = false
     writeFileSync(join(custom, 'package.json'), JSON.stringify(manifest))
-    assert.equal((await installedPlugins(ctx)).find(plugin => plugin.package === manifest.name)!.supportsChildInstances, false)
+    assert.equal((await installedPlugins(ctx)).find(plugin => plugin.package === manifest.name)!.selfCompatible, false)
   } finally { await ctx.fiber.dispose() }
 })
 

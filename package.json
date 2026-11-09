@@ -1,6 +1,6 @@
 {
   "name": "dsh-tiered-plugin-menu",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "description": "Per-client, workspace and session plugin configuration for DeepSeek Harness",
   "type": "module",
   "license": "MIT",

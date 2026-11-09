@@ -177,7 +177,7 @@ export class PluginManager {
     }
     const dependencies = changes.filter(change => scopeKey(change.scope) !== scopeKey(scope) || !targets.includes(change.id))
     const unverified = changes.filter(change => change.mode === 'on' && !isClientScope(change.scope)
-      && !change.id.startsWith('@entry:') && !this.adapter(change.id).supportsChildInstances
+      && !change.id.startsWith('@entry:') && !this.adapter(change.id).selfCompatible
       && !this.store.get(change.scope, change.id)?.enabled).map(change => change.name)
     const signature = JSON.stringify([changes, missing, unverified, nodes.map(node => [node.id, node.enabled])])
     return { scope, id, mode, changes, dependencies, missing, unverified, signature }
@@ -354,7 +354,7 @@ export class PluginManager {
         configNamespace: adapter.options.id,
         routes: this.services.get(adapter.id)?.paths() ?? [],
         managed: this.managed.has(adapter.id),
-        verified: adapter.supportsChildInstances,
+        verified: adapter.selfCompatible,
         settings: 'registered' as const,
         own: isClientScope(scope) || !!this.store.get(scope, adapter.id), source,
         active: !scope.children && saved.enabled && (isClientScope(source) ? this.entries(adapter.id).some(entry => entry.fiber?.state === 2) : this.instance(source, adapter.id)?.plugin.state === 2),
@@ -490,8 +490,8 @@ export class PluginManager {
       return
     }
     const previous = this.store.get(scope, id)
-    if (enabled && !previous?.enabled && !adapter.supportsChildInstances && !confirmed) {
-      throw new Error('该插件尚未验证此层级的兼容性，请确认后再启用')
+    if (enabled && !previous?.enabled && !adapter.selfCompatible && !confirmed) {
+      throw new Error('该插件尚未声明自兼容性，请确认后再启用')
     }
     const definition = await this.definition(id)
     if ((definition as Plugin.Object).apply === this.ctx.fiber.runtime?.callback) {
