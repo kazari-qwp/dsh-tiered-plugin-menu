@@ -1,7 +1,7 @@
 {
   "name": "dsh-tiered-plugin-menu",
   "version": "0.6.3",
-  "description": "Per-client, workspace and session plugin configuration for DeepSeek Harness",
+  "description": "为每个工作区和会话独立开关 DSH 插件、使用不同配置，支持逐级继承与实例隔离。",
   "type": "module",
   "license": "MIT",
   "files": [
@@ -12,7 +12,7 @@
     "README.md",
     "LICENSE",
     "THIRD_PARTY_NOTICES.txt",
-    "README.zh-CN.md"
+    "README.en.md"
   ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
