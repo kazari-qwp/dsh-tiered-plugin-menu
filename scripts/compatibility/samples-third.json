@@ -1,0 +1,10 @@
+{
+  "dsh-rewind-plugin": "0.21.2",
+  "dsh-taskboard": "0.9.11",
+  "@changfenhuang/dsh-genui": "0.15.0",
+  "meow-memory": "0.32.6",
+  "@ayanehana/dsh-reasoning-effort": "0.9.1",
+  "@dsh-external/dsh-normify": "0.7.1",
+  "dsh-npm": "0.1.4",
+  "@caozeal/dsh-next-git": "0.1.10"
+}

@@ -5,7 +5,7 @@ const local = createRequire(path.join(process.cwd(), 'package.json'))
 const { LlmAdapter, createUserMessage } = local('@deepseek-ai/dsh-llm')
 const { assembleContextFor } = local('@deepseek-ai/dsh-agent')
 
-function configFor(name, marker) {
+export function configFor(name, marker) {
   if (name === 'dsh-temporary-messages') return { template: `TEMP_${marker}`, defaultTtlTokens: 0 }
   if (name === 'dsh-context') return { promptPrefix: `CONTEXT_${marker}`, maxRequestSteps: marker === 'A' ? 2 : 5 }
   if (name === 'dsh-tacit') return { autoAnalyze: false, maxKeptTurns: marker === 'A' ? 7 : 11 }
@@ -18,6 +18,10 @@ function configFor(name, marker) {
   if (name === '@falling-ts/dsh-force-compact') return { autoThresholdTokens: marker === 'A' ? 40000 : 60000, retainLatestTokens: marker === 'A' ? 8000 : 12000 }
   if (name === 'dsh-bill') return { maxRecords: marker === 'A' ? 100 : 200 }
   if (name === '@log.li/dsh-automode') return { timeoutMs: marker === 'A' ? 3000 : 5000 }
+  if (name === 'dsh-rewind-plugin') return { maxAnchorGroups: marker === 'A' ? 5 : 9, autoCleanupEnabled: false }
+  if (name === 'meow-memory') return { hitTopK: marker === 'A' ? 2 : 5, reflect: false, dream: { enabled: false }, promptLang: 'zh', autoMigrate: false }
+  if (name === '@ayanehana/dsh-reasoning-effort') return { entries: [{ id: `fixture-${marker}`, provider: 'compat-test', model: 'test', efforts: marker === 'A' ? { low: 'low' } : { high: 'high' } }] }
+  if (name === '@dsh-external/dsh-normify') return { requireBilingual: marker === 'A', devCompanionReminder: false }
   return {}
 }
 
@@ -97,9 +101,9 @@ export async function scopedMix(ctx, report, names, home, save) {
     if (Object.keys(configFor(name, 'A')).length) await act('different-session-configs', async () => {
       const a = (await manager.rows(sa)).flatMap(row => row.components ?? [row]).find(row => row.id === id)
       const b = (await manager.rows(sb)).flatMap(row => row.components ?? [row]).find(row => row.id === id)
+      result.separateConfigurations = { A: a.config, B: b.config, storedA: manager.store.get(sa, id)?.config, storedB: manager.store.get(sb, id)?.config }
       if (JSON.stringify(a.config) === JSON.stringify(b.config)) throw new Error('Session configurations unexpectedly match')
       if (manager.instance(sa, id)?.plugin === manager.instance(sb, id)?.plugin) throw new Error('Session instances unexpectedly match')
-      result.separateConfigurations = { A: a.config, B: b.config }
     })
     await act('session-A-off', () => manager.configure(sa, id, false, {}))
     await act('session-A-inherit', () => manager.inherit(sa, id))

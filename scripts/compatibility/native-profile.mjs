@@ -33,6 +33,7 @@ process.env.DSH_HOME = home
 process.env.DSH_TELEMETRY_DISABLED = '1'
 const report = { names, home }
 const lastReport = path.join(root, 'work', process.env.COMPAT_REPORT_NAME ?? 'native-mix-last.json')
+const save = () => fs.writeFileSync(lastReport, JSON.stringify(report, null, 2))
 try {
   const { loadProfileDirectory, loadLayeredEnv, composeEntries } = runtime('@deepseek-ai/dsh-app-boot')
   if (process.argv.includes('--start-disabled')) {
@@ -52,9 +53,16 @@ try {
     id: entry.id, name: entry.options.name, state: entry.fiber?.state, disabled: entry.disabled,
   }))
   report.bundles = await ctx.pluginManager.listBundles()
+  report.childFailures = []
+  for (const runtime of ctx.registry.values()) for (const fiber of runtime.fibers) {
+    const entry = fiber.ctx.fiber.entry
+    if (fiber.state !== 3 || !entry || !fromSample(entry.options.name)) continue
+    try { await fiber.await() } catch (error) { report.childFailures.push({ name: entry.options.name, error: String(error) }) }
+  }
   try { report.graph = ctx.clientModules.graph().entries.map(entry => entry.id) }
   catch (error) { report.graphError = String(error?.stack ?? error) }
   report.ok = true
+  save()
   if (controls) {
     report.controls = []
     for (const name of extra) {
@@ -81,11 +89,15 @@ try {
   }
   if (scoped) {
     const { scopedMix } = await import('./scoped-mix.mjs')
-    await scopedMix(ctx, report, names, home, () => fs.writeFileSync(path.join(root, 'work/scoped-mix-last.json'), JSON.stringify(report, null, 2)))
+    await scopedMix(ctx, report, names, home, save)
   }
   if (functional) {
     const { functionalMix } = await import('./functional-mix.mjs')
-    await functionalMix(ctx, report, home, () => fs.writeFileSync(path.join(root, 'work/functional-mix-last.json'), JSON.stringify(report, null, 2)))
+    await functionalMix(ctx, report, home, save)
+  }
+  if (process.argv.includes('--concurrent')) {
+    const { concurrentMix } = await import('./concurrent-mix.mjs')
+    await concurrentMix(ctx, report, names, home, save)
   }
   await ctx.fiber.dispose()
 } catch (error) { report.ok = false; report.error = String(error?.stack ?? error) }
