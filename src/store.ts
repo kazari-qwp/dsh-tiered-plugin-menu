@@ -1,12 +1,13 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { ownScope, scopeKey, type ChildDefaults, type SavedConfig, type Scope } from './shared.ts'
+import { ownScope, scopeKey, type ChildDefaults, type MenuSettings, type SavedConfig, type Scope } from './shared.ts'
 
 interface StoredData {
   version: 2
   configs: Record<string, Record<string, SavedConfig>>
   children: Record<string, ChildDefaults>
   parents: Record<string, Scope>
+  settings?: MenuSettings
 }
 
 export class ConfigStore {
@@ -21,6 +22,13 @@ export class ConfigStore {
     if (!scope.children) return this.data.configs[scopeKey(scope)]?.[id]
     const defaults = this.children(scope)
     return defaults.independent ? defaults.plugins[id] : undefined
+  }
+
+  settings(): MenuSettings { return this.data.settings ?? { inheritWorkspaceTree: true } }
+
+  setWorkspaceTreeInheritance(enabled: boolean): void {
+    this.data.settings = { inheritWorkspaceTree: enabled }
+    this.save()
   }
 
   hasScoped(id: string): boolean {

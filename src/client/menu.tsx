@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useId, useState, type ComponentType } from 'react'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { MenuRemote } from '../remote-contract.ts'
-import { childScope, clientScope, isClientScope, scopeKey, type ChildSettings, type MenuContext, type PluginRow, type Scope, type ChangePlan, type ChangeMode } from '../shared.ts'
+import { childScope, isClientScope, scopeKey, type ChildSettings, type PluginRow, type Scope, type ChangePlan, type ChangeMode } from '../shared.ts'
 
 export const labels = { client: '客户端', workspace: '工作区', session: '会话' }
 function value<T>(result: RemoteResult<T>): T {
@@ -157,7 +157,7 @@ function ChildPanel({ api, scope, Page, ui }: MenuProps & { scope: Scope }) {
   const [settings, setSettings] = useState<ChildSettings>()
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
-  const target = { client: '新工作区及无工作区的新会话', workspace: '新会话', session: '新子 agent（包括后续各级子 agent）' }[scope.level]
+  const target = { client: '新顶层工作区及无工作区的新会话', workspace: '新会话，以及按工作区树继承时的新子工作区', session: '新子 agent（包括后续各级子 agent）' }[scope.level]
   const refresh = async () => setSettings(value(await api.childSettings(scope)))
   useEffect(() => { void refresh().catch(error => setNotice(String(error))) }, [api, scopeKey(scope)])
   const select = async (independent: boolean) => {
@@ -175,7 +175,7 @@ function ChildPanel({ api, scope, Page, ui }: MenuProps & { scope: Scope }) {
       </div>
     </div>
     {settings && <>
-      {!settings.independent && <p className="tiered-hint">{settings.source ? '沿用父会话的下级默认设置。' : '沿用本级的有效配置。'}切换为「独立」后可以单独设置。</p>}
+      {!settings.independent && <p className="tiered-hint">{settings.source ? `沿用上级${labels[settings.source.level]}的下级默认设置。` : '沿用本级的有效配置。'}切换为「独立」后可以单独设置。</p>}
       <ScopePanel key={String(settings.independent)} api={api} scope={childScope(scope)} Page={Page} ui={ui} disabled={!settings.independent || busy} />
     </>}
     {notice && <p className="tiered-notice" role="status">{notice}</p>}
@@ -197,29 +197,32 @@ export function ScopeTabs(props: MenuProps & { scope: Scope; sessionId?: string 
   </>
 }
 
-export function LevelSettings({ api, Page, ui, close }: MenuProps & { close(): void }) {
-  const [context, setContext] = useState<MenuContext>({ workspaces: [], workspaceId: null })
-  const [workspaceId, setWorkspaceId] = useState('')
-  const [tab, setTab] = useState<'client' | 'workspace'>('client')
+export function LevelSettings({ api, ui }: Pick<MenuProps, 'api' | 'ui'>) {
+  const [enabled, setEnabled] = useState<boolean>()
+  const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
   useEffect(() => {
-    void api.context(null).then(result => {
-      const next = value(result)
-      setContext(next)
-      setWorkspaceId(next.workspaces[0]?.id ?? '')
-    }).catch(error => setNotice(String(error)))
+    void api.settings().then(result => setEnabled(value(result).inheritWorkspaceTree)).catch(error => setNotice(String(error)))
   }, [api])
-  const scope: Scope = tab === 'client' ? clientScope : { level: 'workspace', id: workspaceId }
-  const scopeUi = { ...ui, openDetails(packageName: string) { close(); ui.openDetails(packageName) } }
+  const toggle = async () => {
+    setBusy(true)
+    try {
+      value(await api.setWorkspaceTreeInheritance(!enabled))
+      setEnabled(!enabled)
+      ui.changed?.()
+      setNotice('已保存')
+    } catch (error) { setNotice(String(error)) } finally { setBusy(false) }
+  }
   return <section className="tiered-menu"><style>{styles}</style>
-    <h2>分级插件菜单</h2><p>会话配置优先于工作区，工作区配置优先于客户端。未单独配置时继承上级。</p>
-    <div className="tiered-tabs" role="tablist">
-      {(['client', 'workspace'] as const).map(level => <button type="button" key={level} role="tab" aria-selected={tab === level} onClick={() => setTab(level)}>{labels[level]}</button>)}
+    <h2>分级插件菜单</h2>
+    <div className="tiered-tree-setting">
+      <div><label htmlFor="tiered-workspace-tree">按工作区树继承</label>
+        <p className="tiered-hint">按目录层级逐级继承上级工作区的插件配置。关闭时，各工作区直接继承客户端。</p>
+      </div>
+      <button id="tiered-workspace-tree" type="button" role="switch" className="tiered-switch"
+        aria-label="按工作区树继承" aria-checked={enabled ?? false} disabled={enabled === undefined || busy}
+        onClick={() => void toggle()}><span /></button>
     </div>
-    {tab === 'workspace' && <label>工作区 <select aria-label="选择工作区" value={workspaceId} onChange={event => setWorkspaceId(event.target.value)}>
-      {context.workspaces.map(workspace => <option key={workspace.id} value={workspace.id}>{workspace.title} — {workspace.path}</option>)}
-    </select></label>}
-    {tab === 'workspace' && !workspaceId ? <p>还没有工作区。</p> : <ScopeTabs key={scopeKey(scope)} api={api} scope={scope} Page={Page} ui={scopeUi} />}
     {notice && <p role="status">{notice}</p>}
   </section>
 }
@@ -243,6 +246,12 @@ const styles = `
 .tiered-menu button { font: inherit; cursor: pointer; }
 .tiered-menu button:disabled { opacity: .35; cursor: default; }
 .tiered-menu h2 { margin: 0; font-size: 18px; line-height: 26px; font-weight: 600; }
+.tiered-menu .tiered-tree-setting { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-top: 24px; }
+.tiered-menu .tiered-tree-setting .tiered-hint { margin: 6px 0 0; }
+.tiered-menu .tiered-switch { flex: none; width: 36px; height: 20px; border: 0; padding: 2px; border-radius: 10px; background: var(--dsw-alias-interactive-bg-active, #555); }
+.tiered-menu .tiered-switch span { display: block; width: 16px; height: 16px; border-radius: 50%; background: #aaa; }
+.tiered-menu .tiered-switch[aria-checked="true"] { background: #eee; }
+.tiered-menu .tiered-switch[aria-checked="true"] span { transform: translateX(16px); background: #222; }
 .tiered-menu .tiered-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
 .tiered-menu .tiered-close, .tiered-menu .tiered-tabs button, .tiered-menu select { color: inherit; border: 1px solid var(--dsw-alias-border-l3, #ffffff20); border-radius: 8px; background: transparent; padding: 5px 10px; font-size: 13px; }
 .tiered-menu .tiered-close { border-color: transparent; color: var(--dsw-alias-label-secondary, #bfc0c5); }

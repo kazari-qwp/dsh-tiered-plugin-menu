@@ -6,7 +6,7 @@ English | [简体中文](README.zh-CN.md)
 
 For example, enable a plugin only in your coding workspace and keep it off elsewhere. Use configuration A in one session and configuration B in another. Open the menu from the small plugin buttons in the sidebar, then expand **Settings** to use the plugin's original configuration UI.
 
-Settings inherit through **client → workspace → session**. Keep the parent's settings by default, or override them for a workspace or an individual session.
+Settings inherit through **client → parent workspace → child workspace → session**, at any workspace depth. Keep the parent's settings by default, or override them for a workspace or an individual session.
 
 ## Where to find the buttons
 
@@ -23,7 +23,7 @@ Workspace and session buttons appear on hover, so they are hidden on the unhover
 Download the prebuilt `.tgz` from [Releases](https://github.com/kazari-qwp/dsh-tiered-plugin-menu/releases), then add it in DSH's plugin page or run:
 
 ```sh
-dsh plugin --profile desktop add ./dsh-tiered-plugin-menu-0.3.1.tgz
+dsh plugin --profile desktop add ./dsh-tiered-plugin-menu-0.4.0.tgz
 ```
 
 For Web, use your profile name (usually `web`). Restart DSH if hot reload is disabled. No companion plugin is required.
@@ -44,19 +44,29 @@ The release includes compiled host/browser code, the bundle patch and licenses. 
 
 Example: client configuration A, workspace B, session C. That session uses C, inheriting sessions in its workspace use B, and other workspaces inherit A.
 
+## Workspace tree inheritance
+
+The menu's own Settings page contains one switch: **Inherit along workspace tree (按工作区树继承)**, enabled by default. Changes save and take effect immediately. The sidebar menus still edit plugins at each level.
+
+The nearest registered ancestor directory is the parent, matching DSH's **Workspace Tree** grouping. Missing intermediate workspace registrations are skipped. Each plugin resolves its nearest explicit configuration; inheritance shares that ancestor's instance. Turning the switch off makes every workspace inherit directly from the client, while preserving explicit configurations and new-child defaults. Changing or deleting an ancestor also reconnects consumers of its services.
+
+This describes directory hierarchy, not Agent ownership: a Superagent Worker can inherit its Router's workspace configuration when its directory is below the Router's directory, even though the Worker is not a native DSH subagent.
+
 ## Defaults for new children
 
 Every menu opens on **This level (本级)** and has a **Children (下级)** tab. Children default to **Inherit (继承)**. Select **Independent (独立)** to edit plugin switches and reuse the original configuration cards for new children.
 
 | Parent menu | Defaults apply to |
 | --- | --- |
-| Client | New workspaces, and new sessions without a workspace |
-| Workspace | New ordinary sessions |
+| Client | New top-level workspaces (all workspaces when tree inheritance is off), and new sessions without a workspace |
+| Workspace | New ordinary sessions; new child workspaces when tree inheritance is on |
 | Session | New subagents, recursively including their descendants |
 
 Explicit on/off entries are copied into each new child; plugins left on Inherit continue to use their parent. Editing defaults starts no preview instance and changes no existing workspace, session or subagent. Resuming sessions, restarting DSH and reopening workspaces do not reapply defaults.
 
 Subagents follow their actual parent chain to the nearest independent child policy. Without their own override, they use the parent's child defaults for later descendants. Each new instance receives its own configuration copy. An ordinary conversation fork is not classified as a subagent just because it records a parent session ID.
+
+Nested workspaces similarly find the nearest workspace with independent child defaults. Existing children are never overwritten when a policy changes.
 
 Scope settings live in `$DSH_HOME/plugins/tiered-plugin-menu.json`; the menu's `dataFile` option overrides that location. Client settings are persisted through DSH's native profile editor. Existing package-level settings migrate to component keys.
 
@@ -73,11 +83,13 @@ Confirmation applies to switches operated through this menu; DSH's own plugin pa
 
 ## Compatibility
 
-Current version: **0.3.1**. Tested with **DSH 0.2.2-rc.1** and Node.js 24. Package/component controls and dependency confirmation use shared DSH mechanisms, without adapters named after individual plugins or changes to DSH and third-party source code.
+Current version: **0.4.0**. Tested with **DSH 0.2.2-rc.1** and Node.js 24. Package/component controls and dependency confirmation use shared DSH mechanisms, without adapters named after individual plugins or changes to DSH and third-party source code.
 
 Installed packages are discovered automatically. Unverified packages appear below a separator at lower scopes and require confirmation. Successful startup does not mark them verified.
 
 The implementation isolates provided services per scope and routes shared DSH registries such as tools, prompts, commands, projections and HTTP handlers. Lower instances are real Loader entries, so DSH can load the **installed package's original frontend and CSS**, even when its client-level instance is disabled. The menu embeds no third-party frontend copies.
+
+Agent preset declarations are also scoped: identical preset IDs can have different workspace/session configurations without duplicate registration. Native preset IDs and revision leases are preserved, including a subagent retaining its parent's revision. The adapter uses the declaration table of the pinned DSH version; this is not a cross-version API guarantee. See [Superagent validation](docs/SUPERAGENT.md) for the tested workflow and remaining upstream issues.
 
 The 0.2.1 update fix was reproduced against the released 0.2.0 menu and verified with unmodified dsh-context 0.82.2 → 0.83.0 frontend bundles, including Insights rendering, CSS replacement, retained session settings and temporary module removal/re-addition. [Update regression details](docs/CLIENT_UPDATES.md).
 
@@ -113,7 +125,7 @@ npm run check
 npm pack
 ```
 
-The checkout is self-contained. `vendor/` holds an unchanged MIT test fixture; no private repository access is needed. `check` covers type checking, building and 25 tests with real DSH services/plugins and React/jsdom. It uses neither browser automation nor paid model requests. Child defaults cover new/reopened workspaces, ordinary sessions, recursive subagents, component dependencies, native configuration cards and restart persistence.
+The checkout is self-contained. `vendor/` holds an unchanged MIT test fixture; no private repository access is needed. `check` covers type checking, building and 30 tests with real DSH services/plugins and React/jsdom. It uses neither browser automation nor paid model requests. Coverage includes child defaults, deep workspace trees, live inheritance changes, preset isolation and revision leases, session disposal/resume, native configuration cards and restart persistence.
 
 The broader third-party matrix runs in a disposable offline VM; see [reproduction instructions](docs/COMPATIBILITY.md#reproduce). No sample packages are installed into a personal DSH profile by these instructions.
 

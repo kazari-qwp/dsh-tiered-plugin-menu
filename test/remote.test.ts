@@ -53,6 +53,10 @@ test('官方 Client Remote → Host Gateway：工作区与会话配置、继承�
     await client.plugin(ClientGateway)
     await client.remote.$mount(remoteContribution)
     const api = client.remote.tieredPluginMenu
+    assert.deepEqual(await api.settings(), { ok: true, value: { inheritWorkspaceTree: true } })
+    assert.ok((await api.setWorkspaceTreeInheritance(false)).ok)
+    assert.equal(host.tieredPlugins.settings().inheritWorkspaceTree, false)
+    assert.ok((await api.setWorkspaceTreeInheritance(true)).ok)
     const wsScope: Scope = { level: 'workspace', id: String(workspace.id) }
     const scope: Scope = { level: 'session', id: 'rpc-session' }
     const context = await api.context(scope.id)

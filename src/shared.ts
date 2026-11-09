@@ -10,6 +10,7 @@ export type PluginConfig = Record<string, unknown>
 export interface SavedConfig { enabled: boolean; config: PluginConfig }
 export interface ChildDefaults { independent: boolean; plugins: Record<string, SavedConfig> }
 export interface ChildSettings { independent: boolean; source: Scope | null }
+export interface MenuSettings { inheritWorkspaceTree: boolean }
 export interface PluginRow extends SavedConfig {
   id: string
   name: string

@@ -11,7 +11,7 @@ export function isolateProvidedServices(parent: Context, labels: Record<string, 
         get(target, key) {
           if (key === 'ctx') return ctx
           if (key === 'provide') return (name: string, value?: unknown, check?: () => boolean) => {
-            if (!Object.hasOwn(labels, name)) labels[name] = Symbol(name)
+            if (!Object.hasOwn(labels, name) && ctx[Context.isolate][name] === labels[name]) labels[name] = Symbol(name)
             return Reflect.get(target, key).call(new Proxy(target, {
               get(object, property) { return property === 'ctx' ? ctx : Reflect.get(object, property) },
             }), name, value, check)

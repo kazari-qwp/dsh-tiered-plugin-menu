@@ -17,6 +17,8 @@ test('services provided dynamically belong to a scope and can be consumed by ano
       await ctx.plugin({ inject: ['sampleCounter'], apply(child: Context) { (child.get('sampleCounter') as Counter).value++ } })
       assert.equal((ctx.get('sampleCounter') as Counter).value, 1)
       assert.equal(ctx.get('hostDependency'), 42)
+      ctx.isolate('hostDependency').provide('hostDependency', 7)
+      assert.equal(ctx.get('hostDependency'), 42, 'a component-private service must not shadow the shared realm')
     }
     assert.equal(root.get('sampleCounter'), undefined)
     assert.notEqual(contexts[0]!.get('sampleCounter'), contexts[1]!.get('sampleCounter'))

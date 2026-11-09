@@ -21,7 +21,7 @@ function originalClient(): Plugin {
   return plugin
 }
 
-test('复用原设置页：工作区/会话独立入口分别保存，取消覆盖，设置页选择工作区', { timeout: 10000 }, async () => {
+test('复用原设置页：工作区/会话独立入口分别保存，取消覆盖，下级默认配置', { timeout: 10000 }, async () => {
   const ctx = new Context()
   let tree: ReactTestRenderer | undefined
   let controller: ContextClient | undefined
@@ -96,10 +96,7 @@ test('复用原设置页：工作区/会话独立入口分别保存，取消覆�
     assert.deepEqual(opened, [], '先打开本层组件详情')
     await act(async () => { button('查看原生插件详情').props.onClick() })
     assert.deepEqual(opened, ['dsh-temporary-messages'])
-    await act(async () => { tree!.update(createElement(LevelSettings, { api, Page: captured.Page, ui, close() {} })) })
-    assert.equal(tree!.root.findByProps({ 'data-mode': 'inherit' }).props.disabled, true)
-    await act(async () => { button('工作区').props.onClick() })
-    assert.equal(tree!.root.findByProps({ 'aria-label': '选择工作区' }).props.value, 'one')
+    await act(async () => { tree!.update(createElement(MenuDialog, { api, Page: captured.Page, ui, target: { scope: workspace }, onClose() {} })) })
     await act(async () => { button('设置').props.onClick() })
     assert.equal(tree!.root.findByProps({ id: 'temporary-template' }).props.value, 'WORKSPACE ONE')
     await act(async () => { button('下级').props.onClick() })
@@ -116,6 +113,26 @@ test('复用原设置页：工作区/会话独立入口分别保存，取消覆�
     assert.equal(tree!.root.findByProps({ id: 'temporary-template' }).props.value, 'WORKSPACE ONE')
     await captured.dispose()
   } finally { await act(async () => { tree?.unmount() }); await controller?.dispose(); await ctx.fiber.dispose() }
+})
+
+test('菜单自身设置页只显示工作区树开关，修改后保存并刷新前端', async () => {
+  const api = withChangePlans({ context: async () => ({ ok: true, value: { workspaces: [], workspaceId: null } }),
+    list: async () => ({ ok: true, value: [] }), inherit: async () => ({ ok: true, value: undefined }),
+    configure: async () => ({ ok: true, value: undefined }) })
+  let changed = 0
+  const ui = { Artwork: () => null, openDetails() {}, changed() { changed++ } }
+  let tree!: ReactTestRenderer
+  try {
+    await act(async () => { tree = create(createElement(LevelSettings, { api, ui })) })
+    assert.equal(tree.root.findAllByType('button').length, 1)
+    assert.equal(tree.root.findAllByProps({ role: 'tablist' }).length, 0)
+    assert.equal(tree.root.findByProps({ role: 'switch' }).props['aria-checked'], true)
+    await act(async () => { tree.root.findByProps({ role: 'switch' }).props.onClick() })
+    assert.deepEqual(await api.settings(), { ok: true, value: { inheritWorkspaceTree: false } })
+    assert.equal(changed, 1)
+    await act(async () => { tree.unmount(); tree = create(createElement(LevelSettings, { api, ui })) })
+    assert.equal(tree.root.findByProps({ role: 'switch' }).props['aria-checked'], false)
+  } finally { await act(async () => tree.unmount()) }
 })
 
 test('两份配置表修改互不影响', async () => {

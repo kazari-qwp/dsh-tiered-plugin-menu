@@ -1,7 +1,9 @@
 import type { RemoteResult, TypertCodec, TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
-import type { ChildSettings, MenuContext, Scope, PluginConfig, PluginRow, ChangeMode, ChangePlan } from './shared.ts'
+import type { ChildSettings, MenuContext, MenuSettings, Scope, PluginConfig, PluginRow, ChangeMode, ChangePlan } from './shared.ts'
 
 export interface MenuRemote {
+  settings(): Promise<RemoteResult<MenuSettings>>
+  setWorkspaceTreeInheritance(enabled: boolean): Promise<RemoteResult<void>>
   context(sessionId: string | null): Promise<RemoteResult<MenuContext>>
   list(scope: Scope): Promise<RemoteResult<PluginRow[]>>
   childSettings(scope: Scope): Promise<RemoteResult<ChildSettings>>
@@ -32,6 +34,8 @@ const codec = (kind: string): TypertCodec => ({ mode: 'strict', typeSymbol: kind
 export const remoteContribution: TypertRemoteContribution = {
   package: 'dsh-tiered-plugin-menu',
   descriptors: [
+    ['settings', []],
+    ['setWorkspaceTreeInheritance', [['enabled', 'boolean']]],
     ['context', [['sessionId', 'session']]],
     ['list', [['scope', 'scope']]],
     ['childSettings', [['scope', 'scope']]],

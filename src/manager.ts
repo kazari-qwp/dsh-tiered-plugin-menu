@@ -14,6 +14,8 @@ import type { ChangeResult } from '@deepseek-ai/dsh-plugin-manager'
 import { ScopedServices, scopedServiceNames } from './scoped-services.ts'
 import { isolateProvidedServices } from './isolation.ts'
 import { RuntimeTree } from './runtime-tree.ts'
+import { parentWorkspace } from './workspace-tree.ts'
+import { ScopedPresets } from './scoped-presets.ts'
 import { dependencyPlan, type DependencyNode } from './dependencies.ts'
 import type { ChangeMode, ChangePlan } from './shared.ts'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
@@ -21,6 +23,12 @@ import type { PeerScope } from '@deepseek-ai/dsh-typert-protocol'
 import type {} from '@deepseek-ai/dsh-api-gateway'
 
 interface Instance { scope: Scope; owner: Fiber; plugin: Fiber }
+
+async function disposeFiber(fiber: Fiber): Promise<void> {
+  await fiber.dispose()
+  // Another owner may already have claimed disposal while teardown is still running.
+  await fiber.await()
+}
 
 export class PluginManager {
   readonly instances = new Map<string, Map<string, Instance>>()
@@ -32,6 +40,8 @@ export class PluginManager {
   private runtime: RuntimeTree
   private realms = new Map<string, Record<string, symbol>>()
   private declarations = new Map<string, { provides: Set<string>; requires: Set<string> }>()
+  private presets?: ScopedPresets
+  private resuming = new Map<string, number>()
   private clientOwners: { entry: NonNullable<ReturnType<PluginManager['entry']>>; owner: Fiber; isolation: any; labels: Record<string, symbol> }[] = []
 
   constructor(private ctx: Context, readonly store: ConfigStore) { this.runtime = new RuntimeTree(ctx) }
@@ -142,7 +152,7 @@ export class PluginManager {
       ...this.ctx.agents.list().map(agent => ({ level: 'session' as const, id: String(agent.id) })),
     ]) if (!scope.children && scopeKey(child) !== scopeKey(scope) && this.chain(child).some(parent => scopeKey(parent) === scopeKey(scope))) children.set(scopeKey(child), child)
     // A session may keep an explicit consumer while inheriting its provider from a workspace.
-    for (const child of [...children.values()].sort((a, b) => Number(a.level === 'session') - Number(b.level === 'session'))) {
+    for (const child of [...children.values()].sort((a, b) => this.chain(a).length - this.chain(b).length)) {
       const childNodes = await this.dependencyNodes(child)
       const removed = childNodes.filter(node => node.enabled && !after(child, node.id)).map(node => node.id)
       if (removed.length) {
@@ -222,10 +232,14 @@ export class PluginManager {
 
   context(sessionId: string | null): MenuContext {
     const workspaces = this.ctx.workspaceRegistry.list()
-    const workspace = sessionId ? workspaces.find(w => w.sessionIds.includes(SessionId(sessionId))) : undefined
+    // Session setup precedes agent/created and the workspace membership update.
+    const cwd = sessionId ? this.ctx.sessions.get(SessionId(sessionId))?.header.cwd : undefined
+    const workspace = sessionId ? workspaces.find(w => w.sessionIds.includes(SessionId(sessionId)))
+      ?? workspaces.find(w => w.path === cwd) : undefined
     return {
       workspaces: workspaces.map(({ id, title, path }) => ({ id: String(id), title, path })),
-      workspaceId: workspace ? String(workspace.id) : sessionId ? this.sessionParents(sessionId).find(scope => scope.level === 'workspace')?.id ?? null : null,
+      workspaceId: workspace ? String(workspace.id) : sessionId ? this.sessionParents(sessionId)
+        .find(scope => scope.level === 'workspace' && workspaces.some(workspace => workspace.id === scope.id))?.id ?? null : null,
     }
   }
 
@@ -235,21 +249,35 @@ export class PluginManager {
     return [parent, ...(parent.level === 'session' ? this.sessionParents(parent.id) : [])]
   }
 
+  settings() { return this.store.settings() }
+
+  async setWorkspaceTreeInheritance(enabled: boolean): Promise<void> {
+    this.store.setWorkspaceTreeInheritance(enabled)
+    await this.sync()
+    for (const broker of this.services.values()) await broker.refresh()
+  }
+
+  private workspaceParent(scope: Scope): Scope {
+    const parent = this.settings().inheritWorkspaceTree
+      ? parentWorkspace(scope.id, this.ctx.workspaceRegistry.list()) : undefined
+    return parent ? { level: 'workspace', id: String(parent.id) } : clientScope
+  }
+
   private chain(scope: Scope): Scope[] {
     if (scope.children) {
       const policy = this.childSettings(ownScope(scope)).source
       return [scope, ...(policy && scopeKey(policy) !== scopeKey(ownScope(scope)) ? [childScope(policy)] : []), ...this.chain(ownScope(scope))]
     }
     if (scope.level === 'client') return [clientScope]
-    if (scope.level === 'workspace') return [scope, clientScope]
+    if (scope.level === 'workspace') return [scope, ...this.chain(this.workspaceParent(scope))]
     const workspaceId = this.context(scope.id).workspaceId
     return [scope, ...this.sessionParents(scope.id).filter(parent => parent.level === 'session'),
-      ...(workspaceId ? [{ level: 'workspace' as const, id: workspaceId }] : []), clientScope]
+      ...(workspaceId ? this.chain({ level: 'workspace', id: workspaceId }) : [clientScope])]
   }
 
   childSettings(scope: Scope): ChildSettings {
     scope = ownScope(scope)
-    const candidates = [scope, ...(scope.level === 'session' ? this.sessionParents(scope.id).filter(parent => parent.level === 'session') : [])]
+    const candidates = this.chain(scope).filter(parent => parent.level === scope.level)
     return { independent: this.store.children(scope).independent,
       source: candidates.find(candidate => this.store.children(candidate).independent) ?? null }
   }
@@ -286,8 +314,12 @@ export class PluginManager {
   }
 
   private accepts(scope: Scope, id: string, sessionId: string): boolean {
+    return this.applies(scope, id, { level: 'session', id: sessionId })
+  }
+
+  private applies(scope: Scope, id: string, view: Scope): boolean {
     if (this.stopped) return scope.level === 'client'
-    const selected = this.source({ level: 'session', id: sessionId }, id)
+    const selected = this.source(view, id)
     const enabled = selected.level === 'client' ? this.clientEnabled(id) : this.store.get(selected, id)!.enabled
     return enabled && scopeKey(selected) === scopeKey(scope)
   }
@@ -362,9 +394,10 @@ export class PluginManager {
         let isolated = this.ctx
         const isolation = entry.ctx[Context.isolate]
         const labels: Record<string, symbol> = {}
-        for (const name of scopedServiceNames) { labels[name] = Symbol(name); isolated = isolated.isolate(name, labels[name]) }
+        for (const name of [...scopedServiceNames, 'agentPresets']) { labels[name] = Symbol(name); isolated = isolated.isolate(name, labels[name]) }
         const owner = await broker.mount(isolated, { scope: clientScope,
           accepts: sessionId => this.accepts(clientScope, id, sessionId), configKey: () => JSON.stringify(entry.options.config ?? {}) })
+        this.mountPresets(owner.ctx, clientScope, id)
         entry.ctx[Context.isolate] = Object.assign(Object.create(isolation), labels)
         this.clientOwners.push({ entry, owner, isolation, labels })
       }
@@ -379,19 +412,32 @@ export class PluginManager {
   async start(): Promise<void> {
     await this.refresh()
     const registry = this.ctx.workspaceRegistry
-    for (const workspace of registry.list()) this.store.remember({ level: 'workspace', id: String(workspace.id) }, clientScope)
+    for (const workspace of registry.list()) {
+      const scope: Scope = { level: 'workspace', id: String(workspace.id) }
+      this.store.remember(scope, this.workspaceParent(scope))
+    }
     for (const agent of this.ctx.agents.list()) this.store.remember({ level: 'session', id: String(agent.id) }, await this.agentParent(agent))
     // 工作区没有创建事件；包装公开创建方法，在返回新工作区前写入默认值。
     const created = async (workspace: Awaited<ReturnType<typeof registry.create>> | undefined) => {
-      if (workspace) { await this.initialize({ level: 'workspace', id: String(workspace.id) }, clientScope); await this.sync() }
+      if (workspace) {
+        const scope: Scope = { level: 'workspace', id: String(workspace.id) }
+        await this.initialize(scope, this.workspaceParent(scope))
+        await this.sync()
+      }
       return workspace
     }
     const create = registry.create
     const initializeDefault = registry.initializeDefault
+    const remove = registry.delete
     registry.create = async (...args) => (await created(await create.apply(registry, args)))!
     registry.initializeDefault = async (...args) => created(await initializeDefault.apply(registry, args))
-    this.ctx.effect(() => () => { registry.create = create; registry.initializeDefault = initializeDefault })
+    registry.delete = async (...args) => { const deleted = await remove.apply(registry, args); await this.sync(); return deleted }
+    this.ctx.effect(() => () => { registry.create = create; registry.initializeDefault = initializeDefault; registry.delete = remove })
     installRouting(this.ctx)
+    this.ctx.effect(() => this.ctx.inject(['agentPresets'], child => {
+      this.presets = new ScopedPresets(child, scope => this.chain(scope), scope => isolateProvidedServices(this.ctx, this.realm(scope)),
+        (id, resume) => this.withResumingSession(id, resume))
+    }).dispose)
     this.ctx.on('loader/patch-context', async (entry, next) => { this.markEntry(entry); await next() })
     for (const adapter of this.plugins.values()) if (this.store.hasScoped(adapter.id)) await this.manage(adapter.id)
     await this.sync()
@@ -462,7 +508,7 @@ export class PluginManager {
       const failed = this.instance(scope, id)
       if (failed) {
         this.instances.get(scopeKey(scope))!.delete(id)
-        await failed.owner.dispose()
+        await disposeFiber(failed.owner)
       }
       await this.sync()
       await this.services.get(id)?.refresh()
@@ -495,10 +541,12 @@ export class PluginManager {
   }
 
   private async syncInstances(): Promise<void> {
+    const sessions = new Set([...this.ctx.agents.list().map(agent => String(agent.id)), ...this.resuming.keys()])
     const scopes: Scope[] = [
       ...this.ctx.workspaceRegistry.list().map(w => ({ level: 'workspace' as const, id: String(w.id) })),
-      ...this.ctx.agents.list().map(agent => ({ level: 'session' as const, id: String(agent.id) })),
-    ]
+      ...[...sessions].map(id => ({ level: 'session' as const, id })),
+    ].sort((a, b) => this.chain(a).length - this.chain(b).length)
+    await this.relinkRealms(scopes)
     const wanted = new Set<string>()
     for (const scope of scopes) for (const adapter of this.plugins.values()) {
       const saved = this.store.get(scope, adapter.id)
@@ -509,26 +557,71 @@ export class PluginManager {
     for (const [key, instances] of this.instances) for (const [id, instance] of instances) {
       if (wanted.has(`${key}/${id}`)) continue
       instances.delete(id)
-      await instance.owner.dispose()
+      await disposeFiber(instance.owner)
       if (!instances.size) this.instances.delete(key)
     }
     for (const broker of this.services.values()) await broker.refreshCommands()
   }
 
+  private realm(scope: Scope): Record<string, symbol> {
+    let labels = this.ctx[Context.isolate]
+    for (const candidate of this.chain(scope).slice(0, -1).reverse()) {
+      const key = scopeKey(candidate)
+      const current = this.realms.get(key) ?? Object.create(labels)
+      Object.setPrototypeOf(current, labels)
+      this.realms.set(key, current)
+      labels = current
+    }
+    return labels
+  }
+
+  private async withResumingSession<T>(id: string, resume: () => Promise<T>): Promise<T> {
+    if (this.ctx.agents.get(SessionId(id))) return resume()
+    this.resuming.set(id, (this.resuming.get(id) ?? 0) + 1)
+    try {
+      // A session's own preset must exist before DSH resolves its stored preset ID.
+      await this.sync()
+      return await resume()
+    } finally {
+      const remaining = this.resuming.get(id)! - 1
+      if (remaining) this.resuming.set(id, remaining)
+      else this.resuming.delete(id)
+      await this.sync()
+    }
+  }
+
+  private async relinkRealms(scopes: Scope[]): Promise<void> {
+    const before = new Map<Fiber, Record<string, symbol>>()
+    for (const runtime of this.ctx.registry.values()) for (const fiber of runtime.fibers) {
+      before.set(fiber, Object.fromEntries(Object.keys(fiber.inject).map(name => [name, fiber.ctx[Context.isolate][name]!])))
+    }
+    for (const scope of scopes) this.realm(scope)
+    const changed = new Map<Fiber, string[]>()
+    for (const [fiber, labels] of before) {
+      const names = Object.keys(labels).filter(name => labels[name] !== fiber.ctx[Context.isolate][name])
+      if (names.length) changed.set(fiber, names)
+    }
+    this.ctx.reflect.notify([...new Set([...changed.values()].flat())], (ctx, name) => changed.get(ctx.fiber)?.includes(name) ?? false)
+    await Promise.all([...changed.keys()].map(fiber => fiber.await()))
+  }
+
+  private mountPresets(ctx: Context, scope: Scope, id: string): void {
+    ctx.effect(() => this.ctx.inject(['agentPresets'], () => {
+      const facade = this.presets!.facade(ctx, { scope, applies: view => this.applies(scope, id, view) })
+      return ctx.provide('agentPresets', facade)
+    }).dispose)
+  }
+
   private async mount(scope: Scope, adapter: InstalledPlugin, config: PluginConfig): Promise<void> {
-    const key = scopeKey(scope)
-    const parentLabels = this.chain(scope).slice(1).map(parent => this.realms.get(scopeKey(parent))).find(Boolean) ?? this.ctx[Context.isolate]
-    let labels = this.realms.get(key)
-    if (!labels) { labels = Object.create(parentLabels); this.realms.set(key, labels!) }
-    else Object.setPrototypeOf(labels, parentLabels)
-    let isolated = isolateProvidedServices(this.ctx, labels!)
-    for (const service of [...scopedServiceNames, 'settings', 'typert']) isolated = isolated.isolate(service)
+    let isolated = isolateProvidedServices(this.ctx, this.realm(scope))
+    for (const service of [...scopedServiceNames, 'settings', 'typert', 'agentPresets']) isolated = isolated.isolate(service)
     const route = { accepts: (sessionId: string) => this.accepts(scope, adapter.id, sessionId) }
     isolated = isolated.extend({ [routing]: route })
     const owner = await isolated.plugin(async (ctx: Context) => {
       ctx.provide('settings', { configure: () => () => {} })
       await ctx.plugin(TypertRegistry)
     })
+    this.mountPresets(owner.ctx, scope, adapter.id)
     await this.services.get(adapter.id)?.mount(owner.ctx, { scope, accepts: route.accepts,
       configKey: () => JSON.stringify(this.store.get(scope, adapter.id)?.config ?? {}) })
     // ctx.inject 的子入口失败也要回报，避免把启动失败显示成已启用。
@@ -548,7 +641,7 @@ export class PluginManager {
       const error = (await Promise.all(failures)).find(Boolean)
       if (error) throw error
     } catch (error) {
-      await owner.dispose()
+      await disposeFiber(owner)
       throw error
     } finally { unwatch() }
     const instances = this.instances.get(scopeKey(scope)) ?? new Map<string, Instance>()
@@ -556,11 +649,16 @@ export class PluginManager {
     this.instances.set(scopeKey(scope), instances)
   }
 
-  async releaseSession(sessionId: string): Promise<void> {
-    const key = scopeKey({ level: 'session', id: sessionId })
-    const instances = this.instances.get(key)
-    this.instances.delete(key)
-    for (const instance of instances?.values() ?? []) await instance.owner.dispose()
+  releaseSession(sessionId: string): Promise<void> {
+    const release = async () => {
+      const key = scopeKey({ level: 'session', id: sessionId })
+      const instances = this.instances.get(key)
+      this.instances.delete(key)
+      for (const instance of instances?.values() ?? []) await disposeFiber(instance.owner)
+    }
+    // agent/disposed is a notification; the next resume must wait for this cleanup.
+    this.syncing = this.syncing.then(release, release)
+    return this.syncing
   }
 
   async call(scope: Scope, id: string, namespace: string, method: string, args: PluginConfig, peer: PeerScope, signal: AbortSignal) {
@@ -576,18 +674,22 @@ export class PluginManager {
 
   async dispose(): Promise<void> {
     this.stopped = true
-    for (const instances of this.instances.values()) for (const instance of instances.values()) await instance.owner.dispose()
+    for (const instances of this.instances.values()) for (const instance of instances.values()) await disposeFiber(instance.owner)
     this.instances.clear()
+    const errors: unknown[] = []
     for (const { entry, owner, isolation } of this.clientOwners) {
-      const running = !!entry.fiber?.uid
-      const disabled = entry.options.disabled ?? null
-      if (running) await entry.update({ disabled: true })
-      entry.ctx[Context.isolate] = isolation
-      // 菜单单独卸载时，把客户端入口交回 DSH；应用退出无需重启入口。
-      if (this.ctx.root.fiber.state === 2 && running) { await entry.update({ disabled }); await entry.fiber?.await() }
-      else entry.options.disabled = disabled
-      await owner.dispose()
+      try {
+        const running = !!entry.fiber?.uid
+        const disabled = entry.options.disabled ?? null
+        if (running) await entry.update({ disabled: true })
+        entry.ctx[Context.isolate] = isolation
+        // 菜单单独卸载时，把客户端入口交回 DSH；应用退出无需重启入口。
+        if (this.ctx.root.fiber.state === 2 && running) { await entry.update({ disabled }); await entry.fiber?.await() }
+        else entry.options.disabled = disabled
+      } catch (error) { errors.push(error) } finally { await disposeFiber(owner) }
     }
     this.clientOwners = []
+    this.presets?.dispose()
+    if (errors.length) throw new AggregateError(errors, '部分客户端插件恢复失败')
   }
 }

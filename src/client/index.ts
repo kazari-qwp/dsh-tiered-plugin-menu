@@ -109,7 +109,7 @@ export async function apply(ctx: Context): Promise<void> {
     }
     child.effect(() => child.slots.inject('settings.section', () => child.slots.register({
       name: 'settings.section', id: 'tiered-plugin-menu', order: 46,
-      label: () => '分级插件菜单', inject: () => ({ api, Page: () => null, ui }),
+      label: () => '分级插件菜单', inject: () => ({ api, ui }),
     }, LevelSettings)))
     child.effect(() => child.slots.inject('sidebar.workspaces.session.row.action', () => child.slots.register({
       name: 'sidebar.workspaces.session.row.action', id: 'tiered-plugin-menu', order: 50,

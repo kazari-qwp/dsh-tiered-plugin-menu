@@ -9,7 +9,7 @@ import { remoteContribution } from './remote-contract.ts'
 import type { Scope, PluginConfig, ChangeMode } from './shared.ts'
 
 export { PluginManager } from './manager.ts'
-export const inject = ['agents', 'loader', 'typert', 'workspaceRegistry', 'pluginManager', 'profileContext', 'configEditor']
+export const inject = ['agents', 'sessions', 'loader', 'typert', 'workspaceRegistry', 'pluginManager', 'profileContext', 'configEditor']
 export const Config = z.object({ dataFile: z.string().default(dshHomePath('plugins', 'tiered-plugin-menu.json')) })
 
 declare module '@deepseek-ai/cordis' { interface Context { tieredPlugins: PluginManager } }
@@ -17,6 +17,8 @@ declare module '@deepseek-ai/cordis' { interface Context { tieredPlugins: Plugin
 class MenuService extends TypertRemoteService {
   static inject = ['tieredPlugins']
   constructor(ctx: Context) { super(ctx, 'tieredPluginMenu') }
+  settings() { return this.ctx.tieredPlugins.settings() }
+  setWorkspaceTreeInheritance(enabled: boolean) { return this.ctx.tieredPlugins.setWorkspaceTreeInheritance(enabled) }
   context(sessionId: string | null) { return this.ctx.tieredPlugins.context(sessionId) }
   list(scope: Scope) { return this.ctx.tieredPlugins.rows(scope) }
   childSettings(scope: Scope) { return this.ctx.tieredPlugins.childSettings(scope) }
