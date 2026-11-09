@@ -1,6 +1,6 @@
 import { Context, Service, type Fiber } from '@deepseek-ai/cordis'
 import type { PromptSection, PromptContext } from '@deepseek-ai/dsh-system-prompt'
-import type { ProjectionDefinition, ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
+import type { ProjectionDefinition, ProjectionHandle, ProjectionKeySelection, ProjectionSnapshot } from '@deepseek-ai/dsh-session-projection'
 import type { Session } from '@deepseek-ai/dsh-session'
 import type { ConnectionFetchRoute } from '@deepseek-ai/dsh-client-connection'
 import { z } from 'zod'
@@ -436,12 +436,40 @@ export class ScopedServices {
 
   stateOf(session: Session, key: string) { return this.projections.get(key)?.handle?.stateOf(session).value }
 
+  projectionKeys(keys?: Iterable<string>): ProjectionKeySelection | undefined {
+    return keys && [...keys].map(key => this.projections.has(key) ? this.name(key) : key) as ProjectionKeySelection
+  }
+
+  projectionLocalKey(hostKey: string): string {
+    for (const key of this.projections.keys()) if (this.name(key) === hostKey) return key
+    return hostKey
+  }
+
+  projectionNames(): Record<string, string> {
+    return Object.fromEntries([...this.projections.keys()].map(key => [key, this.name(key)]))
+  }
+
+  projectionValues(values: ProjectionSnapshot['values']): ProjectionSnapshot['values'] {
+    const result: Record<string, unknown> = { ...values }
+    for (const key of this.projections.keys()) {
+      const hostKey = this.name(key)
+      if (hostKey === key || !Object.hasOwn(result, hostKey)) continue
+      result[key] = result[hostKey]
+      delete result[hostKey]
+    }
+    return result
+  }
+
+  projectionSnapshot<T extends ProjectionSnapshot | undefined>(snapshot: T): T {
+    return snapshot && { ...snapshot, values: this.projectionValues(snapshot.values) }
+  }
+
   async mount(ctx: Context, owner: Owner): Promise<Fiber> {
     const broker = this
     // inject 使用未隔离的宿主来等待服务，提供者则放进实例的隔离空间。
     return ctx.plugin((child: Context) => {
       for (const [name, Factory] of [
-        ['systemPrompt', PromptFacade], ['sessionProjections', ProjectionFacade], ['connection', ConnectionFacade],
+        ['systemPrompt', PromptFacade], ['sessionProjections', ProjectionFacade], ['sessionProjectionCache', ProjectionCacheFacade], ['connection', ConnectionFacade],
         ['tools', ToolsFacade], ['webServer', WebFacade], ['sessionTitle', TitleFacade],
         ['commands', CommandsFacade], ['skills', SkillsFacade],
       ] as const) {
@@ -503,10 +531,30 @@ class PromptFacade extends Service {
 }
 
 class ProjectionFacade extends Service {
-  constructor(ctx: Context, private broker: ScopedServices, private owner: Owner, private root: Context) { super(ctx, 'sessionProjections') }
+  constructor(ctx: Context, private broker: ScopedServices, private owner: Owner, private root: Context) { super(ctx, 'sessionProjections'); forwardService(this, root, 'sessionProjections') }
+  private get native() { return this.root.get('sessionProjections') as Context['sessionProjections'] }
   register(value: Definition) { return this.broker.projection(this.ctx, this.owner, value) }
   stateOf(session: Session, key: string) { return this.broker.stateOf(session, key) }
-  snapshot(session: Session, keys?: any) { return (this.root.get('sessionProjections') as Context['sessionProjections']).snapshot(session, keys) }
+  snapshot(session: Session, keys?: ProjectionKeySelection) { return this.broker.projectionSnapshot(this.native.snapshot(session, this.broker.projectionKeys(keys))) }
+  cachedSnapshot(session: Session, keys?: ProjectionKeySelection) { return this.broker.projectionSnapshot(this.native.cachedSnapshot(session, this.broker.projectionKeys(keys))) }
+  summaryKeys() { return new Set([...this.native.summaryKeys()].map(key => this.broker.projectionLocalKey(key))) }
+  viewCheckpoint(...[checkpoint, keys]: Parameters<Context['sessionProjections']['viewCheckpoint']>) {
+    return this.broker.projectionValues(this.native.viewCheckpoint(checkpoint, this.broker.projectionKeys(keys)))
+  }
+  // Checkpoints remain opaque host records, so restoration and write-back retain every plugin's data.
+  restore(...args: Parameters<Context['sessionProjections']['restore']>) {
+    const result = this.native.restore(...args)
+    return { ...result, snapshot: this.broker.projectionSnapshot(result.snapshot) }
+  }
+  hydrate(...args: Parameters<Context['sessionProjections']['hydrate']>) { return this.broker.projectionSnapshot(this.native.hydrate(...args)) }
+}
+
+class ProjectionCacheFacade extends Service {
+  constructor(ctx: Context, private broker: ScopedServices, _owner: Owner, private root: Context) { super(ctx, 'sessionProjectionCache'); forwardService(this, root, 'sessionProjectionCache') }
+  private get native() { return this.root.get('sessionProjectionCache') as any }
+  cachedSnapshot(header: unknown, keys?: ProjectionKeySelection) { return this.broker.projectionSnapshot(this.native.cachedSnapshot(header, this.broker.projectionKeys(keys))) }
+  coldSnapshot(...args: any[]) { return this.broker.projectionSnapshot(this.native.coldSnapshot(...args)) }
+  hydratePrepared(...args: any[]) { return this.broker.projectionSnapshot(this.native.hydratePrepared(...args)) }
 }
 
 class ConnectionFacade extends Service {
@@ -515,4 +563,4 @@ class ConnectionFacade extends Service {
   get rpc() { return (this.root.get('connection') as Context['connection']).rpc }
 }
 
-export const scopedServiceNames = ['systemPrompt', 'sessionProjections', 'connection', 'tools', 'webServer', 'sessionTitle', 'commands', 'skills'] as const
+export const scopedServiceNames = ['systemPrompt', 'sessionProjections', 'sessionProjectionCache', 'connection', 'tools', 'webServer', 'sessionTitle', 'commands', 'skills'] as const

@@ -34,6 +34,47 @@ function locale(ctx: Context) {
   } as never)
 }
 
+test('isolated conversation panels read their own projections while sharing native title data', async () => {
+  const ctx = new Context()
+  const renderer = load<Plugin>(require.resolve('@deepseek-ai/dsh-client-ui-renderer/client'))
+  const controllers: ContextClient[] = []
+  let tree: ReactTestRenderer | undefined
+  const rows = ['first', 'second'].map((id, index) => ({
+    id, name: id, package: id, description: '', source: clientScope, own: false,
+    enabled: true, active: true, verified: false, managed: true, settings: 'registered', config: {},
+    projections: { statistics: `private-${index}` },
+  }))
+  const api = { list: async () => ({ ok: true, value: rows }) } as unknown as MenuRemote
+  try {
+    await ctx.plugin(renderer)
+    await ctx.plugin(Loader)
+    ctx.slots.register({ name: 'root', children: { 'conversation.view': { kind: 'list', scope: 'session' } } } as any, () => null)
+    for (const row of rows) {
+      const plugin = { inject: ['slots'], apply(child: Context) {
+        child.slots.inject('conversation.view', () => child.slots.register({ name: 'conversation.view', id: row.id } as any,
+          ({ useProjection }: any) => createElement('span', null, `${useProjection('title')}:${useProjection('statistics')}`)))
+      } }
+      const controller = new ContextClient(ctx, api, plugin, row.id)
+      controllers.push(controller)
+      await controller.select('inherited-session')
+    }
+    const values: Record<string, unknown> = { title: 'shared', 'private-0': 11, 'private-1': 22 }
+    const useProjection = (key: string) => values[key]
+    const render = () => createElement(Fragment, null, ...ctx.slots.entriesOfSlot('conversation.view')
+      .map((entry, index) => createElement(entry.component as any, { key: index, useProjection })))
+    await act(async () => { tree = create(render()) })
+    assert.deepEqual(tree!.root.findAllByType('span').map(item => item.children[0]), ['shared:11', 'shared:22'])
+    values['private-0'] = 33
+    await act(async () => { tree!.update(render()) })
+    assert.deepEqual(tree!.root.findAllByType('span').map(item => item.children[0]), ['shared:33', 'shared:22'])
+    assert.equal(useProjection('statistics'), undefined, 'the host projection reader stays unchanged')
+  } finally {
+    await act(async () => tree?.unmount())
+    for (const controller of controllers) await controller.dispose()
+    await ctx.fiber.dispose()
+  }
+})
+
 test('settings and detail cards render together, separated, against the selected form', async () => {
   const ctx = new Context()
   locale(ctx)

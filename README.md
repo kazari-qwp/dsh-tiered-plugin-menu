@@ -23,12 +23,12 @@ Workspace and session buttons appear on hover, so they are hidden on the unhover
 Download the prebuilt `.tgz` from [Releases](https://github.com/kazari-qwp/dsh-tiered-plugin-menu/releases), then add it in DSH's plugin page or run:
 
 ```sh
-dsh plugin --profile desktop add ./dsh-tiered-plugin-menu-0.6.2.tgz
+dsh plugin --profile desktop add ./dsh-tiered-plugin-menu-0.6.3.tgz
 ```
 
 For Web, use your profile name (usually `web`). Restart DSH if hot reload is disabled. No companion plugin is required.
 
-**Upgrading from 0.6.0/0.6.1:** restart DSH after installing 0.6.2. This fixes SDK dependency loading in installed profiles, which could prevent scoped plugins from starting, report `fiber state 4`, or remove a session from the live sidebar when opening it. Existing session logs do not need rewriting. [Cause and verification](docs/PLUGIN_ISOLATION.md#062-installed-profile-module-resolution).
+**Upgrading to 0.6.3:** restart DSH after installing. This fixes isolated plugins reading empty projection data in history queries and conversation panels, including Context insights. It also includes the SDK loading fixes from 0.6.2. Existing session logs do not need rewriting. [Cause and verification](docs/PLUGIN_ISOLATION.md#063-projection-reads-and-panel-binding).
 
 The release includes compiled host/browser code, the bundle patch and licenses. It needs no install-time build script. A GitHub source checkout must be built first; use the release tarball for installation. This follows the [official DSH packaging guide](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/develop/basic/publish.md).
 

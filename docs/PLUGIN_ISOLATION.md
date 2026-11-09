@@ -8,6 +8,10 @@ Version 0.6.0 adds a second switch to the menu's Settings. It defaults to **off*
 
 ## Shared implementation
 
+Isolation separates plugin-owned state and registrations while retaining access to native host data. Shared session history, workspace and account services remain native. A registration that receives a private name must also have its read and client-binding paths translated. This is a compatibility boundary, not a security sandbox; arbitrary filesystem access cannot always be classified automatically as plugin-private or shared.
+
+隔离的是插件自己的状态与注册，公共会话历史、工作区和账户等仍使用宿主服务。注册名称被隔离后，读取和前端绑定也需要对应转换。这是兼容性边界，不是安全沙箱；插件直接操作任意文件时，无法总是自动判断它属于私有数据还是共享数据。
+
 - Client entries use the same `ScopedModules` and `DirectoryView` as lower instances. Native Loader entries, saved configuration and frontend module discovery remain in use.
 - Service environments are separated by scope and package. Components of a package share their environment. Explicit dependencies can connect to an unambiguous active provider; native host consumers are included.
 - `ScopedServices` retains its per-session ownership checks. With the switch on, tool, skill, command, prompt and projection names receive a stable plugin prefix. Both conflicting tools keep their own schemas, executors and output renderers in one Agent's admitted tool set.
@@ -85,3 +89,13 @@ node scripts/compatibility/third-batch.mjs native-memory-pair \
 ```
 
 Run sample code under the lab's unprivileged, offline sandbox launcher. Each case creates an independent HOME, DSH profile and working directory. The functional adapter is local and uses no paid model API.
+
+## 0.6.3 projection reads and panel binding
+
+With experimental isolation enabled, projection registrations had private keys, but reads still used the original keys. The projection facade also omitted native restore/hydrate methods, and conversation panels received the unmodified `useProjection` reader. Plugins could therefore start correctly and list real sessions while receiving empty derived data.
+
+The fix translates key selections and returned values for live snapshots and persisted-cache reads, forwards native checkpoint restoration, and supplies each plugin's registered key mapping to its conversation panels. Checkpoints retain their native representation. All mappings come from registrations; there are no plugin-name branches or changes to DSH or third-party code.
+
+A standalone copy of the installed Windows runtime reproduced zero Context usage before the fix. Afterward, isolation on and off both returned usage through cold reads, live reads and two menu off/on cycles. All seven persisted sessions activated without removals. Five enabled sessions' returned projection values matched the host values after activation and again after the cycles. The two added regressions cover same-name projections in separate plugins, live/cached/cold reads, checkpoint round trips, and panel reads with native shared title data. All **45 local tests**, type checking and build pass. [Machine-readable results](reports/projection-reads-0.6.3.json).
+
+0.6.3 修复的是通用投影读取与面板绑定，不是 Context 专用适配。隔离注册、实时读取、历史缓存读取和前端按名称读取现在使用同一份注册信息。仓库外的真实运行时副本验证了统计恢复、七个会话加载及菜单重载；新增两个测试均先复现失败再验证修复。此次未操作用户客户端界面、改写原会话日志或重跑 26 插件虚拟机矩阵。

@@ -28,6 +28,7 @@ export interface PluginRow extends SavedConfig {
   configNamespace?: string
   routes?: string[]
   routePrefix?: string
+  projections?: Record<string, string>
 }
 export interface MenuContext {
   workspaces: { id: string; title: string; path: string }[]

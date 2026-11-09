@@ -362,6 +362,7 @@ export class PluginManager {
         configNamespace: adapter.options.id,
         routes: this.services.get(adapter.id)?.paths() ?? [],
         routePrefix: this.services.get(adapter.id)?.routePrefix || undefined,
+        projections: this.services.get(adapter.id)?.projectionNames(),
         managed: this.managed.has(adapter.id),
         verified: adapter.selfCompatible,
         settings: 'registered' as const,

@@ -138,7 +138,7 @@ export class ContextClient {
         } as any, () => createElement(Page)))
       } catch { /* Host-only components may have no native settings card. */ }
     }
-    const key = JSON.stringify([row.enabled, row.partial, row.source, row.config, row.components])
+    const key = JSON.stringify([row.enabled, row.partial, row.source, row.config, row.components, row.projections])
     if (key === this.current) return
     await this.mounted?.dispose()
     this.mounted = undefined
@@ -154,7 +154,7 @@ export class ContextClient {
         return component ? this.form(component, component.source) : form
       }, whileServed: (_ids: string[], mount: () => () => void) => mount() })
       child.provide('remote', scopedRemote(child, this.api, componentRows[0]!, row.source))
-      new PanelSlots(child, this.ctx)
+      new PanelSlots(child, this.ctx, Object.assign({}, ...componentRows.map(row => row.projections)))
       await child.plugin(plugin)
     })
     this.current = key
@@ -178,13 +178,18 @@ export class ContextClient {
 }
 
 class PanelSlots extends Service {
-  constructor(ctx: Context, private root: Context) { super(ctx, 'slots') }
+  constructor(ctx: Context, private root: Context, private projections: Record<string, string>) { super(ctx, 'slots') }
   entries(name: any) { return this.root.slots.entries(name) }
   inject(name: any, mount: () => () => void) {
     if (name === 'plugins.bundle.config') return () => {}
     return this.ctx.effect(() => this.root.slots.inject(name, mount))
   }
-  register(options: any, component: ComponentType<any>) { return this.ctx.effect(() => this.root.slots.register(options, props => createElement(component, props))) }
+  register(options: any, component: ComponentType<any>) {
+    return this.ctx.effect(() => this.root.slots.register(options, (props: any) => createElement(component,
+      typeof props.useProjection === 'function' ? { ...props,
+        useProjection: (key: string) => props.useProjection(this.projections[key] ?? key),
+      } : props)))
+  }
 }
 
 export function ActiveSession({ controller, sessionId }: { controller: ContextClient; sessionId?: string }) {

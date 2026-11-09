@@ -1,0 +1,73 @@
+{
+  "version": "0.6.3",
+  "date": "2026-11-09",
+  "environment": {
+    "platform": "Windows x64",
+    "dsh": "0.2.2-rc.1",
+    "electron": "44.7.0",
+    "node": "24.21.0",
+    "profileLocation": "outside repository and its node_modules ancestry",
+    "plugins": {
+      "dsh-context": "0.83.0",
+      "dsh-temporary-messages": "0.1.10"
+    },
+    "data": "copies of seven persisted sessions and configuration, without credentials"
+  },
+  "before": {
+    "isolatedOverviewTokens": 0,
+    "isolatedPanelProjection": "undefined",
+    "nativeSessionListAvailable": true
+  },
+  "after": {
+    "isolationOn": {
+      "sessionsActivated": 7,
+      "sessionErrors": 0,
+      "sessionRemovedNotifications": 0,
+      "menuOffOnCycles": 2,
+      "statisticsAvailableAt": [
+        "cold",
+        "live",
+        "restarted"
+      ],
+      "liveProjectionValuesMatchHost": [
+        5,
+        5
+      ],
+      "coldBackfillFailed": 0
+    },
+    "isolationOff": {
+      "sessionsActivated": 7,
+      "sessionErrors": 0,
+      "sessionRemovedNotifications": 0,
+      "menuOffOnCycles": 2,
+      "statisticsAvailableAt": [
+        "cold",
+        "live",
+        "restarted"
+      ],
+      "liveProjectionValuesMatchHost": [
+        5,
+        5
+      ],
+      "coldBackfillFailed": 0
+    },
+    "localTestCases": {
+      "passed": 45,
+      "failed": 0
+    },
+    "typecheck": "passed",
+    "build": "passed",
+    "regressions": [
+      "live/cached/cold projection reads and checkpoint round trips with two plugins registering the same key",
+      "two isolated conversation panels read their own data and share native title data"
+    ]
+  },
+  "paidModelCalls": 0,
+  "desktopUiAutomated": false,
+  "vm26PackageMatrixRerun": false,
+  "packageSpecificProductionBranchesAdded": false,
+  "thirdPartyCodeChanged": false,
+  "installedPackageStandaloneVerification": "passed",
+  "originalSessionFilesModified": false,
+  "menuSettingsModified": false
+}
