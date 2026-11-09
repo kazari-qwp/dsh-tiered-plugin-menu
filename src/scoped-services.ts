@@ -7,12 +7,16 @@ import { z } from 'zod'
 import { scopeKey, type Scope } from './shared.ts'
 import type { ToolDefinition, ToolRegistrationOptions } from '@deepseek-ai/dsh-tools'
 import type { SkillCandidate, SkillProvider, SkillProviderControl, SkillRegistration, SkillViewOptions } from '@deepseek-ai/dsh-skill'
+import type { Agent } from '@deepseek-ai/dsh-agent'
+import { createScope, type Scope as RegistrationScope } from '@deepseek-ai/dsh-scope'
 
 interface Owner { scope: Scope; accepts(sessionId: string): boolean; configKey(): string }
 interface Contribution<T> { owner: Owner; value: T }
 type Definition = ProjectionDefinition<any, any>
 interface ProjectionState { sessionId: string; owner: string | null; config: string; value: any }
 interface SkillGroup { entries: Contribution<SkillProvider>[]; dispose(): void; invalidate(): void }
+type ToolEntry = Contribution<{ definition: ToolDefinition; options?: ToolRegistrationOptions }>
+interface ToolMount { entry: ToolEntry; dispose(): void }
 
 // Different plugin brokers share the host registration, while retaining each provider's owner.
 const hostSkills = new WeakMap<Context, Map<string, SkillGroup>>()
@@ -35,7 +39,8 @@ function forwardService(facade: object, root: Context, name: string) {
 export class ScopedServices {
   private prompts = new Map<string, { entries: Contribution<PromptSection | PromptContext>[]; dispose(): void }>()
   private routes = new Map<string, { entries: Contribution<ConnectionFetchRoute>[]; dispose(): void }>()
-  private tools = new Map<string, { entries: Contribution<{ definition: ToolDefinition; options?: ToolRegistrationOptions }>[]; dispose(): void }>()
+  private tools = new Map<string, { entries: ToolEntry[]; mounted: Map<Agent | undefined, ToolMount> }>()
+  private toolScopes = new Map<Agent, RegistrationScope>()
   private web = new Map<string, { entries: Contribution<any>[]; dispose(): void }>()
   private titles: Contribution<any>[] = []
   private removeTitle?: () => void
@@ -125,28 +130,65 @@ export class ScopedServices {
   }
 
   tool(ctx: Context, owner: Owner, definition: ToolDefinition, options?: ToolRegistrationOptions) {
-    return ctx.effect(() => {
-      let group = this.tools.get(definition.name)
-      if (!group) {
-        const entries: Contribution<{ definition: ToolDefinition; options?: ToolRegistrationOptions }>[] = []
-        const dispose = (this.root.get('tools') as Context['tools']).register({ ...definition,
-          execute: (args, exec) => {
-            const selected = this.pick(entries, exec.agent?.id)
-            if (!selected) throw new Error('此会话未启用该工具')
-            return selected.value.definition.execute(args, exec)
-          },
-        }, { when: async request => {
-          const selected = this.pick(entries, request.agent.id)
-          return !!selected && (await selected.value.options?.when?.(request) ?? true)
-        } })
-        group = { entries, dispose }; this.tools.set(definition.name, group)
-      }
-      const entry = { owner, value: { definition, options } }; group.entries.push(entry)
-      return () => {
+    const group = this.tools.get(definition.name) ?? { entries: [] as ToolEntry[], mounted: new Map<Agent | undefined, ToolMount>() }
+    this.tools.set(definition.name, group)
+    const broker = this
+    return ctx.effect(function* () {
+      const entry = { owner, value: { definition, options } }
+      group.entries.push(entry)
+      // Register cleanup first so a native registration failure releases this contribution too.
+      yield () => {
         group.entries.splice(group.entries.indexOf(entry), 1)
-        if (!group.entries.length) { group.dispose(); this.tools.delete(definition.name) }
+        broker.refreshTools()
+        if (!group.entries.length) broker.tools.delete(definition.name)
       }
+      broker.refreshTools()
     })
+  }
+
+  refreshTools() {
+    const agents = (this.root.get('agents') as Context['agents'] | undefined)?.list() ?? []
+    for (const group of this.tools.values()) {
+      const wanted = new Map<Agent | undefined, ToolEntry>()
+      const client = this.pick(group.entries)
+      if (client) wanted.set(undefined, client)
+      for (const agent of agents) {
+        const entry = this.pick(group.entries, agent.id)
+        if (entry && entry.owner.scope.level !== 'client') wanted.set(agent, entry)
+      }
+      for (const [agent, mounted] of group.mounted) if (wanted.get(agent) !== mounted.entry) {
+        group.mounted.delete(agent); mounted.dispose()
+      }
+      for (const [agent, entry] of wanted) {
+        if (group.mounted.has(agent)) continue
+        let target = this.root
+        if (agent) {
+          const scope = this.toolScopes.get(agent) ?? createScope(this.root, agent)
+          this.toolScopes.set(agent, scope); target = scope.ctx
+        }
+        const { definition, options } = entry.value
+        const dispose = (target.get('tools') as Context['tools']).register(agent ? definition : { ...definition,
+          execute: (args, exec) => {
+            if (exec.agent && !entry.owner.accepts(exec.agent.id)) throw new Error('此会话未启用该工具')
+            return definition.execute(args, exec)
+          },
+        }, agent ? options : { when: async request => entry.owner.accepts(request.agent.id)
+          && (await options?.when?.(request) ?? true) })
+        group.mounted.set(agent, { entry, dispose })
+      }
+    }
+    for (const [agent, scope] of this.toolScopes) if (![...this.tools.values()].some(group => group.mounted.has(agent))) {
+      this.toolScopes.delete(agent); void scope.dispose()
+    }
+  }
+
+  releaseTools(sessionId: string) {
+    for (const group of this.tools.values()) for (const [agent, mounted] of group.mounted) if (agent?.id === sessionId) {
+      group.mounted.delete(agent); mounted.dispose()
+    }
+    for (const [agent, scope] of this.toolScopes) if (agent.id === sessionId) {
+      this.toolScopes.delete(agent); void scope.dispose()
+    }
   }
 
   webRoute(ctx: Context, owner: Owner, method: 'register' | 'registerUpgrade', value: any) {
@@ -351,6 +393,7 @@ export class ScopedServices {
   }
 
   async refresh(): Promise<void> {
+    this.refreshTools()
     for (const group of this.skills.values()) group.invalidate()
     await Promise.all([...this.projections.keys()].map(key => this.refreshProjection(key)))
     await this.refreshCommands()

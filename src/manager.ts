@@ -567,7 +567,10 @@ export class PluginManager {
       await disposeFiber(instance.owner)
       if (!instances.size) this.instances.delete(key)
     }
-    for (const broker of this.services.values()) await broker.refreshCommands()
+    for (const broker of this.services.values()) {
+      broker.refreshTools()
+      await broker.refreshCommands()
+    }
   }
 
   private realm(scope: Scope): Record<string, symbol> {
@@ -672,6 +675,7 @@ export class PluginManager {
       const instances = this.instances.get(key)
       this.instances.delete(key)
       for (const instance of instances?.values() ?? []) await disposeFiber(instance.owner)
+      for (const broker of this.services.values()) broker.releaseTools(sessionId)
     }
     // agent/disposed is a notification; the next resume must wait for this cleanup.
     this.syncing = this.syncing.then(release, release)

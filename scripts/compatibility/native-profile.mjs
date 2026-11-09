@@ -99,6 +99,10 @@ try {
     const { concurrentMix } = await import('./concurrent-mix.mjs')
     await concurrentMix(ctx, report, names, home, save)
   }
+  if (process.argv.includes('--tool-scopes')) {
+    const { toolScopes } = await import('./tool-scopes.mjs')
+    await toolScopes(ctx, report, home, save)
+  }
   await ctx.fiber.dispose()
 } catch (error) { report.ok = false; report.error = String(error?.stack ?? error) }
 fs.writeFileSync(lastReport, JSON.stringify(report, null, 2))

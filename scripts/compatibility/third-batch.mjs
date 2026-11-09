@@ -19,6 +19,7 @@ const cases = newNames.flatMap(name => [
 cases.push(
   { name: 'native-all', args: names },
   { name: 'native-memory-pair', args: ['@fooxe/dsh-memory','meow-memory'] },
+  { name: 'scoped-memory-pair', args: ['--tool-scopes', '--start-disabled', '@fooxe/dsh-memory', 'meow-memory', 'dsh-tiered-plugin-menu'] },
   { name: 'client-all', args: [...names, 'dsh-tiered-plugin-menu'] },
   { name: 'scoped-old', args: ['--scoped', '--start-disabled', ...Object.keys(old), 'dsh-tiered-plugin-menu'] },
   { name: 'scoped-new', args: ['--scoped', '--start-disabled', ...newNames, 'dsh-tiered-plugin-menu'] },
@@ -59,7 +60,7 @@ for (const item of cases.filter(item => process.argv.length === 2 || process.arg
     scoped: raw.scoped?.map(plugin => ({ name: plugin.name, error: plugin.error, cases: plugin.cases,
       frontendInGraph: plugin.clientModules?.includes(plugin.name), separateConfigurations: plugin.separateConfigurations,
       packageComponents: plugin.packageComponents })), functional: raw.functional, persistence: raw.persistence,
-    concurrent: raw.concurrent, requestCount: raw.requestCount }
+    concurrent: raw.concurrent, toolScopes: raw.toolScopes, requestCount: raw.requestCount }
   const index = summary.findIndex(previous => previous.name === item.name)
   if (index < 0) summary.push(record); else summary[index] = record
   fs.writeFileSync(summaryFile, clean({ samples, cases: summary }))
@@ -69,5 +70,5 @@ for (const item of cases.filter(item => process.argv.length === 2 || process.arg
     nativeFailures: raw.controls?.flatMap(plugin => plugin.cycles.filter(test => !test.ok)).length,
     scopedFailures: failed.map(test => ({ name: test.name, label: test.label, error: test.error?.split('\n')[0] })),
     functionalFailures: raw.functional?.flatMap(plugin => plugin.cases.filter(test => !test.ok)).length,
-    concurrentFailures: raw.concurrent?.filter(test => !test.ok) }))
+    concurrentFailures: raw.concurrent?.filter(test => !test.ok), toolScopeFailures: raw.toolScopes?.filter(test => !test.ok) }))
 }

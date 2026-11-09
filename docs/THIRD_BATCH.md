@@ -4,6 +4,8 @@
 
 Follow-up: [0.5.2 cross-plugin skill registration fix / 跨插件同名技能修复](SKILLS.md).
 
+Follow-up: [0.5.3 same-name tools in separate workspaces/sessions / 不同工作区、会话的同名工具](TOOLS.md). The collision below describes enabling the packages together; separate scopes now coexist.
+
 Eight new packages were mixed with the previous eighteen, for **26 samples**. Tests ran in the disposable VMware VM as an unprivileged user, with only loopback networking and `no_new_privs`. Host shared folders, clipboard and credentials were unavailable. Installation scripts were disabled. Third-party source files and DSH core were unchanged; no test samples were installed in the personal desktop profile.
 
 本轮新增八个包，与原十八个混装，共 **26 个样本**。第三方代码只在非管理员、断外网的虚拟机中运行，没有宿主共享目录、剪贴板或凭据，安装时禁用脚本。没有改第三方插件或 DSH 源码，也没有向日常客户端安装这批样本。
