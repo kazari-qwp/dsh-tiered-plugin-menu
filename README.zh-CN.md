@@ -20,11 +20,21 @@
 
 ## 安装
 
-从 [Releases](https://github.com/kazari-qwp/dsh-tiered-plugin-menu/releases) 下载构建好的 `.tgz`，在 DSH 插件页添加，或执行：
+在 DSH 的 **插件 → 添加插件** 中输入 npm 包名：
+
+```text
+dsh-tiered-plugin-menu
+```
+
+如果镜像源仍返回首次发布的占位包，请切换到 npm 官方源后重试。
+
+也可以在命令行安装：
 
 ```sh
-dsh plugin --profile desktop add ./dsh-tiered-plugin-menu-0.6.3.tgz
+dsh plugin --profile desktop add dsh-tiered-plugin-menu
 ```
+
+也可以从 [Releases](https://github.com/kazari-qwp/dsh-tiered-plugin-menu/releases) 下载构建好的 `.tgz` 安装。
 
 Web 版换成自己的 profile 名称，通常是 `web`。未开启热重载时重启 DSH。不需要预先安装临时消息等其他插件。
 

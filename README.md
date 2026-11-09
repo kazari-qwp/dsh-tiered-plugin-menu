@@ -20,11 +20,21 @@ Workspace and session buttons appear on hover, so they are hidden on the unhover
 
 ## Install
 
-Download the prebuilt `.tgz` from [Releases](https://github.com/kazari-qwp/dsh-tiered-plugin-menu/releases), then add it in DSH's plugin page or run:
+In DSH, open **Plugins → Add plugin** and enter the npm package name:
+
+```text
+dsh-tiered-plugin-menu
+```
+
+If a registry mirror still serves the initial placeholder package, select the official npm registry and retry.
+
+Or install from the command line:
 
 ```sh
-dsh plugin --profile desktop add ./dsh-tiered-plugin-menu-0.6.3.tgz
+dsh plugin --profile desktop add dsh-tiered-plugin-menu
 ```
+
+Prebuilt `.tgz` packages are also available from [Releases](https://github.com/kazari-qwp/dsh-tiered-plugin-menu/releases).
 
 For Web, use your profile name (usually `web`). Restart DSH if hot reload is disabled. No companion plugin is required.
 
