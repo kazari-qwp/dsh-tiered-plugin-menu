@@ -23,7 +23,7 @@ Workspace and session buttons appear on hover, so they are hidden on the unhover
 Download the prebuilt `.tgz` from [Releases](https://github.com/kazari-qwp/dsh-tiered-plugin-menu/releases), then add it in DSH's plugin page or run:
 
 ```sh
-dsh plugin --profile desktop add ./dsh-tiered-plugin-menu-0.3.0.tgz
+dsh plugin --profile desktop add ./dsh-tiered-plugin-menu-0.3.1.tgz
 ```
 
 For Web, use your profile name (usually `web`). Restart DSH if hot reload is disabled. No companion plugin is required.
@@ -38,6 +38,7 @@ The release includes compiled host/browser code, the bundle patch and licenses. 
 - **Settings** expands the original plugin configuration cards when available, with a JSON editor as fallback. Cards from both Settings and plugin details are shown separately, divided by a line.
 - Disabling a scope blocks the inherited instance. An explicitly enabled child can still override a disabled parent.
 - Client scope uses the original DSH instance and native switch. Lower scopes create separate instances. Leaving a view does not stop background agents.
+- Disabling this menu releases its lower-scope instances, endpoints and UI while preserving saved settings for re-enabling. The original frontend is restored only for plugins enabled at client scope.
 - Choosing another session changes the active frontend binding; visiting Insights or Settings keeps that binding.
 - Updating an installed plugin replaces its scoped frontend and open configuration cards after DSH finishes reloading its module and CSS, keeping the selected session and its settings.
 
@@ -72,7 +73,7 @@ Confirmation applies to switches operated through this menu; DSH's own plugin pa
 
 ## Compatibility
 
-Current version: **0.3.0**. Tested with **DSH 0.2.2-rc.1** and Node.js 24. Package/component controls and dependency confirmation use shared DSH mechanisms, without adapters named after individual plugins or changes to DSH and third-party source code.
+Current version: **0.3.1**. Tested with **DSH 0.2.2-rc.1** and Node.js 24. Package/component controls and dependency confirmation use shared DSH mechanisms, without adapters named after individual plugins or changes to DSH and third-party source code.
 
 Installed packages are discovered automatically. Unverified packages appear below a separator at lower scopes and require confirmation. Successful startup does not mark them verified.
 

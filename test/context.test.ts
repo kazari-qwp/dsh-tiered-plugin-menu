@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
@@ -53,7 +53,8 @@ test('原版 dsh-context：客户端、两工作区和会话同时启用，提�
       const { agent } = await ctx.agents.create({ sessionId: SessionId(name), meta: { cwd: workspace.path }, agentOptions: { provider: 'test', model: 'test' } })
       await workspace.attachSession(SessionId(name)); agents.push(agent)
     }
-    const fiber = await ctx.plugin(menu, { dataFile: resolve(root, 'settings.json') })
+    const dataFile = resolve(root, 'settings.json')
+    let fiber = await ctx.plugin(menu, { dataFile })
     const manager = ctx.tieredPlugins
     const one = { level: 'workspace' as const, id: String(workspaces[0]!.id) }
     const two = { level: 'workspace' as const, id: String(workspaces[1]!.id) }
@@ -100,8 +101,28 @@ test('原版 dsh-context：客户端、两工作区和会话同时启用，提�
     await manager.inherit(a, 'dsh-context')
     await round()
     assert.deepEqual(prompt('A').match(/PREFIX_\w+/g), ['PREFIX_UPDATED'])
+    await manager.configure(a, 'dsh-context', true, { promptPrefix: 'PREFIX_A', maxRequestSteps: 1 }, true)
+    const saved = readFileSync(dataFile, 'utf8')
+    for (let cycle = 0; cycle < 2; cycle++) {
+      const current = ctx.tieredPlugins
+      const instances = [...current.instances.values()].flatMap(instances => [...instances.values()])
+      await fiber.dispose()
+      assert.ok(instances.every(instance => !instance.owner.uid && !instance.plugin.uid), '关闭菜单回收全部下级实例')
+      assert.equal(current.instances.size, 0)
+      assert.equal(ctx.get('tieredPlugins'), undefined)
+      assert.equal((ctx.connection as any).fetchRoutes.has('/api/dsh-context/detail'), false, '全局未启用时，下级 HTTP 注册一起释放')
+      assert.equal(readFileSync(dataFile, 'utf8'), saved, '卸载不删除持久化配置')
+      await round()
+      for (const agent of agents) assert.equal(prompt(String(agent.id)).includes('PREFIX_'), false)
+      fiber = await ctx.plugin(menu, { dataFile })
+      await round()
+      assert.deepEqual(prompt('A').match(/PREFIX_\w+/g), ['PREFIX_A'])
+      assert.deepEqual(prompt('B').match(/PREFIX_\w+/g), ['PREFIX_UPDATED'])
+      for (const id of ['C', 'D']) assert.equal(prompt(id).includes('PREFIX_'), false)
+      assert.notEqual(ctx.tieredPlugins.instance(a, 'dsh-context'), instances.find(instance => instance.scope.id === 'A'))
+    }
     // 菜单卸载后恢复原生客户端服务，不残留隔离注册。
-    await manager.configure(clientScope, 'dsh-context', true, { promptPrefix: 'PREFIX_RESTORED' })
+    await ctx.tieredPlugins.configure(clientScope, 'dsh-context', true, { promptPrefix: 'PREFIX_RESTORED' })
     await fiber.dispose()
     await round()
     for (const agent of agents) assert.deepEqual(prompt(String(agent.id)).match(/PREFIX_\w+/g), ['PREFIX_RESTORED'])

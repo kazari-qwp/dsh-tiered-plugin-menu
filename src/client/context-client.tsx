@@ -21,6 +21,7 @@ export class ContextClient {
   private pending = Promise.resolve()
   private stopped = false
   private managed = false
+  private clientEnabled = false
   private forms = new Map<string, ReturnType<typeof sessionForm>>()
   private formRows = new Map<string, PluginRow>()
   private cards = new Map<string, Promise<{ Page: ComponentType; dispose(): unknown }>>()
@@ -113,7 +114,10 @@ export class ContextClient {
   private async sync() {
     if (!this.plugin) return
     const client = await this.row(clientScope)
-    if (client) this.form(client, clientScope)
+    if (client) {
+      this.clientEnabled = client.enabled || !!client.partial
+      this.form(client, clientScope)
+    }
     const row = await this.row(this.sessionId ? { level: 'session', id: this.sessionId } : clientScope)
     if (row) this.fetch.select(row)
     if (!row?.managed) return
@@ -162,7 +166,9 @@ export class ContextClient {
     await this.pending.catch(() => {})
     await this.clearClient()
     if (this.native && [...this.ctx.loader.entries()].includes(this.native.entry)) {
-      const { entry, isolation, disabled } = this.native
+      const { entry, isolation } = this.native
+      // 下级实例也会让原前端进入模块图；卸载菜单时只恢复实际启用的客户端插件。
+      const disabled = this.clientEnabled ? this.native.disabled : true
       await entry.update({ disabled: true })
       entry.ctx[Context.isolate] = isolation
       if (this.ctx.root.fiber.state === 2) { await entry.update({ disabled }); await entry.fiber?.await() }

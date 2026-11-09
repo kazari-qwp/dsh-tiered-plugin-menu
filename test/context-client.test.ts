@@ -171,6 +171,8 @@ test('打包入口：第三方全局从未启用，会话面板和配置卡也�
       'shell.overlay': { kind: 'list', scope: 'root' },
       'settings.section': { kind: 'list', scope: 'root' },
       'sidebar.workspaces.session.row.action': { kind: 'list', scope: 'root' },
+      'sidebar.panellist': { kind: 'list', scope: 'root' },
+      'main': { kind: 'keyed', scope: 'root' },
     } } as any, () => null)
     const form = sessionForm({ promptPrefix: 'CLIENT' }, async () => {})
     ctx.provide('configForms', { get: () => form, whileServed: (_ids: any, mount: any) => mount() } as any)
@@ -186,7 +188,7 @@ test('打包入口：第三方全局从未启用，会话面板和配置卡也�
     ctx.provide('remote', { $mount: async () => () => {}, tieredPluginMenu: api } as any)
     ctx.provide('remote.tieredPluginMenu', api as any)
     ctx.provide('pluginNavigation', { openBundle() {} } as any)
-    const fiber = await ctx.plugin(bundled)
+    let fiber = await ctx.plugin(bundled)
     // The module arrives after the menu has already started (first lower-scope activation).
     await ctx.loader.root.update([{ id: 'dsh-context', name: 'dsh-context' }])
     // 等待客户端的依赖注入子入口完成；不是浏览器操作。
@@ -199,6 +201,8 @@ test('打包入口：第三方全局从未启用，会话面板和配置卡也�
     const face = observer.inject!() as any
     await face.controller.select('A')
     assert.equal(ctx.slots.entries('conversation.view').length, 2, '全局从未启用也应注册上下文、编队面板')
+    assert.equal(ctx.slots.entries('sidebar.panellist' as any).length, 1)
+    assert.equal(ctx.slots.entries('main').length, 1)
     await face.controller.select('B')
     assert.equal(ctx.slots.entries('conversation.view').length, 0, '未启用的会话没有面板')
     await face.controller.select('A')
@@ -208,16 +212,30 @@ test('打包入口：第三方全局从未启用，会话面板和配置卡也�
     await act(async () => { view = create(createElement(injected.ui.Settings, { row: result.value[0], scope: { level: 'session', id: 'A' } })) })
     assert.equal(view!.root.findAllByType('textarea')[0]!.props.value, 'SESSION')
     await act(async () => { view!.unmount() })
+    // 宿主全局从未启用；下级使原前端入口可见，不代表它应该在菜单卸载后继续运行。
+    await fiber.dispose()
+    assert.equal(ctx.slots.entries('conversation.view').length, 0, '关闭菜单必须移除仅下级启用的原前端')
+    assert.equal(ctx.slots.entries('sidebar.panellist' as any).length, 0, '移除洞察按钮')
+    assert.equal(ctx.slots.entries('main').length, 0, '移除洞察页面')
+    assert.equal(ctx.slots.entries('plugins.bundle.config').length, 0)
+    fiber = await ctx.plugin(bundled)
+    await ctx.loader.await()
+    const restarted = ctx.slots.entries('tiered-plugin-menu.active-session' as any).find(e => e.options.id === 'tiered-observer:dsh-context')!
+    const restored = restarted.inject!() as any
+    await restored.controller.select('A')
+    assert.equal(ctx.slots.entries('conversation.view').length, 2, '重新打开菜单恢复保存的会话前端')
+    assert.equal(ctx.slots.entries('sidebar.panellist' as any).length, 1)
+    assert.equal(ctx.slots.entries('main').length, 1)
     // 再模拟全局开/关/重新开启，Loader 会创建新的 Entry，不能继续绑定旧对象。
     ctx.loader.import = async () => load<Plugin>(require.resolve('dsh-context/client'))
     for (let i = 0; i < 2; i++) {
       await ctx.loader.root.update([{ id: 'dsh-context', name: 'dsh-context' }])
       await ctx.loader.await()
-      await face.controller.refresh()
+      await restored.controller.refresh()
       assert.equal(ctx.slots.entries('conversation.view').length, 2, '全局开启也只能有一套会话面板')
       await ctx.loader.root.update([])
       await ctx.loader.await()
-      await face.controller.refresh()
+      await restored.controller.refresh()
       assert.equal(ctx.slots.entries('conversation.view').length, 2, '全局关闭保留下级面板')
     }
     await fiber.dispose()
