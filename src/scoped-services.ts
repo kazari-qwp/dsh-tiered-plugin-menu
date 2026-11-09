@@ -6,6 +6,7 @@ import type { ConnectionFetchRoute } from '@deepseek-ai/dsh-client-connection'
 import { z } from 'zod'
 import { scopeKey, type Scope } from './shared.ts'
 import type { ToolDefinition, ToolRegistrationOptions } from '@deepseek-ai/dsh-tools'
+import type { SkillProvider, SkillProviderControl, SkillRegistration, SkillViewOptions } from '@deepseek-ai/dsh-skill'
 
 interface Owner { scope: Scope; accepts(sessionId: string): boolean; configKey(): string }
 interface Contribution<T> { owner: Owner; value: T }
@@ -38,6 +39,7 @@ export class ScopedServices {
   private projections = new Map<string, {
     entries: Contribution<Definition>[]; handle?: ProjectionHandle<ProjectionState>; pending: Promise<void>
   }>()
+  private skills = new Map<string, { entries: Contribution<SkillProvider>[]; dispose(): void; invalidate(): void }>()
 
   constructor(private root: Context) {}
 
@@ -46,6 +48,48 @@ export class ScopedServices {
   }
 
   paths() { return [...this.routes.keys(), ...[...this.web.values()].map(group => group.entries[0]!.value.path)] }
+
+  skillProvider(ctx: Context, owner: Owner, create: (control: SkillProviderControl) => SkillProvider) {
+    return ctx.effect(() => {
+      const lifecycle = new AbortController()
+      let group: ReturnType<typeof this.skills.get>
+      try {
+        const provider = create({ signal: lifecycle.signal, invalidate: () => { if (!lifecycle.signal.aborted) group?.invalidate() } })
+        group = this.skills.get(provider.name)
+        if (!group) {
+          const entries: Contribution<SkillProvider>[] = []
+          let invalidate!: () => void
+          const selected = (options: SkillViewOptions) => this.pick(entries, (options.scope as { id?: string })?.id)?.value
+          const dispose = (this.root.get('skills') as Context['skills']).registerProvider(control => {
+            invalidate = control.invalidate
+            return { name: provider.name,
+              list: options => selected(options)?.list(options) ?? Promise.resolve([]),
+              get: (candidate, options) => selected(options)?.get(candidate, options) ?? Promise.resolve(undefined),
+            }
+          })
+          group = { entries, dispose, invalidate }; this.skills.set(provider.name, group)
+        }
+        const entry = { owner, value: provider }; group.entries.push(entry)
+        group.invalidate()
+        return () => {
+          group!.entries.splice(group!.entries.indexOf(entry), 1)
+          lifecycle.abort(new Error(`skill provider "${provider.name}" disposed`))
+          group!.invalidate()
+          if (!group!.entries.length) { group!.dispose(); this.skills.delete(provider.name) }
+        }
+      } catch (error) { lifecycle.abort(error); throw error }
+    })
+  }
+
+  runtimeSkill(ctx: Context, owner: Owner, value: SkillRegistration) {
+    const skill = { ...value, invocation: value.invocation ?? { modelInvocable: true, userInvocable: true }, provider: value.provider ?? 'runtime' }
+    // Route a static registration through the same catalog, retaining DSH's runtime rank and loaded metadata.
+    const provider = `runtime:${value.name}`
+    return this.skillProvider(ctx, owner, () => ({ name: provider,
+      list: async () => [{ ...skill, provider, rank: 250, locator: skill }],
+      get: async () => skill,
+    }))
+  }
 
   tool(ctx: Context, owner: Owner, definition: ToolDefinition, options?: ToolRegistrationOptions) {
     return ctx.effect(() => {
@@ -274,6 +318,7 @@ export class ScopedServices {
   }
 
   async refresh(): Promise<void> {
+    for (const group of this.skills.values()) group.invalidate()
     await Promise.all([...this.projections.keys()].map(key => this.refreshProjection(key)))
     await this.refreshCommands()
   }
@@ -287,7 +332,7 @@ export class ScopedServices {
       for (const [name, Factory] of [
         ['systemPrompt', PromptFacade], ['sessionProjections', ProjectionFacade], ['connection', ConnectionFacade],
         ['tools', ToolsFacade], ['webServer', WebFacade], ['sessionTitle', TitleFacade],
-        ['commands', CommandsFacade],
+        ['commands', CommandsFacade], ['skills', SkillsFacade],
       ] as const) {
         child.effect(() => broker.root.inject([name], async () => {
           const fiber = await child.plugin((serviceCtx: Context) => { new Factory(serviceCtx, broker, owner, broker.root) })
@@ -309,6 +354,12 @@ class ToolsFacade extends Service {
 class CommandsFacade extends Service {
   constructor(ctx: Context, private broker: ScopedServices, private owner: Owner, root: Context) { super(ctx, 'commands'); forwardService(this, root, 'commands') }
   register(value: any) { return this.broker.command(this.ctx, this.owner, value) }
+}
+
+class SkillsFacade extends Service {
+  constructor(ctx: Context, private broker: ScopedServices, private owner: Owner, root: Context) { super(ctx, 'skills'); forwardService(this, root, 'skills') }
+  registerProvider(create: (control: SkillProviderControl) => SkillProvider) { return this.broker.skillProvider(this.ctx, this.owner, create) }
+  register(value: SkillRegistration) { return this.broker.runtimeSkill(this.ctx, this.owner, value) }
 }
 
 class WebFacade extends Service {
@@ -347,4 +398,4 @@ class ConnectionFacade extends Service {
   get rpc() { return (this.root.get('connection') as Context['connection']).rpc }
 }
 
-export const scopedServiceNames = ['systemPrompt', 'sessionProjections', 'connection', 'tools', 'webServer', 'sessionTitle', 'commands'] as const
+export const scopedServiceNames = ['systemPrompt', 'sessionProjections', 'connection', 'tools', 'webServer', 'sessionTitle', 'commands', 'skills'] as const

@@ -18,6 +18,7 @@ const cases = newNames.flatMap(name => [
 ])
 cases.push(
   { name: 'native-all', args: names },
+  { name: 'native-memory-pair', args: ['@fooxe/dsh-memory','meow-memory'] },
   { name: 'client-all', args: [...names, 'dsh-tiered-plugin-menu'] },
   { name: 'scoped-old', args: ['--scoped', '--start-disabled', ...Object.keys(old), 'dsh-tiered-plugin-menu'] },
   { name: 'scoped-new', args: ['--scoped', '--start-disabled', ...newNames, 'dsh-tiered-plugin-menu'] },
@@ -40,8 +41,9 @@ for (const item of cases.filter(item => process.argv.length === 2 || process.arg
   fs.symlinkSync(path.join(root, 'node_modules'), path.join(directory, 'node_modules'), 'dir')
   fs.mkdirSync(path.join(directory, 'home'))
   fs.writeFileSync(path.join(directory, 'package.json'), '{"private":true}')
+  const started = Date.now()
   const run = spawnSync(process.execPath, [script, ...item.args], {
-    cwd: directory, encoding: 'utf8', timeout: 180000, maxBuffer: 8 * 1024 * 1024,
+    cwd: directory, encoding: 'utf8', timeout: Number(process.env.COMPAT_TIMEOUT_MS) || (item.args.includes('--functional') ? 900000 : 180000), maxBuffer: 8 * 1024 * 1024,
     env: { ...process.env, HOME: path.join(directory, 'home'), XDG_CONFIG_HOME: path.join(directory, 'home/.config'),
       XDG_CACHE_HOME: path.join(directory, 'home/.cache'), COMPAT_REPORT_NAME: 'report.json',
       COMPAT_MENU_ENTRY: process.env.COMPAT_MENU_ENTRY ?? path.join(root, 'dist/index.js') },
@@ -51,7 +53,8 @@ for (const item of cases.filter(item => process.argv.length === 2 || process.arg
   fs.writeFileSync(path.join(output, `${item.name}.json`), clean(raw))
   fs.writeFileSync(path.join(output, `${item.name}.log`), (run.stdout + run.stderr).replaceAll(root, '<lab>').replace(/token=\S+/g, 'token=[redacted]'))
   const failed = (raw.scoped ?? []).flatMap(plugin => plugin.cases?.filter(test => !test.ok).map(test => ({ name: plugin.name, ...test })) ?? [{ name: plugin.name, error: plugin.error }])
-  const record = { name: item.name, exit: run.status, signal: run.signal, ok: raw.ok, error: raw.error,
+  const record = { name: item.name, exit: run.status, signal: run.signal, elapsedMs: Date.now() - started,
+    processError: run.error?.message, ok: raw.ok, error: raw.error,
     graphError: raw.graphError, entries: raw.entries, childFailures: raw.childFailures, controls: raw.controls,
     scoped: raw.scoped?.map(plugin => ({ name: plugin.name, error: plugin.error, cases: plugin.cases,
       frontendInGraph: plugin.clientModules?.includes(plugin.name), separateConfigurations: plugin.separateConfigurations,
@@ -60,7 +63,8 @@ for (const item of cases.filter(item => process.argv.length === 2 || process.arg
   const index = summary.findIndex(previous => previous.name === item.name)
   if (index < 0) summary.push(record); else summary[index] = record
   fs.writeFileSync(summaryFile, clean({ samples, cases: summary }))
-  console.log(JSON.stringify({ name: item.name, exit: run.status, ok: raw.ok, error: raw.error?.split('\n')[0],
+  console.log(JSON.stringify({ name: item.name, exit: run.status, elapsedMs: record.elapsedMs,
+    processError: record.processError, ok: raw.ok, error: raw.error?.split('\n')[0],
     inactive: raw.entries?.filter(entry => !entry.disabled && entry.state !== 2), childFailures: raw.childFailures,
     nativeFailures: raw.controls?.flatMap(plugin => plugin.cycles.filter(test => !test.ok)).length,
     scopedFailures: failed.map(test => ({ name: test.name, label: test.label, error: test.error?.split('\n')[0] })),

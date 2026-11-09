@@ -23,7 +23,7 @@ Workspace and session buttons appear on hover, so they are hidden on the unhover
 Download the prebuilt `.tgz` from [Releases](https://github.com/kazari-qwp/dsh-tiered-plugin-menu/releases), then add it in DSH's plugin page or run:
 
 ```sh
-dsh plugin --profile desktop add ./dsh-tiered-plugin-menu-0.5.0.tgz
+dsh plugin --profile desktop add ./dsh-tiered-plugin-menu-0.5.1.tgz
 ```
 
 For Web, use your profile name (usually `web`). Restart DSH if hot reload is disabled. No companion plugin is required.
@@ -91,11 +91,11 @@ Data lives beside the menu configuration file in `<config-filename>.data/`, sepa
 
 ## Compatibility
 
-Current version: **0.5.0**. Tested with **DSH 0.2.2-rc.1** and Node.js 24. Package/component controls and dependency confirmation use shared DSH mechanisms, without adapters named after individual plugins or changes to DSH and third-party source code.
+Current version: **0.5.1**. Tested with **DSH 0.2.2-rc.1** and Node.js 24. Package/component controls and dependency confirmation use shared DSH mechanisms, without adapters named after individual plugins or changes to DSH and third-party source code.
 
 Installed packages are discovered automatically. Unverified packages appear below a separator at lower scopes and require confirmation. Successful startup does not mark them verified.
 
-The implementation isolates provided services per scope and routes shared DSH registries such as tools, prompts, commands, projections and HTTP handlers. Lower instances are real Loader entries, so DSH can load the **installed package's original frontend and CSS**, even when its client-level instance is disabled. The menu embeds no third-party frontend copies.
+The implementation isolates provided services per scope and routes shared DSH registries such as tools, prompts, commands, skills, projections and HTTP handlers. Lower instances are real Loader entries, so DSH can load the **installed package's original frontend and CSS**, even when its client-level instance is disabled. The menu embeds no third-party frontend copies.
 
 Agent preset declarations are also scoped: identical preset IDs can have different workspace/session configurations without duplicate registration. Native preset IDs and revision leases are preserved, including a subagent retaining its parent's revision. The adapter uses the declaration table of the pinned DSH version; this is not a cross-version API guarantee. See [Superagent validation](docs/SUPERAGENT.md) for the tested workflow and remaining upstream issues.
 
@@ -104,6 +104,8 @@ The 0.2.1 update fix was reproduced against the released 0.2.0 menu and verified
 The isolated matrix covers ten packages. Temporary messages, dsh-context and notifications pass **54 functional switch combinations** across four sessions and two workspaces. Seven other samples were checked independently for lifecycle, separate configuration and frontend module availability; Clock's actual configuration component also passes two-session save checks. [Results, versions and reproduction](docs/COMPATIBILITY.md).
 
 A second batch adds eight packages: Better Sidebar, Agent Teams, another memory plugin, Force Compact, Bill, Auto Mode, Workbench and Simplify. Their mixed lower-scope run passes **110/110 lifecycle/configuration cases**. It exposed and fixed a parse-only projection schema incompatibility in this menu. Workbench also reproduces a native route-cleanup failure without the menu. [Second-batch details](docs/SECOND_BATCH.md).
+
+A third batch mixes eight new packages with the previous eighteen. Excluding a memory-tool naming conflict that also occurs natively, all 25 packages pass **341/341 lower-scope lifecycle/configuration checks**. This exposed a missing skill-registry adapter: packaged skill providers and runtime skills now follow the selected workspace/session and release with their instance. [Third-batch results and native controls](docs/THIRD_BATCH.md).
 
 `@fooxe/dsh-memory` has a reproducible native HTTP-route cleanup problem without this menu. Starting with its native instance disabled avoids that leftover registration in the tested lower-scope cases. This menu does not repair upstream native registrations.
 
@@ -133,7 +135,7 @@ npm run check
 npm pack
 ```
 
-The checkout is self-contained. `vendor/` holds an unchanged MIT test fixture; no private repository access is needed. `check` covers type checking, building and 33 tests with real DSH services/plugins and React/jsdom. It uses neither browser automation nor paid model requests. Coverage includes child defaults, deep workspace trees, live inheritance changes, preset isolation and revision leases, session disposal/resume, native configuration cards and restart persistence.
+The checkout is self-contained. `vendor/` holds an unchanged MIT test fixture; no private repository access is needed. `check` covers type checking, building and 35 tests with real DSH services/plugins and React/jsdom. It uses neither browser automation nor paid model requests. Coverage includes child defaults, deep workspace trees, live inheritance changes, preset isolation and revision leases, session disposal/resume, native configuration cards and restart persistence.
 
 The broader third-party matrix runs in a disposable offline VM; see [reproduction instructions](docs/COMPATIBILITY.md#reproduce). No sample packages are installed into a personal DSH profile by these instructions.
 

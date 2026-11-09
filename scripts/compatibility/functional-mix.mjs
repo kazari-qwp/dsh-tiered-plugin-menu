@@ -53,9 +53,13 @@ export async function functionalMix(ctx, report, home, save) {
   const client = { level: 'client', id: '' }, workspace = { level: 'workspace', id: String(workspaces[0].id) }
   const session = { level: 'session', id: 'FA' }
   const manager = ctx.tieredPlugins
+  report.turns = []
   const send = async agent => {
+    const started = Date.now(), before = requests.length
     agent.followup(createUserMessage({ content: [{ type: 'text', text: 'hello' }], source: { kind: 'user' } }))
     await agent.whenIdle()
+    report.turns.push({ sessionId: agent.id, elapsedMs: Date.now() - started, requests: requests.length - before })
+    save()
   }
   report.functional = []
   report.persistence = []

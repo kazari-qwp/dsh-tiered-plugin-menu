@@ -8,6 +8,8 @@ Current evidence: [compatibility-0.2.0.json](compatibility-0.2.0.json). Historic
 
 Eight additional packages were subsequently tested: [second-batch report / 第二批新增八个样本的报告](SECOND_BATCH.md).
 
+Latest mixed regression: [third batch, menu 0.5.1 / 最新 26 样本混装回归](THIRD_BATCH.md).
+
 ## Isolation / 隔离方式
 
 Third-party code ran only as an unprivileged guest user, in a network namespace with loopback only and `no_new_privs`. The disposable VM had no shared host folders, clipboard, drag-and-drop or credentials. Dependencies were prepared with install scripts disabled. No samples were installed into the user's desktop profile. Model responses and webhooks used local fixtures; no paid API was called.

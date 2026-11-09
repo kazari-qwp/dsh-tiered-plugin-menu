@@ -15,10 +15,10 @@ export async function concurrentMix(ctx, report, names, home, save) {
     fs.mkdirSync(directory, { recursive: true })
     return ctx.workspaceRegistry.create(directory)
   }
-  const root = await workspace('projects'), nested = await workspace('projects/a/b'), other = await workspace('other')
+  const root = await workspace('projects'), nested = await workspace('projects/a/b'), other = await workspace('other'), outside = await workspace('outside')
   const scope = workspace => ({ level: 'workspace', id: String(workspace.id) })
   const handles = []
-  for (const [id, workspace] of [['A', nested], ['B', other], ['S', nested]]) {
+  for (const [id, workspace] of [['A', nested], ['B', other], ['S', nested], ['OFF',outside]]) {
     const handle = await ctx.agents.create({ sessionId: `concurrent-${id}`, meta: { cwd: workspace.path } })
     await workspace.attachSession(handle.agent.id)
     handles.push(handle)
@@ -59,6 +59,24 @@ export async function concurrentMix(ctx, report, names, home, save) {
       }
     }
     assert.ok(ctx.clientModules.graph().entries.length)
+  })
+  await check('packaged and runtime skills load only in enabled sessions',async()=>{
+    for(const agent of [a,b]) {
+      const options = {scope:agent,cwd:agent.session.header.cwd}
+      const listed = await ctx.skills.list(options)
+      const packaged = listed.find(skill=>skill.provider==='dsh-genui')
+      assert.ok(packaged,'GenUI provider is visible')
+      assert.ok((await ctx.skills.get(packaged.name,options))?.content.length)
+      assert.ok((await ctx.skills.get('normify-gen',options))?.content.length)
+    }
+    const off = handles[3].agent
+    const disabled = await ctx.skills.list({scope:off,cwd:outside.path})
+    assert.equal(disabled.some(skill=>skill.provider==='dsh-genui'||skill.name==='normify-gen'),false)
+    const genui = configured.find(item=>item.name==='@changfenhuang/dsh-genui')
+    await manager().configure(session(a),genui.id,false,{})
+    assert.equal((await ctx.skills.list({scope:a,cwd:nested.path})).some(skill=>skill.provider==='dsh-genui'),false)
+    assert.equal((await ctx.skills.list({scope:b,cwd:other.path})).some(skill=>skill.provider==='dsh-genui'),true)
+    await manager().inherit(session(a),genui.id)
   })
   const call = async (agent, name, args={}) => {
     const tool = ctx.tools.get(name, agent)
