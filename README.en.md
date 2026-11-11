@@ -124,7 +124,9 @@ Data lives beside the menu configuration file in `<config-filename>.data/`, sepa
 
 ## Compatibility
 
-Current version: **0.6.1**. Tested with **DSH 0.2.2-rc.1** and Node.js 24. Package/component controls and dependency confirmation use shared DSH mechanisms, without adapters named after individual plugins or changes to DSH and third-party source code.
+Current version: **0.7.1**. Tested with **DSH 0.2.2-rc.1 / rc.2** and Node.js 24. Package/component controls and dependency confirmation use shared DSH mechanisms, without adapters named after individual plugins or changes to DSH and third-party source code.
+
+0.7.1 removes the exact DSH version restriction: `engines.dsh` is omitted and DSH host peer dependencies use `*`, so this plugin's manifest no longer blocks DSH upgrades solely because the version changed. When `agents.isOwnedBy` is absent, the menu uses session metadata to identify parent sessions. Development dependencies remain pinned for reproducible builds and tests.
 
 0.6.1 fixes sessions disappearing from the sidebar after opening them with experimental isolation enabled. Private helper services no longer replace host services. Existing session files remain intact; update and restart DSH. [Cause and regression checks](docs/PLUGIN_ISOLATION.md#061-session-restoration-fix).
 

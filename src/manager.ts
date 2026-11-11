@@ -358,7 +358,7 @@ export class PluginManager {
   }
 
   private async agentParent(agent: Agent): Promise<Scope> {
-    const owner = this.ctx.agents.list().find(parent => this.ctx.agents.isOwnedBy(agent.id, parent))
+    const owner = this.ctx.agents.list().find(parent => this.ctx.agents.isOwnedBy?.(agent.id, parent))
     const header = agent.session.header
     const parentId = owner?.id ?? (header.origin === 'subagent' ? header.parentSession : undefined)
     if (parentId) return { level: 'session', id: String(parentId) }

@@ -16,7 +16,8 @@ import { childScope, clientScope, type Scope } from '../src/shared.ts'
 import { mountWorkspaces } from './workspaces.ts'
 import { mountPluginManagement } from './plugins.ts'
 
-test('new-child defaults: workspaces, sessions, recursive subagents, inheritance and restart', { timeout: 30000 }, async () => {
+for (const ownership of ['registry', 'session-header']) {
+test(`new-child defaults: workspaces, sessions, recursive subagents, inheritance and restart (${ownership})`, { timeout: 30000 }, async () => {
   mkdirSync('work', { recursive: true })
   const directory = resolve(mkdtempSync('work/child-defaults-'))
   const dataFile = resolve(directory, 'settings.json')
@@ -26,6 +27,7 @@ test('new-child defaults: workspaces, sessions, recursive subagents, inheritance
   const requests: GenerateOptions[] = []
   try {
     await mountAgentLoopTestDependencies(ctx)
+    if (ownership === 'session-header') Object.defineProperty(ctx.agents, 'isOwnedBy', { value: undefined })
     await mountWorkspaces(ctx)
     await ctx.plugin(TypertRegistry)
     await ctx.plugin(Loader)
@@ -146,6 +148,7 @@ test('new-child defaults: workspaces, sessions, recursive subagents, inheritance
     assert.equal((await ctx.tieredPlugins.rows(sessionScope(a.agent.id)))[0]!.config.template, 'SESSION A', 'a missing workspace directory must not break menu restart')
   } finally { await ctx.fiber.dispose() }
 })
+}
 
 test('stored defaults migrate legacy configs and survive reload without sharing mutable config objects', () => {
   mkdirSync('work', { recursive: true })
