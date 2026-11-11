@@ -1,11 +1,16 @@
 import type { MenuRemote } from '../src/remote-contract.ts'
 import { isClientScope, scopeKey, type ChangePlan } from '../src/shared.ts'
 
-export function withChangePlans(base: Omit<MenuRemote, 'plan' | 'change' | 'call' | 'childSettings' | 'setChildSettings' | 'settings' | 'setWorkspaceTreeInheritance' | 'setPluginIsolation'>): MenuRemote {
+export function withChangePlans(base: Omit<MenuRemote, 'plan' | 'change' | 'call' | 'childSettings' | 'setChildSettings' | 'settings' | 'setWorkspaceTreeInheritance' | 'setPluginIsolation' | 'addMcp' | 'skills' | 'skillConfig' | 'configureSkill' | 'inheritSkill'>): MenuRemote {
   const children = new Set<string>()
   let inheritWorkspaceTree = true
   let pluginIsolation = false
   const api: MenuRemote = { ...base,
+    addMcp: async () => ({ ok: true, value: 'mcp:test' }),
+    skills: async () => ({ ok: true, value: [] }),
+    skillConfig: async () => ({ ok: true, value: {} }),
+    configureSkill: async () => ({ ok: true, value: undefined }),
+    inheritSkill: async () => ({ ok: true, value: undefined }),
     settings: async () => ({ ok: true, value: { inheritWorkspaceTree, pluginIsolation } }),
     setWorkspaceTreeInheritance: async enabled => { inheritWorkspaceTree = enabled; return { ok: true, value: undefined } },
     setPluginIsolation: async enabled => { pluginIsolation = enabled; return { ok: true, value: undefined } },

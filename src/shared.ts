@@ -12,6 +12,7 @@ export interface ChildDefaults { independent: boolean; plugins: Record<string, S
 export interface ChildSettings { independent: boolean; source: Scope | null }
 export interface MenuSettings { inheritWorkspaceTree: boolean; pluginIsolation: boolean }
 export interface PluginRow extends SavedConfig {
+  kind?: 'plugin' | 'mcp'
   id: string
   name: string
   package: string
@@ -29,6 +30,18 @@ export interface PluginRow extends SavedConfig {
   routes?: string[]
   routePrefix?: string
   projections?: Record<string, string>
+}
+
+export type ResourceKind = 'plugin' | 'mcp' | 'skill'
+// A catalog preview has a menu scope but does not create an agent or run a model.
+export const catalogScope = Symbol('tiered.catalogScope')
+export interface SkillRow extends SavedConfig {
+  id: string
+  name: string
+  description: string
+  own: boolean
+  source: Scope
+  available: boolean
 }
 export interface MenuContext {
   workspaces: { id: string; title: string; path: string }[]

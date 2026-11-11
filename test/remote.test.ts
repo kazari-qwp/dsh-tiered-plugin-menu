@@ -19,6 +19,7 @@ import { mountWorkspaces } from './workspaces.ts'
 import { mountPluginManagement } from './plugins.ts'
 import { childScope, type Scope } from '../src/shared.ts'
 import { ConfigStore } from '../src/store.ts'
+import SkillRegistry from '@deepseek-ai/dsh-skill'
 
 for (const pluginIsolation of [false, true]) test(`官方 Client Remote → Host Gateway：配置、继承、原插件预览（隔离 ${pluginIsolation}）`, { timeout: 15000 }, async () => {
   mkdirSync('work', { recursive: true })
@@ -26,6 +27,8 @@ for (const pluginIsolation of [false, true]) test(`官方 Client Remote → Host
   const client = new Context()
   try {
     await mountAgentLoopTestDependencies(host)
+    await host.plugin(SkillRegistry)
+    host.skills.register({ name: 'rpc-skill', description: 'RPC skill', content: 'ORIGINAL', source: 'runtime' })
     await mountWorkspaces(host)
     const workspace = await host.workspaceRegistry.create(resolve('work'))
     await host.plugin(Loader)
@@ -56,6 +59,13 @@ for (const pluginIsolation of [false, true]) test(`官方 Client Remote → Host
     await client.plugin(ClientGateway)
     await client.remote.$mount(remoteContribution)
     const api = client.remote.tieredPluginMenu
+    const skillScope: Scope = { level: 'session', id: 'rpc-session' }
+    assert.ok((await api.skills(skillScope)).ok)
+    assert.deepEqual(await api.skillConfig(skillScope, 'rpc-skill'), { ok: true, value: { description: 'RPC skill', content: 'ORIGINAL', modelInvocable: true, userInvocable: true } })
+    assert.ok((await api.configureSkill(skillScope, 'rpc-skill', false, {})).ok)
+    assert.equal(await host.skills.get('rpc-skill', { scope: host.agents.get(SessionId(skillScope.id)) }), undefined)
+    assert.ok((await api.inheritSkill(skillScope, 'rpc-skill')).ok)
+    assert.equal((await host.skills.get('rpc-skill', { scope: host.agents.get(SessionId(skillScope.id)) }))?.content, 'ORIGINAL')
     assert.deepEqual(await api.settings(), { ok: true, value: { inheritWorkspaceTree: true, pluginIsolation } })
     assert.ok((await api.setPluginIsolation(true)).ok)
     assert.equal(host.tieredPlugins.settings().pluginIsolation, true)

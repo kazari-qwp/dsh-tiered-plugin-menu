@@ -22,6 +22,11 @@ class MenuService extends TypertRemoteService {
   setPluginIsolation(enabled: boolean) { return this.ctx.tieredPlugins.setPluginIsolation(enabled) }
   context(sessionId: string | null) { return this.ctx.tieredPlugins.context(sessionId) }
   list(scope: Scope) { return this.ctx.tieredPlugins.rows(scope) }
+  addMcp(scope: Scope, config: PluginConfig) { return this.ctx.tieredPlugins.addMcp(scope, config) }
+  skills(scope: Scope) { return this.ctx.tieredPlugins.skills.rows(scope) }
+  skillConfig(scope: Scope, name: string) { return this.ctx.tieredPlugins.skills.config(scope, name) }
+  configureSkill(scope: Scope, name: string, enabled: boolean, config: PluginConfig) { return this.ctx.tieredPlugins.skills.configure(scope, name, enabled, config) }
+  inheritSkill(scope: Scope, name: string) { return this.ctx.tieredPlugins.skills.inherit(scope, name) }
   childSettings(scope: Scope) { return this.ctx.tieredPlugins.childSettings(scope) }
   setChildSettings(scope: Scope, independent: boolean) { return this.ctx.tieredPlugins.setChildSettings(scope, independent) }
   plan(scope: Scope, id: string, mode: ChangeMode) { return this.ctx.tieredPlugins.plan(scope, id, mode) }

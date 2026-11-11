@@ -7,9 +7,14 @@ import type { Agent, SessionStartSource } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-workspace'
 import type {} from '@deepseek-ai/dsh-config-editor'
 import { ConfigStore } from './store.ts'
-import { installedPlugins, type InstalledPlugin } from './catalog.ts'
+import { installedPlugins, mcpAdapter, mcpModule, type InstalledPlugin } from './catalog.ts'
+import { randomUUID } from 'node:crypto'
+import { relative, resolve } from 'node:path'
+import type { SkillViewOptions } from '@deepseek-ai/dsh-skill'
+import { bindScopeParent } from '@deepseek-ai/dsh-scope'
+import { SkillPolicies } from './skill-policies.ts'
 import { attachRoute, installRouting, routing } from './routing.ts'
-import { childScope, clientScope, isClientScope, ownScope, scopeKey, type ChildSettings, type MenuContext, type PluginConfig, type PluginRow, type Scope } from './shared.ts'
+import { catalogScope, childScope, clientScope, isClientScope, ownScope, scopeKey, type ChildSettings, type MenuContext, type PluginConfig, type PluginRow, type Scope } from './shared.ts'
 import type { ChangeResult } from '@deepseek-ai/dsh-plugin-manager'
 import { ScopedServices, scopedServiceNames } from './scoped-services.ts'
 import { isolateProvidedServices } from './isolation.ts'
@@ -32,6 +37,7 @@ async function disposeFiber(fiber: Fiber): Promise<void> {
 }
 
 export class PluginManager {
+  readonly skills: SkillPolicies
   readonly instances = new Map<string, Map<string, Instance>>()
   private stopped = false
   private syncing = Promise.resolve()
@@ -53,12 +59,20 @@ export class PluginManager {
     this.runtime = new RuntimeTree(ctx)
     this.modules = new ScopedModules(`${store.filename}.data`)
     this.pluginIsolation = store.settings().pluginIsolation
+    this.skills = new SkillPolicies(ctx, store, scope => this.chain(scope), (scope, read) => this.withSkillLookup(scope, read), options => this.lookupView(options))
   }
 
   private async refresh(): Promise<void> {
-    this.plugins = new Map((await installedPlugins(this.ctx)).map(item => [item.id, item]))
+    const plugins = (await installedPlugins(this.ctx)).filter(item => item.options.name !== mcpModule)
+    for (const entry of this.ctx.loader.entries()) if (entry.parent.tree !== this.runtime && entry.options.name === mcpModule) {
+      plugins.push(mcpAdapter(`mcp:${entry.id}`, entry.options, !entry.disabled))
+    }
+    for (const [id, saved] of Object.entries(this.store.mcp())) {
+      plugins.push(mcpAdapter(id, { id, name: mcpModule, config: { serverName: saved.name, transport: 'stdio', command: '' } }, false, true))
+    }
+    this.plugins = new Map(plugins.map(item => [item.id, item]))
     const packages = new Map<string, string[]>()
-    for (const item of this.plugins.values()) packages.set(item.package, [...packages.get(item.package) ?? [], item.id])
+    for (const item of this.plugins.values()) if (!item.kind) packages.set(item.package, [...packages.get(item.package) ?? [], item.id])
     for (const [name, ids] of packages) this.store.migrate(name, ids)
   }
 
@@ -69,6 +83,7 @@ export class PluginManager {
   }
 
   private entries(id: string) {
+    if (this.adapter(id).owned) return []
     const rows = this.adapter(id).bundle.rows
     return [...this.ctx.loader.entries()].filter(entry => entry.parent.tree !== this.runtime && rows.some(row =>
       row.entryId === entry.id || (row.rowId === entry.options.id && row.moduleName === entry.options.name)))
@@ -264,6 +279,43 @@ export class PluginManager {
   }
 
   settings() { return this.store.settings() }
+
+  private async withSkillLookup<T>(scope: Scope, read: (options: SkillViewOptions) => Promise<T>): Promise<T> {
+    const agent = scope.level === 'session' ? this.ctx.agents.get(SessionId(scope.id)) : undefined
+    const workspaceId = scope.level === 'workspace' ? scope.id : scope.level === 'session' ? this.context(scope.id).workspaceId : undefined
+    const cwd = agent?.session.header.cwd ?? this.ctx.workspaceRegistry.list().find(item => item.id === workspaceId)?.path
+    if (agent) return read({ scope: agent, cwd })
+    const preview = { [catalogScope]: ownScope(scope) }
+    const presets = this.ctx.get('agentPresets') as Context['agentPresets'] | undefined
+    // Native filesystem providers may live in a preset layer, not in the global registry.
+    // Borrow its read scope; no Agent, session history or model request is created.
+    const acquire = () => presets?.acquireScope()
+    const lease = await (this.presets ? this.presets.read(ownScope(scope), acquire) : acquire())
+    if (lease) bindScopeParent(preview, lease.key)
+    try { return await read({ scope: preview, cwd }) }
+    finally { await lease?.[Symbol.asyncDispose]() }
+  }
+
+  private lookupView(options: SkillViewOptions): Scope {
+    const preview = (options.scope as { [catalogScope]?: Scope } | undefined)?.[catalogScope]
+    if (preview) return preview
+    const id = (options.scope as { id?: string } | undefined)?.id
+    if (id) return { level: 'session', id: String(id) }
+    const cwd = options.cwd
+    const workspace = cwd && this.ctx.workspaceRegistry.list().filter(item => {
+      const path = relative(resolve(item.path), resolve(cwd))
+      return path === '' || !path.startsWith('..') && !path.includes(':')
+    }).sort((a, b) => b.path.length - a.path.length)[0]
+    return workspace ? { level: 'workspace', id: String(workspace.id) } : clientScope
+  }
+
+  async addMcp(scope: Scope, config: PluginConfig): Promise<string> {
+    if (scope.children && !this.store.children(scope).independent) throw new Error('请先切换为独立下级设置')
+    const id = `mcp:menu-${randomUUID()}`
+    this.store.addMcp(id, String(config.serverName ?? ''))
+    try { await this.configure(scope, id, true, config, true); return id }
+    catch (error) { this.store.remove(scope, id); this.store.removeMcp(id); await this.refresh(); throw error }
+  }
   setPluginIsolation(enabled: boolean): void { this.store.setPluginIsolation(enabled) }
 
   async setWorkspaceTreeInheritance(enabled: boolean): Promise<void> {
@@ -340,6 +392,7 @@ export class PluginManager {
   }
 
   private clientEnabled(id: string): boolean {
+    if (this.adapter(id).owned) return this.store.get(clientScope, id)?.enabled ?? false
     const entries = this.entries(id)
     return this.adapter(id).bundle.enabled && (!entries.length || entries.some(entry => !entry.disabled))
   }
@@ -354,20 +407,21 @@ export class PluginManager {
       const entry = this.entry(adapter.id)
       const source = this.source(scope, adapter.id)
       const saved = isClientScope(source)
-        ? { enabled: this.clientEnabled(adapter.id), config: entry?.options.config ?? {} }
+        ? adapter.owned ? this.store.get(clientScope, adapter.id) ?? { enabled: false, config: adapter.options.config ?? {} }
+          : { enabled: this.clientEnabled(adapter.id), config: entry?.options.config ?? {} }
         : this.store.get(source, adapter.id)!
       return {
-        id: adapter.id, name: adapter.parentId === adapter.id ? adapter.package : adapter.options.id, package: adapter.package, description: adapter.description, ...saved,
-        config: await this.normalize(adapter.id, saved.config),
+        id: adapter.id, kind: adapter.kind, name: adapter.kind === 'mcp' ? String(saved.config.serverName ?? adapter.options.id) : adapter.parentId === adapter.id ? adapter.package : adapter.options.id, package: adapter.package, description: adapter.description, ...saved,
+        config: adapter.kind === 'mcp' && !saved.enabled ? saved.config : await this.normalize(adapter.id, saved.config),
         configNamespace: adapter.options.id,
         routes: this.services.get(adapter.id)?.paths() ?? [],
         routePrefix: this.services.get(adapter.id)?.routePrefix || undefined,
         projections: this.services.get(adapter.id)?.projectionNames(),
         managed: this.managed.has(adapter.id),
         verified: adapter.selfCompatible,
-        settings: 'registered' as const,
+        settings: adapter.kind === 'mcp' ? 'native' as const : 'registered' as const,
         own: isClientScope(scope) || !!this.store.get(scope, adapter.id), source,
-        active: !scope.children && saved.enabled && (isClientScope(source) ? this.entries(adapter.id).some(entry => entry.fiber?.state === 2) : this.instance(source, adapter.id)?.plugin.state === 2),
+        active: !scope.children && saved.enabled && (isClientScope(source) && !adapter.owned ? this.entries(adapter.id).some(entry => entry.fiber?.state === 2) : this.instance(source, adapter.id)?.plugin.state === 2),
       }
     }))
     const result: PluginRow[] = []
@@ -395,7 +449,7 @@ export class PluginManager {
       if (mounted.realm) Object.setPrototypeOf(entry.ctx[Context.isolate], mounted.realm)
       Object.assign(entry.ctx[Context.isolate], mounted.labels)
     }
-    const adapter = [...this.plugins.values()].find(item => this.managed.has(item.id) && item.bundle.rows.some(row => row.moduleName === entry.options.name))
+    const adapter = [...this.plugins.values()].find(item => this.managed.has(item.id) && this.entries(item.id).includes(entry))
     if (adapter) attachRoute(entry.ctx, { accepts: sessionId => this.accepts(clientScope, adapter.id, sessionId) })
   }
 
@@ -418,6 +472,7 @@ export class PluginManager {
         for (const name of [...scopedServiceNames, 'agentPresets', ...(realm ? ['typert'] : [])]) { labels[name] = Symbol(name); isolated = isolated.isolate(name, labels[name]) }
         const owner = await isolated.plugin(async child => { if (realm) await child.plugin(TypertRegistry) })
         await broker.mount(owner.ctx, { scope: clientScope,
+          applies: view => this.applies(clientScope, id, view),
           accepts: sessionId => this.accepts(clientScope, id, sessionId), configKey: () => JSON.stringify(entry.options.config ?? {}) })
         this.mountPresets(owner.ctx, clientScope, id)
         entry.ctx[Context.isolate] = Object.assign(Object.create(realm ?? isolation), labels)
@@ -444,6 +499,7 @@ export class PluginManager {
 
   async start(): Promise<void> {
     await this.refresh()
+    this.skills.start()
     const registry = this.ctx.workspaceRegistry
     for (const workspace of registry.list()) {
       const scope: Scope = { level: 'workspace', id: String(workspace.id) }
@@ -475,7 +531,7 @@ export class PluginManager {
     if (this.pluginIsolation) await this.dependencyNodes(clientScope)
     const targets: InstalledPlugin[] = []
     for (const adapter of this.plugins.values()) {
-      if (!this.pluginIsolation && !this.store.hasScoped(adapter.id)) continue
+      if (!adapter.owned && !this.pluginIsolation && !this.store.hasScoped(adapter.id)) continue
       const definition = await this.definition(adapter.id) as Plugin.Object
       if (definition.apply === this.ctx.fiber.runtime?.callback) continue
       targets.push(adapter)
@@ -530,19 +586,20 @@ export class PluginManager {
       if (plan.missing.length) throw new Error(`缺少依赖，无法启用：${plan.missing.join('、')}`)
       if (plan.dependencies.length) throw new Error(`需要先${enabled ? '启用' : '关闭'}依赖组件：${plan.dependencies.map(change => change.name).join('、')}；请通过菜单确认`)
     }
-    if (isClientScope(scope)) {
+    if (isClientScope(scope) && !adapter.owned) {
       if (this.pluginIsolation) await this.manage(id)
-      if (!adapter.bundle.enabled) {
+      if (!adapter.kind && !adapter.bundle.enabled) {
         if (!enabled) return
         this.checkChange(await this.ctx.pluginManager.setBundleEnabled(adapter.package, true))
         await this.refresh()
       }
       for (const entry of this.entries(id)) {
         const normalized = enabled
-          ? await this.normalize(id, config) : undefined
+          ? await this.normalize(id, config) : config
         this.checkChange(await this.ctx.pluginManager.setPluginEnabled(entry.id as never, enabled))
         // 原生客户端实例由 DSH 管理；只有已复用的配置表会从这里保存配置。
-        if (normalized && JSON.stringify(normalized) !== JSON.stringify(await this.normalize(id, entry.options.config ?? {}))) {
+        const current = enabled ? await this.normalize(id, entry.options.config ?? {}) : entry.options.config ?? {}
+        if (JSON.stringify(normalized) !== JSON.stringify(current)) {
           // 开关会重新读取 profile；配置也走持久化编辑，不能只改当前内存入口。
           await this.ctx.configEditor.edit(this.entries(id).find(current => current.id === entry.id)!, () => config)
         }
@@ -558,7 +615,7 @@ export class PluginManager {
     if ((definition as Plugin.Object).apply === this.ctx.fiber.runtime?.callback) {
       throw new Error('分级菜单不能在自身管理的作用域内再次加载自己')
     }
-    await this.normalize(id, config)
+    if (enabled || adapter.kind !== 'mcp') await this.normalize(id, config)
     if (scope.children) {
       if (!this.store.children(scope).independent) throw new Error('请先切换为独立下级设置')
       this.store.set(scope, id, { enabled, config })
@@ -611,12 +668,14 @@ export class PluginManager {
   private async syncInstances(): Promise<void> {
     const sessions = new Set([...this.ctx.agents.list().map(agent => String(agent.id)), ...this.resuming.keys()])
     const scopes: Scope[] = [
+      clientScope,
       ...this.ctx.workspaceRegistry.list().map(w => ({ level: 'workspace' as const, id: String(w.id) })),
       ...[...sessions].map(id => ({ level: 'session' as const, id })),
     ].sort((a, b) => this.chain(a).length - this.chain(b).length)
     await this.relinkRealms(scopes)
     const wanted = new Set<string>()
     for (const scope of scopes) for (const adapter of this.plugins.values()) {
+      if (isClientScope(scope) && !adapter.owned) continue
       const saved = this.store.get(scope, adapter.id)
       if (!saved?.enabled) continue
       wanted.add(`${scopeKey(scope)}/${adapter.id}`)
@@ -744,6 +803,7 @@ export class PluginManager {
     })
     this.mountPresets(owner.ctx, scope, adapter.id)
     await this.services.get(adapter.id)?.mount(owner.ctx, { scope, accepts: route.accepts,
+      applies: view => this.applies(scope, adapter.id, view),
       configKey: () => JSON.stringify(this.store.get(scope, adapter.id)?.config ?? {}) })
     // ctx.inject 的子入口失败也要回报，避免把启动失败显示成已启用。
     const failures: Promise<unknown>[] = []
@@ -757,7 +817,7 @@ export class PluginManager {
       const original = this.entry(adapter.id)
       const tree = original?.parent.tree ?? this.ctx.loader
       const entry = await this.runtime.mount(owner.ctx, encodeURIComponent(`${scopeKey(scope)}/${adapter.id}`),
-        { ...adapter.options, config }, name => this.modules.load(tree, name, `${scopeKey(scope)}/${adapter.package}`, adapter.peers))
+        { ...adapter.options, config }, name => this.modules.load(tree, name, `${scopeKey(scope)}/${adapter.kind === 'mcp' ? adapter.id : adapter.package}`, adapter.peers))
       plugin = entry.fiber!
       const error = (await Promise.all(failures)).find(Boolean)
       if (error) throw error

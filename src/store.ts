@@ -8,6 +8,7 @@ interface StoredData {
   children: Record<string, ChildDefaults>
   parents: Record<string, Scope>
   settings?: MenuSettings
+  mcp?: Record<string, { name: string }>
 }
 
 export class ConfigStore {
@@ -22,6 +23,16 @@ export class ConfigStore {
     if (!scope.children) return this.data.configs[scopeKey(scope)]?.[id]
     const defaults = this.children(scope)
     return defaults.independent ? defaults.plugins[id] : undefined
+  }
+
+  mcp() { return this.data.mcp ?? {} }
+  addMcp(id: string, name: string): void {
+    ;(this.data.mcp ??= {})[id] = { name }
+    this.save()
+  }
+  removeMcp(id: string): void { delete this.data.mcp?.[id]; this.save() }
+  keys(scope: Scope): string[] {
+    return Object.keys(scope.children ? this.children(scope).plugins : this.data.configs[scopeKey(scope)] ?? {})
   }
 
   settings(): MenuSettings { return { inheritWorkspaceTree: true, pluginIsolation: false, ...this.data.settings } }

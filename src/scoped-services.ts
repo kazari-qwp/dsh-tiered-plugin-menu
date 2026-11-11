@@ -4,14 +4,15 @@ import type { ProjectionDefinition, ProjectionHandle, ProjectionKeySelection, Pr
 import type { Session } from '@deepseek-ai/dsh-session'
 import type { ConnectionFetchRoute } from '@deepseek-ai/dsh-client-connection'
 import { z } from 'zod'
-import { scopeKey, type Scope } from './shared.ts'
+import { catalogScope, scopeKey, type Scope } from './shared.ts'
 import type { ToolDefinition, ToolRegistrationOptions } from '@deepseek-ai/dsh-tools'
 import type { SkillCandidate, SkillProvider, SkillProviderControl, SkillRegistration, SkillViewOptions } from '@deepseek-ai/dsh-skill'
 import type { Agent } from '@deepseek-ai/dsh-agent'
+import type { McpResourceProvider } from '@deepseek-ai/dsh-mcp-resources'
 import { createScope, type Scope as RegistrationScope } from '@deepseek-ai/dsh-scope'
 import { resourceName } from './resource-names.ts'
 
-interface Owner { scope: Scope; accepts(sessionId: string): boolean; configKey(): string }
+interface Owner { scope: Scope; accepts(sessionId: string): boolean; applies?(scope: Scope): boolean; configKey(): string }
 interface Contribution<T> { owner: Owner; value: T }
 type Definition = ProjectionDefinition<any, any>
 interface ProjectionState { sessionId: string; owner: string | null; config: string; value: any }
@@ -42,6 +43,8 @@ export class ScopedServices {
   private routes = new Map<string, { entries: Contribution<ConnectionFetchRoute>[]; dispose(): void }>()
   private tools = new Map<string, { entries: ToolEntry[]; mounted: Map<Agent | undefined, ToolMount> }>()
   private toolScopes = new Map<Agent, RegistrationScope>()
+  private resources = new Map<string, { entries: Contribution<McpResourceProvider>[]; mounted: Map<Agent, { entry: Contribution<McpResourceProvider>; dispose(): void }> }>()
+  private resourceScopes = new Map<Agent, RegistrationScope>()
   private web = new Map<string, { entries: Contribution<any>[]; dispose(): void }>()
   private titles: Contribution<any>[] = []
   private removeTitle?: () => void
@@ -101,6 +104,8 @@ export class ScopedServices {
           const sources = new WeakMap<SkillCandidate, { entry: Contribution<SkillProvider>; candidate: SkillCandidate }>()
           let invalidate!: () => void
           const visible = (entry: Contribution<SkillProvider>, options: SkillViewOptions) => {
+            const view = (options.scope as { [catalogScope]?: Scope } | undefined)?.[catalogScope]
+            if (view) return entry.owner.applies?.(view) ?? scopeKey(entry.owner.scope) === scopeKey(view)
             const id = (options.scope as { id?: string })?.id
             return id ? entry.owner.accepts(id) : entry.owner.scope.level === 'client'
           }
@@ -208,6 +213,43 @@ export class ScopedServices {
     for (const [agent, scope] of this.toolScopes) if (![...this.tools.values()].some(group => group.mounted.has(agent))) {
       this.toolScopes.delete(agent); void scope.dispose()
     }
+    this.refreshResources()
+  }
+
+  resource(ctx: Context, owner: Owner, server: string, provider: McpResourceProvider) {
+    const group = this.resources.get(server) ?? { entries: [] as Contribution<McpResourceProvider>[], mounted: new Map<Agent, { entry: Contribution<McpResourceProvider>; dispose(): void }>() }
+    this.resources.set(server, group)
+    return ctx.effect(() => {
+      const entry = { owner, value: provider }
+      group.entries.push(entry)
+      try { this.refreshResources() }
+      catch (error) { group.entries.splice(group.entries.indexOf(entry), 1); this.refreshResources(); throw error }
+      return () => {
+        group.entries.splice(group.entries.indexOf(entry), 1)
+        this.refreshResources()
+        if (!group.entries.length) this.resources.delete(server)
+      }
+    })
+  }
+
+  private refreshResources() {
+    const agents = (this.root.get('agents') as Context['agents'] | undefined)?.list() ?? []
+    for (const [server, group] of this.resources) {
+      const wanted = new Map(agents.map(agent => [agent, this.pick(group.entries, agent.id)] as const).filter(([, entry]) => entry))
+      for (const [agent, mounted] of group.mounted) if (wanted.get(agent) !== mounted.entry) {
+        group.mounted.delete(agent); mounted.dispose()
+      }
+      for (const [agent, entry] of wanted) {
+        if (group.mounted.has(agent)) continue
+        const scope = this.resourceScopes.get(agent) ?? createScope(this.root, agent)
+        this.resourceScopes.set(agent, scope)
+        const dispose = (scope.ctx.get('mcpResources') as Context['mcpResources']).register(this.name(server), entry!.value)
+        group.mounted.set(agent, { entry: entry!, dispose })
+      }
+    }
+    for (const [agent, scope] of this.resourceScopes) if (![...this.resources.values()].some(group => group.mounted.has(agent))) {
+      this.resourceScopes.delete(agent); void scope.dispose()
+    }
   }
 
   localTool(name: string, owner: Owner) {
@@ -215,6 +257,12 @@ export class ScopedServices {
   }
 
   releaseTools(sessionId: string) {
+    for (const group of this.resources.values()) for (const [agent, mounted] of group.mounted) if (agent.id === sessionId) {
+      group.mounted.delete(agent); mounted.dispose()
+    }
+    for (const [agent, scope] of this.resourceScopes) if (agent.id === sessionId) {
+      this.resourceScopes.delete(agent); void scope.dispose()
+    }
     for (const group of this.tools.values()) for (const [agent, mounted] of group.mounted) if (agent?.id === sessionId) {
       group.mounted.delete(agent); mounted.dispose()
     }
@@ -471,7 +519,7 @@ export class ScopedServices {
       for (const [name, Factory] of [
         ['systemPrompt', PromptFacade], ['sessionProjections', ProjectionFacade], ['sessionProjectionCache', ProjectionCacheFacade], ['connection', ConnectionFacade],
         ['tools', ToolsFacade], ['webServer', WebFacade], ['sessionTitle', TitleFacade],
-        ['commands', CommandsFacade], ['skills', SkillsFacade],
+        ['commands', CommandsFacade], ['skills', SkillsFacade], ['mcpResources', McpResourcesFacade],
       ] as const) {
         child.effect(() => broker.root.inject([name], async () => {
           const fiber = await child.plugin((serviceCtx: Context) => { new Factory(serviceCtx, broker, owner, broker.root) })
@@ -505,6 +553,11 @@ class SkillsFacade extends Service {
     if (local === name) return skills.get(name, options)
     return await skills.get(local, options) ?? skills.get(name, options)
   }
+}
+
+class McpResourcesFacade extends Service {
+  constructor(ctx: Context, private broker: ScopedServices, private owner: Owner, root: Context) { super(ctx, 'mcpResources'); forwardService(this, root, 'mcpResources') }
+  register(server: string, provider: McpResourceProvider) { return this.broker.resource(this.ctx, this.owner, server, provider) }
 }
 
 class WebFacade extends Service {
@@ -563,4 +616,4 @@ class ConnectionFacade extends Service {
   get rpc() { return (this.root.get('connection') as Context['connection']).rpc }
 }
 
-export const scopedServiceNames = ['systemPrompt', 'sessionProjections', 'sessionProjectionCache', 'connection', 'tools', 'webServer', 'sessionTitle', 'commands', 'skills'] as const
+export const scopedServiceNames = ['systemPrompt', 'sessionProjections', 'sessionProjectionCache', 'connection', 'tools', 'webServer', 'sessionTitle', 'commands', 'skills', 'mcpResources'] as const

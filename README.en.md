@@ -2,11 +2,22 @@
 
 [简体中文](README.md) | English
 
-**Enable or disable DSH plugins independently for each workspace and each session, with different settings for each.**
+**Enable or disable DSH plugins, MCP servers and skills independently for each workspace and each session, with different settings for each.**
 
 For example, enable a plugin only in your coding workspace and keep it off elsewhere. Use configuration A in one session and configuration B in another. Open the menu from the small plugin buttons in the sidebar, then expand **Settings** to use the plugin's original configuration UI.
 
 Settings inherit through **client → parent workspace → child workspace → session**, at any workspace depth. Keep the parent's settings by default, or override them for a workspace or an individual session.
+
+## MCP and skills
+
+The left navigation switches between **Plugins / MCP / Skill**. All three reuse the same scope inheritance and new-child defaults. The child policy's Inherit/Independent switch covers all three categories; defaults are copied only when a child is created.
+
+- **MCP:** discovers existing `@deepseek-ai/dsh-mcp-client` entries and supports adding servers with JSON connection settings (stdio or streamable-http). Inherited configuration shares its parent's connection. A local override starts a separate connection, including a separate process for stdio. Tools, resources and server instructions follow the selected scope. Background connections survive navigation away from a session.
+- **Skills:** lists filesystem and plugin-provided skills available in the current scope. Each can be enabled or disabled, with optional overrides for its description, body and model/user invocation flags. Overrides live in the menu's configuration; original files remain unchanged. Skill providers, scripts and resource directories remain shared. Changes affect subsequent skill discovery/loading, not text already in conversation history.
+
+MCP command arguments, environment, working directory, URL and headers can differ per scope. Remote services and external-process storage are independent only when their configuration makes them so. Disabling the menu releases its added MCP connections and restores native DSH entries; enabling it restores saved scope settings.
+
+See [resource tests and reproduction steps](docs/RESOURCES.md).
 
 ## Where to find the buttons
 

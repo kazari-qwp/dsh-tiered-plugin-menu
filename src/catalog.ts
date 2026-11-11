@@ -7,6 +7,8 @@ import { join } from 'node:path'
 import type { TieredPluginMetadata } from './shared.ts'
 
 export interface InstalledPlugin {
+  kind?: 'mcp'
+  owned?: boolean
   id: string
   package: string
   description: string
@@ -15,6 +17,17 @@ export interface InstalledPlugin {
   parentId: string
   selfCompatible: boolean
   peers: string[]
+}
+
+export const mcpModule = '@deepseek-ai/dsh-mcp-client'
+
+/** A configured MCP server uses the same lifecycle and scoped services as a plugin entry. */
+export function mcpAdapter(id: string, options: EntryOptions, enabled: boolean, owned = false): InstalledPlugin {
+  return { id, parentId: id, kind: 'mcp', owned, package: mcpModule,
+    description: 'MCP 服务器', options, selfCompatible: true, peers: [],
+    bundle: { name: mcpModule, enabled, installed: true, optional: false, removable: false, official: true, availability: 'profile', updatable: false, overrides: [],
+      rows: owned ? [{ rowId: options.id, moduleName: mcpModule }] : [{ rowId: options.id, moduleName: mcpModule, entryId: id.slice(4) as never }] },
+  }
 }
 
 export async function installedPlugins(ctx: Context): Promise<InstalledPlugin[]> {

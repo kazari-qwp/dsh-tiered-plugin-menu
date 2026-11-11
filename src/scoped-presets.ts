@@ -129,6 +129,8 @@ export class ScopedPresets {
 
   private current(): Lookup { return this.lookup.getStore() ?? { scope: clientScope } }
 
+  read<T>(scope: Scope, read: () => T): T { return this.lookup.run({ scope }, read) }
+
   /** Restore the host only after all managed registrations have been released. */
   dispose(): void { for (const restore of this.restores.splice(0)) restore() }
 

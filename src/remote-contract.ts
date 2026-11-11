@@ -1,5 +1,5 @@
 import type { RemoteResult, TypertCodec, TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
-import type { ChildSettings, MenuContext, MenuSettings, Scope, PluginConfig, PluginRow, ChangeMode, ChangePlan } from './shared.ts'
+import type { ChildSettings, MenuContext, MenuSettings, Scope, PluginConfig, PluginRow, ChangeMode, ChangePlan, SkillRow } from './shared.ts'
 
 export interface MenuRemote {
   settings(): Promise<RemoteResult<MenuSettings>>
@@ -7,6 +7,11 @@ export interface MenuRemote {
   setPluginIsolation(enabled: boolean): Promise<RemoteResult<void>>
   context(sessionId: string | null): Promise<RemoteResult<MenuContext>>
   list(scope: Scope): Promise<RemoteResult<PluginRow[]>>
+  addMcp(scope: Scope, config: PluginConfig): Promise<RemoteResult<string>>
+  skills(scope: Scope): Promise<RemoteResult<SkillRow[]>>
+  skillConfig(scope: Scope, name: string): Promise<RemoteResult<PluginConfig>>
+  configureSkill(scope: Scope, name: string, enabled: boolean, config: PluginConfig): Promise<RemoteResult<void>>
+  inheritSkill(scope: Scope, name: string): Promise<RemoteResult<void>>
   childSettings(scope: Scope): Promise<RemoteResult<ChildSettings>>
   setChildSettings(scope: Scope, independent: boolean): Promise<RemoteResult<void>>
   plan(scope: Scope, id: string, mode: ChangeMode): Promise<RemoteResult<ChangePlan>>
@@ -40,6 +45,11 @@ export const remoteContribution: TypertRemoteContribution = {
     ['setPluginIsolation', [['enabled', 'boolean']]],
     ['context', [['sessionId', 'session']]],
     ['list', [['scope', 'scope']]],
+    ['addMcp', [['scope', 'scope'], ['config', 'config']]],
+    ['skills', [['scope', 'scope']]],
+    ['skillConfig', [['scope', 'scope'], ['name', 'string']]],
+    ['configureSkill', [['scope', 'scope'], ['name', 'string'], ['enabled', 'boolean'], ['config', 'config']]],
+    ['inheritSkill', [['scope', 'scope'], ['name', 'string']]],
     ['childSettings', [['scope', 'scope']]],
     ['setChildSettings', [['scope', 'scope'], ['independent', 'boolean']]],
     ['plan', [['scope', 'scope'], ['id', 'string'], ['mode', 'string']]],
