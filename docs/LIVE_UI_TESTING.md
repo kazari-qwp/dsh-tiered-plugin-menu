@@ -4,7 +4,17 @@
 
 虚拟磁盘、依赖缓存、临时文件和截图保存在 E 盘。测试进程使用独立账户和仅有 loopback 的网络命名空间，未导入个人凭据或会话，未调用付费模型。测试的是实际界面与真实 DSH/MCP 服务，截图中的会话没有模型回复。
 
-## 已检查
+## 冷启动验收要求
+
+后续界面和生命周期改动必须包含冷启动：完全退出 DSH 后端与客户端进程，再从实际安装包启动。热运行时切换开关和重新加载插件不能替代冷启动验收。分别检查新配置首次启用，以及已有配置在新进程中的恢复；检查实际入口、页面和数据，不能只依据后端状态或“保存成功”。多端测试同时覆盖独立启动与共享后端。
+
+2026-11-12 的共享核心回归：Web 适配器独立安装时，核心没有自己的 Loader 父入口，导致下级后端运行正常，但 DSH 无法发现对应的前端模块。修复把这些临时入口登记到根索引，释放时移除，不写入客户端 profile。未修改外部插件。
+
+在实际 DSH rc.2 + 原版 dsh-context 0.83.0 中复现并验证：客户端关闭、会话独立启用；冷启动恢复已有会话；插件隔离开启；上下文统计页面正常显示；切到未启用的会话隐藏入口。后端和 Chromium 均重新启动，模型回复由本地固定测试适配器生成。页面无 JavaScript 错误。60 项自动回归通过，另补充共享核心入口发现、索引解析、多界面存活和最后释放的断言。
+
+![冷启动后，会话独立启用 context](images/live-ui/context-cold-isolated.png)
+
+## 原有多端验收
 
 | 操作 | 结果 |
 | --- | --- |
@@ -78,6 +88,8 @@ TUI 当前会话读到工作区独立 Skill 正文：
 未发布组件用本地 tarball 和包管理器 override 安装；不要把开发机 `file:` 路径写进发布依赖。
 
 ## English
+
+Cold-start verification is required for future UI and lifecycle changes: stop both host and client processes, launch the installed artifacts, and check first activation and persisted-state restoration in the actual UI. Reloading a plugin in a warm process is insufficient. A shared-core regression was reproduced and fixed by exposing otherwise detached runtime entries in the Loader root index without persisting them. Live DSH rc.2 / unmodified dsh-context 0.83.0 checks passed with the client plugin disabled, session activation, isolation enabled, cold restoration, and hiding the UI in another session.
 
 Live VM testing used Ubuntu 24.04, real dsh-TUI 0.19.0 and DSH rc.1, with Web sharing the same host. It verified bidirectional settings edits, child defaults, a real stdio MCP endpoint, filesystem Skill overrides, restart persistence, and a surviving TUI after unloading the Web adapter. Screenshots cover normal and narrow layouts. No credentials or paid model calls were used.
 

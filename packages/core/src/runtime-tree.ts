@@ -12,8 +12,13 @@ export class RuntimeTree extends EntryTree {
     entry.parent = parent
     this.store[id] = entry
     parent.data.push(row)
+    // A shared core has no owning Loader entry, so its tree is not a subtree.
+    // Publish those entries in the root index without changing profile data.
+    const root = this.ctx.fiber.entry ? undefined : this.ctx.loader
+    if (root) root.store[id] = entry
     ctx.effect(() => async () => {
       await entry.fiber?.dispose()
+      if (root) delete root.store[id]
       parent.remove(id)
     })
     // Import from the original profile, including its package resolution rules.

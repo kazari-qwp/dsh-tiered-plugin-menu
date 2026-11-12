@@ -15,7 +15,8 @@ export function mountPluginManagement(ctx: Context, directory = resolve('.')) {
   const calls: { package?: string; entry?: string; enabled: boolean }[] = []
   ctx.provide('pluginManager', {
     async listBundles(): Promise<BundleInfo[]> {
-      const entries = [...ctx.loader.entries()]
+      // Installed bundles describe profile entries, not the menu's transient instances.
+      const entries = [...ctx.loader.entries()].filter(entry => entry.parent.tree.store === ctx.loader.store && !entry.options.group)
       return [...new Set(entries.map(entry => entry.options.name))].map(name => {
         const dir = resolveBundleDir('dsh', name, profile.installAnchor, directory)
         const manifest = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'))
