@@ -48,7 +48,7 @@ dsh plugin --profile <profile> add dsh-tiered-plugin-core
 dsh plugin --profile <profile> add dsh-tiered-plugin-tui
 ```
 
-Fully restart TUI and its DSH backend, then open **分级配置** in the sidebar panel picker. The first command installs and enables the core bundle in that profile. Installing the npm dependency alone does not enable its DSH entry. For manually configured profiles, retain existing bundles and include both packages in `dsh.profile.bundles`, core before TUI. Web installation is unchanged and does not require this extra core activation. 
+Fully restart TUI and its DSH backend, then open **分级配置** in the sidebar panel picker. The first command installs and enables the core bundle in that profile. Installing the npm dependency alone does not enable its DSH entry. For manually configured profiles, retain existing bundles and include both packages in `dsh.profile.bundles`, core before TUI. Web installation is unchanged and does not require this extra core activation.
 
 
 A native dsh-TUI panel for the DSH backend. Enable both the core and TUI adapter bundles in the DSH profile, with the core before TUI. The explicit core owns the backend without violating TUI's root-mutation restriction. Open **分级配置** in the sidebar panel picker. `1/2/3` switches resource type, `l` selects scope, `c` selects own/child defaults, `d` toggles independent defaults, Enter changes state, `e` edits a JSON field, and `g` opens manager options. Long fields must be edited through Web; third-party Web settings components are not rendered in a terminal. Live VM testing used dsh-TUI 0.19.0 with DSH rc.1, including bidirectional Web/TUI configuration sharing. This upstream TUI release does not declare rc.2 support.
