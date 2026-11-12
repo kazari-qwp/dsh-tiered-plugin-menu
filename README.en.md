@@ -8,7 +8,7 @@ For example, enable a plugin only in your coding workspace and keep it off elsew
 
 Settings inherit through **client → parent workspace → child workspace → session**, at any workspace depth. Keep the parent's settings by default, or override them for a workspace or an individual session.
 
-## Multi-platform components (development branch, not released)
+## Multi-platform components
 
 | Package | Role |
 | --- | --- |
