@@ -21,6 +21,17 @@ Packages have independent versions. Adapters depend on a compatible core version
 
 All interfaces manage plugins, MCP, Skills and child defaults. Web reuses original settings components; TUI edits fields and mobile uses JSON forms. See [TUI](packages/tui/README.md), [dsh-go](packages/dsh-go/README.md) and [architecture/testing](docs/COMPONENTS.md). Live tests cover TUI/Web in an isolated VM and the official Android APK connected to that VM, including UI operations and full cold starts. See [screenshots and coverage](docs/LIVE_UI_TESTING.md).
 
+### TUI installation: enable the core as well
+
+For TUI 0.1.0, run both commands against the **same DSH profile used by TUI**, core first. Replace `<profile>` with your actual profile name:
+
+```sh
+dsh plugin --profile <profile> add dsh-tiered-plugin-core
+dsh plugin --profile <profile> add dsh-tiered-plugin-tui
+```
+
+Fully restart TUI and its DSH backend, then open **分级配置** in the sidebar panel picker. The first command installs and enables the core bundle in that profile. Installing the npm dependency alone does not enable its DSH entry. For manually configured profiles, retain existing bundles and include both packages in `dsh.profile.bundles`, core before TUI. Web installation is unchanged and does not require this extra core activation. See [TUI usage](packages/tui/README.md).
+
 ## MCP and skills
 
 The left navigation switches between **Plugins / MCP / Skill**. All three reuse the same scope inheritance and new-child defaults. The child policy's Inherit/Independent switch covers all three categories; defaults are copied only when a child is created.

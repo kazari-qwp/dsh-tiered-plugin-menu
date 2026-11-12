@@ -1,6 +1,6 @@
 # 多界面组件架构
 
-本开发分支把原包拆为四个 npm workspace，尚未发布这些新组件。
+原包已拆为四个 npm workspace；以下组件已发布。
 
 ```text
 packages/core     dsh-tiered-plugin-core       0.8.0

@@ -23,6 +23,19 @@
 
 三端都提供插件 / MCP / Skill、本级 / 下级默认、继承 / 启用 / 关闭和配置编辑。桌面继续复用插件原设置页；TUI 逐字段编辑，手机使用 JSON 表单。详见 [TUI](packages/tui/README.md)、[dsh-go](packages/dsh-go/README.md) 和 [架构与验证](docs/COMPONENTS.md)。已验证隔离虚拟机中的实际 TUI/Web，以及连接虚拟机后端的 Android 官方 APK；包括界面操作和完整冷启动，见 [测试截图与范围](docs/LIVE_UI_TESTING.md)。
 
+### TUI 安装：需要同时启用核心
+
+TUI 0.1.0 需要在 **TUI 实际使用的同一个 DSH profile** 中执行下面两条命令，先核心、后界面。把 `<profile>` 换成你的 profile 名称（不要原样输入尖括号）：
+
+```sh
+dsh plugin --profile <profile> add dsh-tiered-plugin-core
+dsh plugin --profile <profile> add dsh-tiered-plugin-tui
+```
+
+随后完全退出并重新启动 TUI 和它的 DSH 后端，在侧栏面板选择器中打开「分级配置」。这里的“启用核心 bundle”就是第一条 `dsh plugin add`：它既安装包，也将核心入口加入该 profile。只执行 `npm install`，或只添加 TUI 包，虽然会下载核心依赖，却不会启用核心入口。
+
+如果已手动配置 profile，请保留其他 bundle，并确保 `dsh.profile.bundles` 包含 `dsh-tiered-plugin-core` 和 `dsh-tiered-plugin-tui`，核心排在 TUI 之前。Web 的原安装命令不变，无须额外执行上述核心安装步骤。详见 [TUI 使用说明](packages/tui/README.md)。
+
 ## 按钮位置
 
 ![侧栏截图：客户端插件入口位于“工作区”标题右侧，下方是工作区和会话列表](docs/images/sidebar-buttons.png)
