@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { MenuDialog } from '../src/client/menu.tsx'
+import { ConversationSettings, MenuDialog } from '../src/client/menu.tsx'
 import { childScope, clientScope, isClientScope, scopeKey, type PluginRow, type SkillRow, type Scope } from '../src/shared.ts'
 import { withChangePlans } from './menu-api.ts'
 
@@ -57,4 +57,34 @@ test('left resource tabs: MCP/Skill edits, scoped toggles and shared child defau
     await click('添加并启用')
     assert.deepEqual(calls.at(-1), { type: 'mcp-add', scope: childScope(scope), config: { serverName: 'child', transport: 'stdio', command: 'node' } })
   } finally { await act(async () => tree?.unmount()) }
+})
+
+test('conversation settings follow the displayed parent, child and grandchild session', async () => {
+  const calls: Scope[] = []
+  const api = withChangePlans({
+    list: async scope => { calls.push(scope); return { ok: true, value: [] } },
+    context: async () => ({ ok: true, value: { workspaces: [], workspaceId: null } }),
+    configure: async () => ({ ok: true, value: undefined }),
+    inherit: async () => ({ ok: true, value: undefined }),
+  })
+  api.skills = async scope => { calls.push(scope); return { ok: true, value: [] } }
+  const props = { api, Page: () => null, ui: { Artwork: () => null, openDetails() {} } }
+  let tree!: ReactTestRenderer
+  const tab = (label: string) => tree.root.findAllByProps({ role: 'tab' }).find(node => node.children.includes(label))!
+  try {
+    await act(async () => { tree = create(createElement(ConversationSettings, { ...props, sessionId: 'parent' })) })
+    assert.deepEqual(calls.at(-1), { level: 'session', id: 'parent' })
+    await act(async () => { tab('下级').props.onClick() })
+    assert.deepEqual(calls.at(-1), { level: 'session', id: 'parent', children: true })
+    for (const sessionId of ['child', 'grandchild', 'parent']) {
+      await act(async () => { tree.update(createElement(ConversationSettings, { ...props, sessionId })) })
+      assert.equal(tab('本级').props['aria-selected'], true)
+      assert.equal(tab('插件').props['aria-selected'], true)
+      assert.deepEqual(calls.at(-1), { level: 'session', id: sessionId })
+      await act(async () => { tab('Skill').props.onClick() })
+      assert.deepEqual(calls.at(-1), { level: 'session', id: sessionId })
+      await act(async () => { tab('下级').props.onClick() })
+      assert.deepEqual(calls.at(-1), { level: 'session', id: sessionId, children: true })
+    }
+  } finally { await act(async () => { tree.unmount() }) }
 })

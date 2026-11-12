@@ -241,11 +241,11 @@ test('打包入口：第三方全局从未启用，会话面板和配置卡也�
     assert.ok(observer)
     const face = observer.inject!() as any
     await face.controller.select('A')
-    assert.equal(ctx.slots.entries('conversation.view').length, 2, '全局从未启用也应注册上下文、编队面板')
+    assert.equal(ctx.slots.entries('conversation.view').filter(entry => entry.options.id !== 'tiered-plugin-menu.settings').length, 2, '全局从未启用也应注册上下文、编队面板')
     assert.equal(ctx.slots.entries('sidebar.panellist' as any).length, 1)
     assert.equal(ctx.slots.entries('main').length, 1)
     await face.controller.select('B')
-    assert.equal(ctx.slots.entries('conversation.view').length, 0, '未启用的会话没有面板')
+    assert.equal(ctx.slots.entries('conversation.view').filter(entry => entry.options.id !== 'tiered-plugin-menu.settings').length, 0, '未启用的会话没有面板')
     await face.controller.select('A')
     assert.equal(ctx.slots.entries('plugins.bundle.config').length, 1)
     const injected = ctx.slots.entries('shell.overlay').find(e => e.options.id === 'tiered-plugin-menu')!.inject!() as any
@@ -255,7 +255,7 @@ test('打包入口：第三方全局从未启用，会话面板和配置卡也�
     await act(async () => { view!.unmount() })
     // 宿主全局从未启用；下级使原前端入口可见，不代表它应该在菜单卸载后继续运行。
     await fiber.dispose()
-    assert.equal(ctx.slots.entries('conversation.view').length, 0, '关闭菜单必须移除仅下级启用的原前端')
+    assert.equal(ctx.slots.entries('conversation.view').filter(entry => entry.options.id !== 'tiered-plugin-menu.settings').length, 0, '关闭菜单必须移除仅下级启用的原前端')
     assert.equal(ctx.slots.entries('sidebar.panellist' as any).length, 0, '移除洞察按钮')
     assert.equal(ctx.slots.entries('main').length, 0, '移除洞察页面')
     assert.equal(ctx.slots.entries('plugins.bundle.config').length, 0)
@@ -264,7 +264,7 @@ test('打包入口：第三方全局从未启用，会话面板和配置卡也�
     const restarted = ctx.slots.entries('tiered-plugin-menu.active-session' as any).find(e => e.options.id === 'tiered-observer:dsh-context')!
     const restored = restarted.inject!() as any
     await restored.controller.select('A')
-    assert.equal(ctx.slots.entries('conversation.view').length, 2, '重新打开菜单恢复保存的会话前端')
+    assert.equal(ctx.slots.entries('conversation.view').filter(entry => entry.options.id !== 'tiered-plugin-menu.settings').length, 2, '重新打开菜单恢复保存的会话前端')
     assert.equal(ctx.slots.entries('sidebar.panellist' as any).length, 1)
     assert.equal(ctx.slots.entries('main').length, 1)
     // 再模拟全局开/关/重新开启，Loader 会创建新的 Entry，不能继续绑定旧对象。
@@ -273,11 +273,11 @@ test('打包入口：第三方全局从未启用，会话面板和配置卡也�
       await ctx.loader.root.update([{ id: 'dsh-context', name: 'dsh-context' }])
       await ctx.loader.await()
       await restored.controller.refresh()
-      assert.equal(ctx.slots.entries('conversation.view').length, 2, '全局开启也只能有一套会话面板')
+      assert.equal(ctx.slots.entries('conversation.view').filter(entry => entry.options.id !== 'tiered-plugin-menu.settings').length, 2, '全局开启也只能有一套会话面板')
       await ctx.loader.root.update([])
       await ctx.loader.await()
       await restored.controller.refresh()
-      assert.equal(ctx.slots.entries('conversation.view').length, 2, '全局关闭保留下级面板')
+      assert.equal(ctx.slots.entries('conversation.view').filter(entry => entry.options.id !== 'tiered-plugin-menu.settings').length, 2, '全局关闭保留下级面板')
     }
     await fiber.dispose()
     assert.equal(ctx.slots.entries('tiered-plugin-menu.active-session' as any).some(e => e.options.id === 'tiered-observer:dsh-context'), false)
@@ -333,10 +333,11 @@ test('点击洞察离开对话页面后，插件面板仍存活；切换关闭�
     ctx.provide('remote', { $mount: async () => () => {}, tieredPluginMenu: api } as any)
     ctx.provide('remote.tieredPluginMenu', api as any)
     ctx.provide('pluginNavigation', { openBundle() {} } as any)
-    await ctx.plugin(bundled)
+    const menuFiber = await ctx.plugin(bundled)
     await ctx.loader.await()
+    assert.equal(ctx.slots.entries('conversation.view').filter(entry => entry.options.id === 'tiered-plugin-menu.settings').length, 1)
     await act(async () => { tree = create(createElement(Fragment, null, ctx.slots.renderSlot('root', {}))) })
-    assert.equal(ctx.slots.entries('conversation.view').length, 2)
+    assert.equal(ctx.slots.entries('conversation.view').filter(entry => entry.options.id !== 'tiered-plugin-menu.settings').length, 2)
     assert.equal(ctx.slots.entries('main').length, 1)
     assert.ok(tree!.root.findAll(node => node.props.className === 'lc-root').length, '实际渲染上下文页面')
     await act(async () => { tree!.root.findAllByType('button').find(button => button.children[0] === '洞察')!.props.onClick() })
@@ -347,6 +348,9 @@ test('点击洞察离开对话页面后，插件面板仍存活；切换关闭�
       listeners.forEach(fn => fn())
     })
     assert.equal(ctx.slots.entries('main').length, 0, 'B 关闭插件，才应移除洞察')
+    await act(async () => { tree!.unmount() })
+    await menuFiber.dispose()
+    assert.equal(ctx.slots.entries('conversation.view').some(entry => entry.options.id === 'tiered-plugin-menu.settings'), false)
   } finally {
     await act(async () => { tree?.unmount() })
     await ctx.fiber.dispose(); dom.window.close()

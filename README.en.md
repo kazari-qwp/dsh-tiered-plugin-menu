@@ -26,8 +26,11 @@ See [resource tests and reproduction steps](docs/RESOURCES.md).
 - **Client plugins**: the **plug icon** beside the **Workspaces** heading sets the default plugins and configuration for the client.
 - **Workspace plugins**: hover over a workspace row, then click its plug icon.
 - **Session plugins**: hover over a session row, then click its plug icon.
+- **Conversation tab**: open **分级配置** at the top of a conversation to edit its own settings and new-child defaults for plugins, MCP and skills. Navigating into a child or grandchild agent targets the displayed session, preserving recursive parent-agent inheritance. The tab uses DSH's official slot and coexists with tabs from Context and other plugins.
 
 Workspace and session buttons appear on hover, so they are hidden on the unhovered rows in this screenshot.
+
+On rc.1, the conversation tab is another entry point to the existing session menu. On rc.2, it also works after navigating into a subagent. Both use the same configuration and inheritance logic; upgrading to rc.2 is not required.
 
 ## Install
 

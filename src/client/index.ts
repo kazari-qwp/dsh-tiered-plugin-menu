@@ -4,10 +4,11 @@ import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
+import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { PluginArtworkDefault } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TypertClientRemote } from '@deepseek-ai/dsh-typert-protocol'
 import { remoteContribution } from '../remote-contract.ts'
-import { LevelSettings, NativeSettings } from './menu.tsx'
+import { ConversationSettings, LevelSettings, NativeSettings } from './menu.tsx'
 import { createMenuState, MenuOverlay, SessionButton } from './sidebar.tsx'
 import { createElement, useEffect, useState, type ReactElement } from 'react'
 import { ContextClient, ActiveSession, RegisteredSettings } from './context-client.tsx'
@@ -111,6 +112,10 @@ export async function apply(ctx: Context): Promise<void> {
       name: 'settings.section', id: 'tiered-plugin-menu', order: 46,
       label: () => '分级插件菜单', inject: () => ({ api, ui }),
     }, LevelSettings)))
+    child.effect(() => child.slots.inject('conversation.view', () => child.slots.register({
+      name: 'conversation.view', id: 'tiered-plugin-menu.settings', order: 40,
+      label: () => '分级配置', inject: () => ({ api, ui, Page: () => null }),
+    }, ConversationSettings)))
     child.effect(() => child.slots.inject('sidebar.workspaces.session.row.action', () => child.slots.register({
       name: 'sidebar.workspaces.session.row.action', id: 'tiered-plugin-menu', order: 50,
       inject: () => ({ open: menu.open }),

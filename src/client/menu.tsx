@@ -251,15 +251,11 @@ export function LevelSettings({ api, ui }: Pick<MenuProps, 'api' | 'ui'>) {
 
 export interface MenuTarget { scope: Scope }
 
-export function MenuDialog({ api, Page, ui, target, onClose }: MenuProps & { target: MenuTarget; onClose(): void }) {
-  const { scope } = target
+export function ScopeContent({ api, Page, ui, scope }: MenuProps & { scope: Scope }) {
   const sessionId = scope.level === 'session' ? scope.id : null
-  const title = `${labels[scope.level]}插件`
   const [kind, setKind] = useState<ResourceKind>('plugin')
   const id = useId()
-  return <div className="tiered-menu"><style>{styles}</style>
-    <div className="tiered-backdrop"><section className="tiered-panel" role="dialog" aria-modal="true" aria-label={title}>
-      <div className="tiered-heading"><h2>{title}</h2><button type="button" className="tiered-close" aria-label="关闭" onClick={onClose}>关闭</button></div>
+  return (
       <div className="tiered-resource-layout">
         <div className="tiered-resource-tabs" role="tablist" aria-label="资源类型" aria-orientation="vertical">
           {([{ kind: 'plugin', label: '插件' }, { kind: 'mcp', label: 'MCP' }, { kind: 'skill', label: 'Skill' }] as const).map(tab =>
@@ -269,11 +265,28 @@ export function MenuDialog({ api, Page, ui, target, onClose }: MenuProps & { tar
           <ScopeTabs key={scopeKey(scope)} api={api} scope={scope} sessionId={sessionId} Page={Page} ui={ui} kind={kind} />
         </div>
       </div>
+  )
+}
+
+export function ConversationSettings({ sessionId, ...props }: MenuProps & { sessionId: string }) {
+  return <section className="tiered-menu tiered-conversation"><style>{styles}</style>
+    <ScopeContent key={sessionId} {...props} scope={{ level: 'session', id: sessionId }} />
+  </section>
+}
+
+export function MenuDialog({ api, Page, ui, target, onClose }: MenuProps & { target: MenuTarget; onClose(): void }) {
+  const { scope } = target
+  const title = `${labels[scope.level]}插件`
+  return <div className="tiered-menu"><style>{styles}</style>
+    <div className="tiered-backdrop"><section className="tiered-panel" role="dialog" aria-modal="true" aria-label={title}>
+      <div className="tiered-heading"><h2>{title}</h2><button type="button" className="tiered-close" aria-label="关闭" onClick={onClose}>关闭</button></div>
+      <ScopeContent api={api} Page={Page} ui={ui} scope={scope} />
     </section></div>
   </div>
 }
 
 const styles = `
+.tiered-conversation { padding: 24px; overflow: auto; height: 100%; box-sizing: border-box; }
 .tiered-menu { color: var(--dsw-alias-label-primary, #ededee); font: inherit; line-height: 1.6; }
 .tiered-menu .tiered-resource-layout { display: flex; gap: 24px; }
 .tiered-menu .tiered-resource-tabs { display: flex; flex-direction: column; gap: 4px; width: 84px; flex-shrink: 0; padding-right: 16px; border-right: 1px solid var(--dsw-alias-border-l3, #ffffff16); }

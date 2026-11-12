@@ -97,8 +97,9 @@ test('native frontend replacement refreshes scoped panels, settings and CSS', as
         for (let i = 0; i < 4; i++) await new Promise(resolve => setImmediate(resolve))
       })
       assert.match(document.querySelector('style')!.textContent!, /--version: 2/, `managed=${managed}: new stylesheet`)
-      const panels = ctx.slots.entries('conversation.view')
+      const panels = ctx.slots.entries('conversation.view').filter(entry => entry.options.id === id)
       assert.equal(panels.length, 1, `managed=${managed}: exactly one current panel`)
+      assert.equal(ctx.slots.entries('conversation.view').filter(entry => entry.options.id === 'tiered-plugin-menu.settings').length, Number(managed), 'menu tab remains independent of package reload')
       let panel!: ReactTestRenderer
       await act(async () => { panel = create(createElement(panels[0]!.component as any)) })
       assert.equal(panel.root.findByProps({ 'data-panel-version': 2 }).children[0], managed ? 'SESSION A' : 'CLIENT')
@@ -110,14 +111,14 @@ test('native frontend replacement refreshes scoped panels, settings and CSS', as
         for (let i = 0; i < 4; i++) await new Promise(resolve => setImmediate(resolve))
       })
       assert.equal(document.querySelectorAll('style[data-plugin="reload-fixture"]').length, 0)
-      assert.equal(ctx.slots.entries('conversation.view').length, 0, 'no stale unstyled panel while the package is absent')
+      assert.equal(ctx.slots.entries('conversation.view').filter(entry => entry.options.id === id).length, 0, 'no stale unstyled panel while the package is absent')
       version = 3
       await act(async () => {
         await system.entries.sync(graph('three'))
         for (let i = 0; i < 4; i++) await new Promise(resolve => setImmediate(resolve))
       })
       assert.match(document.querySelector('style')!.textContent!, /--version: 3/)
-      const restored = ctx.slots.entries('conversation.view')
+      const restored = ctx.slots.entries('conversation.view').filter(entry => entry.options.id === id)
       assert.equal(restored.length, 1)
       await act(async () => { panel = create(createElement(restored[0]!.component as any)) })
       assert.equal(panel.root.findByProps({ 'data-panel-version': 3 }).children[0], managed ? 'SESSION A' : 'CLIENT')
