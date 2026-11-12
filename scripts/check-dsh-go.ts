@@ -104,9 +104,13 @@ try {
     assert.deepEqual(reply.issues, [])
     if (reply.settled) { const result = await reply.settled; assert.equal(result.t, 'done'); assert.deepEqual(result.issues ?? [], []) }
     await verify()
+    return reply
   }
   await verify()
-  await tap('scope', { bind: 'data.nav.scope', value: JSON.stringify({ level: 'client', id: '' }) }, false)
+  const beforeScopeChange = feed.stale
+  const scopeReply = await tap('scope', { bind: 'data.nav.scope', value: JSON.stringify({ level: 'client', id: '' }) }, false)
+  assert.equal(feed.stale, beforeScopeChange, '输入请求返回前不能推送视图刷新，否则 App 会把请求判为过期')
+  assert.ok(scopeReply.effects.some((effect: any) => effect.type === 'refresh'))
   await tap('scope', { bind: 'data.nav.scope', value: JSON.stringify({ level: 'session', id: 'A' }) }, false)
   await tap('change', { id: 'native-example', mode: 'on' }); await tap('confirm')
   await tap('edit', { id: 'native-example' })

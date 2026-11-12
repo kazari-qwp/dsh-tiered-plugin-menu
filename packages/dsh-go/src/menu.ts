@@ -19,10 +19,10 @@ export function mountMenu(ctx: Context, manager: PluginManager): void {
     if (!value) { value = { model: new MenuModel(manager, scope.sessionId ?? null), page: 0, scopePage: 0, json: '{}', notice: '', emitters: new Set() }; menus.set(key, value) }
     return value
   }
-  const changed = (scope: GoScope) => {
+  const changed = (scope: GoScope, refresh = true) => {
     const state = menu(scope)
     for (const emit of state.emitters) emit({ form: { json: state.json }, nav: { scope: JSON.stringify(ownScope(state.model.selection.scope)) } })
-    bridge.refresh('menu', scope)
+    if (refresh) bridge.refresh('menu', scope)
   }
   async function view(scope: GoScope): Promise<Json> {
     const state = menu(scope)
@@ -81,8 +81,10 @@ export function mountMenu(ctx: Context, manager: PluginManager): void {
   const run = (action: (state: ReturnType<typeof menu>, value: Json) => void | Promise<void>, deferred = true) => (scope: GoScope, event: { value?: Json }) => {
     const result = async () => {
       const state = menu(scope)
-      try { await action(state, event.value ?? {}); state.notice = ''; changed(scope); return deferred ? { toast: '已更新' } : { refresh: true } }
-      catch (error) { state.notice = String(error); changed(scope); return deferred ? { toast: String(error).slice(0, 180) } : { refresh: true } }
+      // Immediate inputs refresh through their response, so the client can accept
+      // the result before replacing the view that owns the input request.
+      try { await action(state, event.value ?? {}); state.notice = ''; changed(scope, deferred); return deferred ? { toast: '已更新' } : { refresh: true } }
+      catch (error) { state.notice = String(error); changed(scope, deferred); return deferred ? { toast: String(error).slice(0, 180) } : { refresh: true } }
     }
     return deferred ? { pending: { label: '正在处理', timeoutMs: 60000 }, result } : result()
   }

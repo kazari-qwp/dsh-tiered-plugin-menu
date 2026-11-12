@@ -1,4 +1,4 @@
-# 实际 TUI / Web 界面测试
+# 实际 TUI / Web / Android 界面测试
 
 2026-11-12，在 Ubuntu 24.04 虚拟机内安装开发 tarball，加载实际的 dsh-TUI 0.19.0 与 DSH 0.2.2-rc.1。Web 和 TUI 使用同一个 Node 后端、同一个分级核心。终端通过 tmux / xterm 运行，Web 使用 Chromium；截图来自实际窗口。
 
@@ -6,7 +6,7 @@
 
 ## 冷启动验收要求
 
-后续界面和生命周期改动必须包含冷启动：完全退出 DSH 后端与客户端进程，再从实际安装包启动。热运行时切换开关和重新加载插件不能替代冷启动验收。分别检查新配置首次启用，以及已有配置在新进程中的恢复；检查实际入口、页面和数据，不能只依据后端状态或“保存成功”。多端测试同时覆盖独立启动与共享后端。
+后续实测必须包含冷启动：完全退出 DSH 后端与客户端进程，再从实际安装包启动。热运行时切换开关和重新加载插件不能替代冷启动验收。分别检查新配置首次启用，以及已有配置在新进程中的恢复；检查实际入口、页面和数据，不能只依据后端状态或“保存成功”。多端测试同时覆盖独立启动与共享后端。
 
 2026-11-12 的共享核心回归：Web 适配器独立安装时，核心没有自己的 Loader 父入口，导致下级后端运行正常，但 DSH 无法发现对应的前端模块。修复把这些临时入口登记到根索引，释放时移除，不写入客户端 profile。未修改外部插件。
 
@@ -57,11 +57,33 @@ TUI 当前会话读到工作区独立 Skill 正文：
 
 ![实际 TUI 技能配置](images/live-ui/tui-skill.png)
 
+## Android 实际界面与冷启动
+
+同日追加 Android 15 模拟器测试：官方 dsh-go 1.0.15 ARM64 APK，1080×2160 / 420 dpi，通过 App 自身的受管 SSH 连接 Ubuntu 虚拟机内的 DSH rc.2 与官方原生桥接 0.4.0。Android SDK、AVD、缓存和截图均在 E 盘。使用独立测试 profile 和本地固定回复适配器，没有导入个人凭据或调用付费模型。
+
+| 操作 | 实际结果 |
+| --- | --- |
+| 客户端 / 工作区 / 会话 Skill 编辑 | 分别保存不同正文；会话编辑前读到工作区正文，覆盖后其他会话仍按各自层级继承 |
+| 添加会话 MCP | 安卓 JSON 表单添加真实 stdio 服务；冷启动后 DSH 实际调用返回 `ANDROID_SESSION`，其他会话没有该工具 |
+| 原生插件会话启用 | 客户端关闭的官方 Toolbox 在会话 A 单独启用；模板面板可点击并插入当前草稿，回合注释可见 |
+| 切到未启用会话 | 不显示 Toolbox 回合注释；包级入口仍可见，但面板提示“此会话未启用该插件”，不会调用 A 的实例 |
+| 会话下级默认 | 从安卓设置独立 Skill 默认；冷启动后创建子代理和孙代理，实际读取的正文都是 `ANDROID_CHILDREN_SAVED` |
+| 完整冷启动 | 强制停止 App 并终止专用后端；新进程恢复同一批已保存会话，页面能读回 Skill、MCP 和下级默认，原生回合注释恢复 |
+| 布局 | 检查展开、滚动、选择层级、JSON 输入和保存；未见按钮重叠，原生宿主会将三按钮组纵向排列，页面较长 |
+
+实测发现：切换层级实际成功，却出现“未保存”。即时输入动作在返回响应前推送了页面刷新，App 因视图已被替换而把响应判为过期。改为通过即时动作响应刷新页面；异步按钮仍使用原有推送。修复后在真实 App 重测切换通过，官方 SDK 也增加了“输入响应前不得提前刷新”的断言。没有修改 dsh-go 或第三方插件。
+
+冷启动后各会话的实际 Skill 读取结果为：A → `ANDROID_SESSION_SAVED`，同工作区 B → `ANDROID_WORKSPACE_SAVED`，另一工作区 C → `ANDROID_CLIENT_SAVED`。60 项自动测试、类型检查、构建及官方 SDK 检查通过。
+
+![Android 冷启动后读回会话配置](images/live-ui/android-cold-skill.png)
+
+![会话独立启用的官方原生 Toolbox](images/live-ui/android-toolbox.png)
+
 ## 范围与限制
 
 - 该版本官方 TUI 的依赖声明只接受到 DSH rc.1，rc.2 会跳过其 bundle。这次未放宽或修改官方声明，TUI 视觉测试使用 rc.1。此前的 rc.2 后端测试不能当作 rc.2 TUI 实测。
 - Web 显示“连接异常，刷新重试”；在完全不加载分级核心和三个适配器的同版本对照 profile 中也复现。菜单 HTTP 请求与配置操作可用；这次未修复该宿主连接现象，也未据此宣称所有 Web 订阅和会话导航均正常。
-- 没有运行 Android 真机或模拟器；dsh-go 仍是官方 SDK / 原生桥接层测试，不宣称通过了手机界面验收。虚拟机未提供 `/dev/kvm`。
+- Android 测试覆盖真实 APK + 模拟器 + SSH 后端；未测试物理手机或手机本地 PRoot 引擎。测试中的子/孙代理由 DSH API 创建并验证继承，未验证安卓团队页中的子代理导航。
 - 这次不是所有外部插件、所有 TUI 终端类型的全量兼容认证。
 
 ## TUI profile 要点
@@ -93,4 +115,6 @@ Cold-start verification is required for future UI and lifecycle changes: stop bo
 
 Live VM testing used Ubuntu 24.04, real dsh-TUI 0.19.0 and DSH rc.1, with Web sharing the same host. It verified bidirectional settings edits, child defaults, a real stdio MCP endpoint, filesystem Skill overrides, restart persistence, and a surviving TUI after unloading the Web adapter. Screenshots cover normal and narrow layouts. No credentials or paid model calls were used.
 
-The fixes address explicit core ownership under TUI's root-mutation restriction, disabled missing bundle entries, Loader configuration expressions, and partial package status. An offline Web connection indicator also reproduced in the upstream-only baseline. Android UI and rc.2 TUI remain unverified; the tested upstream TUI release rejects rc.2 in its own dependency declaration.
+The fixes address explicit core ownership under TUI's root-mutation restriction, disabled missing bundle entries, Loader configuration expressions, and partial package status. An offline Web connection indicator also reproduced in the upstream-only baseline. The tested upstream TUI release rejects rc.2 in its own dependency declaration.
+
+Additional live Android checks used the official dsh-go 1.0.15 APK on an Android 15 emulator, connected through managed SSH to DSH rc.2 in the VM. Client, workspace and session Skill overrides, a real session-only stdio MCP server, child/grandchild defaults, and scoped official Toolbox views/actions passed. Both the App and backend were stopped and restarted; the same persisted sessions restored their settings and native contributions. Actual MCP calls and Skill reads confirmed scope isolation after restart. An input-refresh race was reproduced and fixed in our adapter, with an SDK regression assertion. Screenshots were inspected; controls do not overlap, although the host stacks three-button groups vertically. Physical phones, local PRoot and Android team-page child navigation were not tested.

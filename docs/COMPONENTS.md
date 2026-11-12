@@ -55,7 +55,7 @@ Web、TUI、Go 使用各自版本与标签：`web/v…`、`tui/v…`、`go/v…`
 
 ## 已完成验证与待测项
 
-已在隔离虚拟机加载实际 TUI/Web，未向个人 DSH profile 安装新组件，也未调用模型 API。详细过程、问题与截图见 [实际界面验证](LIVE_UI_TESTING.md)。
+已在隔离虚拟机加载实际 TUI/Web，并用 Android 模拟器运行官方 dsh-go APK 连接测试后端；没有调用付费模型 API。Web 与核心修复也已装入本机 DSH。详细过程、问题与截图见 [实际界面验证](LIVE_UI_TESTING.md)。
 
 - 原桌面回归覆盖 DSH rc.1 SDK、真实第三方插件、实例隔离、MCP、Skill、React/jsdom；新增显式核心生命周期、禁用缺失组件和 Loader 表达式用例。
 - 共享核心：三个界面、兼容核心副本、交错关闭/打开、最后释放、重开恢复。
@@ -65,7 +65,9 @@ Web、TUI、Go 使用各自版本与标签：`web/v…`、`tui/v…`、`go/v…`
 
 实际界面验证：Ubuntu 虚拟机中加载 dsh-TUI 0.19.0 + DSH rc.1，Web 同进程运行；模板双向编辑、MCP 发现、Skill 工作区覆盖与会话关闭、下级默认、关闭 Web 后继续使用 TUI、重启读回和宽窄布局已检查。修复了显式核心挂载、禁用缺失组件、Loader 表达式读取，以及终端中“部分启用”的状态显示。官方 TUI 0.19.0 的版本声明不接受 rc.2，因此这次 TUI 实测使用 rc.1。
 
-尚未验证：Android 真机或模拟器界面、大规模外部插件在三个前端同时打开时的混装矩阵。旧的混装矩阵不能代替这次新平台的完整实机验证。
+Android 实测：官方 1.0.15 APK / Android 15 模拟器，经 SSH 连接实际 DSH rc.2。分级 Skill、会话 MCP、原生 Toolbox 的独立启用与动作、下级默认、完整 App/后端冷启动恢复通过。修复了即时层级切换提前刷新导致的“未保存”误报。
+
+尚未验证：物理 Android 手机、手机本地 PRoot 引擎、大规模外部插件在三个前端同时打开时的混装矩阵。旧的混装矩阵不能代替这次新平台的完整实机验证。
 
 官方源码检验版本：
 
@@ -86,4 +88,4 @@ Four independently versioned packages share one backend within a DSH root Contex
 
 The mobile adapter routes public native contributions by session, including live data lifecycles. The TUI adapter uses host React and public panel/dialog services. Neither changes upstream code. Native package-level contribution visibility and bounded editor inputs remain host limitations.
 
-Build with `npm run check`; package all components with `npm run pack`, or only one with `npm run pack -- core`. Publish changed components independently. Existing lockfiles require an explicit dependency update. Official bridge/SDK checks and an isolated real rc.2 runtime passed. Live VM testing additionally covered TUI 0.19.0 on rc.1 and Web sharing that host, with screenshots. TUI needs the standalone core bundle enabled. Android UI testing and the expanded multi-platform plugin matrix remain pending.
+Build with `npm run check`; package all components with `npm run pack`, or only one with `npm run pack -- core`. Publish changed components independently. Existing lockfiles require an explicit dependency update. Official bridge/SDK checks and an isolated real rc.2 runtime passed. Live VM testing additionally covered TUI 0.19.0 on rc.1 and Web sharing that host, with screenshots. TUI needs the standalone core bundle enabled. Live Android 15 emulator checks with the official 1.0.15 APK and a VM SSH backend covered scoped edits, MCP, native Toolbox actions and full cold restoration. Physical phones, local PRoot and the expanded multi-platform plugin matrix remain pending.

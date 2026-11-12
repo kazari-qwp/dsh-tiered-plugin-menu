@@ -19,7 +19,7 @@ Settings inherit through **client → parent workspace → child workspace → s
 
 Packages have independent versions. Adapters depend on a compatible core version range; a core patch does not require publishing all adapters. Interfaces attached to **one DSH host share one core and plugin instances**. Closing one interface leaves others and background tasks running. Separate DSH processes have separate managers.
 
-All interfaces manage plugins, MCP, Skills and child defaults. Web reuses original settings components; TUI edits fields and mobile uses JSON forms. See [TUI](packages/tui/README.md), [dsh-go](packages/dsh-go/README.md) and [architecture/testing](docs/COMPONENTS.md). Real TUI and Web interfaces sharing one backend have been tested in an isolated VM; see [screenshots and coverage](docs/LIVE_UI_TESTING.md). Android visual verification remains pending.
+All interfaces manage plugins, MCP, Skills and child defaults. Web reuses original settings components; TUI edits fields and mobile uses JSON forms. See [TUI](packages/tui/README.md), [dsh-go](packages/dsh-go/README.md) and [architecture/testing](docs/COMPONENTS.md). Live tests cover TUI/Web in an isolated VM and the official Android APK connected to that VM, including UI operations and full cold starts. See [screenshots and coverage](docs/LIVE_UI_TESTING.md).
 
 ## MCP and skills
 
