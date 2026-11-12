@@ -1,54 +1,17 @@
 {
-  "name": "dsh-tiered-plugin-menu",
-  "version": "0.7.2",
-  "description": "为每个工作区和会话独立配置 DSH 插件、MCP 和 Skill，支持逐级继承与插件实例隔离。",
+  "name": "dsh-tiered-plugin-workspace",
+  "private": true,
   "type": "module",
-  "license": "MIT",
-  "files": [
-    "dist",
-    "docs/images",
-    "screenshots.json",
-    "cordis.patch.yml",
-    "README.md",
-    "LICENSE",
-    "THIRD_PARTY_NOTICES.txt",
-    "README.en.md"
+  "workspaces": [
+    "packages/*"
   ],
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
-    },
-    "./client": "./dist/client/index.js",
-    "./package.json": "./package.json"
-  },
   "scripts": {
     "check": "npm run typecheck && npm run build && npm test",
-    "build": "tsdown",
+    "build": "tsdown && node scripts/package-assets.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test test/*.test.ts"
-  },
-  "engines": {
-    "node": "^22.19.0 || >=24.0.0"
-  },
-  "dsh": {
-    "bundle": {
-      "patch": "./cordis.patch.yml"
-    },
-    "client": {
-      "platform": "web",
-      "inject": [
-        "@deepseek-ai/dsh-api-gateway",
-        "@deepseek-ai/dsh-client-ui-settings",
-        "@deepseek-ai/dsh-client-ui-renderer",
-        "@deepseek-ai/dsh-client-ui-conversation",
-        "@deepseek-ai/dsh-client-ui-workspace",
-        "@deepseek-ai/dsh-client-ui-layout",
-        "@deepseek-ai/dsh-client-ui-plugin-manager"
-      ]
-    }
+    "test": "tsx --test --test-concurrency=1 test/*.test.ts",
+    "pack": "npm run build && node scripts/pack.mjs",
+    "test:go": "tsx scripts/check-dsh-go.ts"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "4.1.0",
@@ -108,36 +71,5 @@
     "typescript": "7.0.2",
     "zod": "4.4.3"
   },
-  "peerDependencies": {
-    "@deepseek-ai/cordis": "4.1.0",
-    "@deepseek-ai/cordis-plugin-loader": "1.1.0",
-    "@deepseek-ai/cosmokit": "1.9.0",
-    "@deepseek-ai/dsh-agent": "*",
-    "@deepseek-ai/dsh-app-boot": "*",
-    "@deepseek-ai/dsh-config-editor": "*",
-    "@deepseek-ai/dsh-home-paths": "*",
-    "@deepseek-ai/dsh-plugin-manager": "*",
-    "@deepseek-ai/dsh-scope": "*",
-    "@deepseek-ai/dsh-session": "*",
-    "@deepseek-ai/dsh-typert-protocol": "*",
-    "@deepseek-ai/dsh-typert-registry": "*",
-    "@deepseek-ai/dsh-workspace": "*",
-    "@deepseek-ai/schemastery": "3.19.0"
-  },
-  "keywords": [
-    "dsh-plugin",
-    "deepseek-harness",
-    "dsh",
-    "plugins",
-    "workspace",
-    "session"
-  ],
-  "repository": {
-    "url": "git+https://github.com/kazari-qwp/dsh-tiered-plugin-menu.git",
-    "type": "git"
-  },
-  "homepage": "https://github.com/kazari-qwp/dsh-tiered-plugin-menu#readme",
-  "bugs": {
-    "url": "https://github.com/kazari-qwp/dsh-tiered-plugin-menu/issues"
-  }
+  "license": "MIT"
 }

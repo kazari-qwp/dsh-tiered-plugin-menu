@@ -7,8 +7,8 @@ import Loader from '@deepseek-ai/cordis-plugin-loader'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { mountWorkspaces } from './workspaces.ts'
-import * as menu from '../src/index.ts'
-import { childScope, clientScope, type Scope } from '../src/shared.ts'
+import * as menu from '../packages/core/src/index.ts'
+import { childScope, clientScope, type Scope } from '../packages/core/src/shared.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
 
 test('package switches, component switches and dependency confirmation use the same independent instances', { timeout: 15000 }, async () => {

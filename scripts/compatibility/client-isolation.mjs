@@ -2,7 +2,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import assert from 'node:assert/strict'
-import { resourceName } from '../../src/resource-names.ts'
+import { resourceName } from '../../packages/core/src/resource-names.ts'
 
 export async function clientIsolation(ctx, report, home, save) {
   report.clientIsolation = []

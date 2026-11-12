@@ -1,5 +1,5 @@
 import type { ConfigForm, ConfigFormSnapshot } from '@deepseek-ai/dsh-client-ui-settings/client'
-import type { PluginConfig } from '../shared.ts'
+import type { PluginConfig } from 'dsh-tiered-plugin-core/shared'
 import type { SettingsPathOpView } from '@deepseek-ai/dsh-api-remotes/client'
 
 type FieldValue = Extract<SettingsPathOpView, { op: 'set' }>['value']

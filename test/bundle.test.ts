@@ -16,7 +16,7 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
-import type { Scope } from '../src/shared.ts'
+import type { Scope } from '../packages/core/src/shared.ts'
 
 test('打包客户端：侧栏按钮绑定正确层级，点击不切换行，弹窗独立于悬停区域', { timeout: 10000 }, async () => {
   const dom = new JSDOM('<!doctype html><html><body><main id="app"></main></body></html>')
@@ -41,7 +41,7 @@ test('打包客户端：侧栏按钮绑定正确层级，点击不切换行，�
     load: entry => { registrations.push(entry) },
     create: options => modules.createClientModuleSystem(target, { id: '@deepseek-ai/dsh-client-modules', exports: modules }, options),
   }
-  new Function('window', readFileSync(fileURLToPath(new URL('../dist/client/index.js', import.meta.url)), 'utf8'))({ __ModuleLoader__: target })
+  new Function('window', readFileSync(fileURLToPath(new URL('../packages/web/dist/client/index.js', import.meta.url)), 'utf8'))({ __ModuleLoader__: target })
   const moduleLoader = new modules.ClientModuleSystem({
     manifest: { rev: 'test', modules: [{ id: 'dsh-tiered-plugin-menu', url: 'menu.js', initialUrl: 'menu.js', rev: 'test', inject: [], external: [] }], plugins: [] },
     registrationTarget: target,

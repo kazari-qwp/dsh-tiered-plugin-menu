@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useId, useState, type ComponentType } from 'react'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
-import type { MenuRemote } from '../remote-contract.ts'
-import { childScope, isClientScope, scopeKey, type ChildSettings, type PluginRow, type Scope, type ChangePlan, type ChangeMode, type ResourceKind } from '../shared.ts'
+import type { MenuRemote } from 'dsh-tiered-plugin-core/remote-contract'
+import { childScope, isClientScope, scopeKey, type ChildSettings, type PluginRow, type Scope, type ChangePlan, type ChangeMode, type ResourceKind } from 'dsh-tiered-plugin-core/shared'
 import { ResourcePanel } from './resources.tsx'
 
 export const labels = { client: '客户端', workspace: '工作区', session: '会话' }

@@ -52,7 +52,7 @@ for (const item of cases.filter(item => process.argv.length === 2 || process.arg
     cwd: directory, encoding: 'utf8', timeout: Number(process.env.COMPAT_TIMEOUT_MS) || (item.args.includes('--functional') ? 900000 : 180000), maxBuffer: 8 * 1024 * 1024,
     env: { ...process.env, HOME: path.join(directory, 'home'), XDG_CONFIG_HOME: path.join(directory, 'home/.config'),
       XDG_CACHE_HOME: path.join(directory, 'home/.cache'), COMPAT_REPORT_NAME: 'report.json',
-      COMPAT_MENU_ENTRY: process.env.COMPAT_MENU_ENTRY ?? path.join(root, 'dist/index.js') },
+      COMPAT_MENU_ENTRY: process.env.COMPAT_MENU_ENTRY ?? path.join(root, 'packages/web/dist/index.js') },
   })
   const report = path.join(directory, 'work/report.json')
   const raw = fs.existsSync(report) ? readFile(report) : { ok: false, error: String(run.error ?? 'No report') }

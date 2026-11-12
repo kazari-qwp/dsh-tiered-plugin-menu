@@ -4,8 +4,8 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import * as filesystem from '@deepseek-ai/dsh-skill-filesystem'
-import * as menu from '../src/index.ts'
-import { clientScope, type Scope } from '../src/shared.ts'
+import * as menu from '../packages/core/src/index.ts'
+import { clientScope, type Scope } from '../packages/core/src/shared.ts'
 import { resourceHarness } from './resources-harness.ts'
 
 const entry = (name: string) => resolve(`work/mcp-lab/node_modules/@modelcontextprotocol/server-${name}/dist/index.js`)

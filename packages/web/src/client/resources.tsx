@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from 'react'
-import type { MenuRemote } from '../remote-contract.ts'
-import { isClientScope, scopeKey, type ChangeMode, type ChangePlan, type PluginConfig, type PluginRow, type Scope, type SkillRow } from '../shared.ts'
+import type { MenuRemote } from 'dsh-tiered-plugin-core/remote-contract'
+import { isClientScope, scopeKey, type ChangeMode, type ChangePlan, type PluginConfig, type PluginRow, type Scope, type SkillRow } from 'dsh-tiered-plugin-core/shared'
 import { ConfirmEnable, labels, modes, value } from './menu.tsx'
 
 type Kind = 'mcp' | 'skill'

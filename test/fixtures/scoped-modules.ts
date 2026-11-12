@@ -7,7 +7,7 @@ import { pathToFileURL } from 'node:url'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import { PluginPackages } from '@deepseek-ai/dsh-app-boot'
-import { ScopedModules } from '../../src/scoped-modules.ts'
+import { ScopedModules } from '../../packages/core/src/scoped-modules.ts'
 
 test('private ESM/CommonJS dependencies bind fs, promises, createRequire and SQLite to their instance', async () => {
   const lab = fs.mkdtempSync(path.resolve('work/scoped-modules-'))

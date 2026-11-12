@@ -1,5 +1,5 @@
-import type { MenuRemote } from '../src/remote-contract.ts'
-import { isClientScope, scopeKey, type ChangePlan } from '../src/shared.ts'
+import type { MenuRemote } from '../packages/core/src/remote-contract.ts'
+import { isClientScope, scopeKey, type ChangePlan } from '../packages/core/src/shared.ts'
 
 export function withChangePlans(base: Omit<MenuRemote, 'plan' | 'change' | 'call' | 'childSettings' | 'setChildSettings' | 'settings' | 'setWorkspaceTreeInheritance' | 'setPluginIsolation' | 'addMcp' | 'skills' | 'skillConfig' | 'configureSkill' | 'inheritSkill'>): MenuRemote {
   const children = new Set<string>()

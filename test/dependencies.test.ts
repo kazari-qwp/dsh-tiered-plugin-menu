@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { dependencyPlan, type DependencyNode } from '../src/dependencies.ts'
+import { dependencyPlan, type DependencyNode } from '../packages/core/src/dependencies.ts'
 
 const sample = (enabled: boolean): DependencyNode[] => [
   { id: 'data', name: 'Data', provides: ['data'], requires: [], enabled },

@@ -10,12 +10,12 @@ import { LlmAdapter, createUserMessage } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import * as contextPlugin from 'dsh-context'
-import * as menu from '../src/index.ts'
-import { clientScope } from '../src/shared.ts'
+import * as menu from '../packages/core/src/index.ts'
+import { clientScope } from '../packages/core/src/shared.ts'
 import { mountWorkspaces } from './workspaces.ts'
 import { mountPluginManagement } from './plugins.ts'
-import { ConfigStore } from '../src/store.ts'
-import { resourceName } from '../src/resource-names.ts'
+import { ConfigStore } from '../packages/core/src/store.ts'
+import { resourceName } from '../packages/core/src/resource-names.ts'
 
 for (const pluginIsolation of [false, true]) test(`原版 dsh-context：多层配置、统计、HTTP 和卸载恢复（隔离 ${pluginIsolation}）`, { timeout: 15000 }, async () => {
   mkdirSync('work', { recursive: true })

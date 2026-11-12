@@ -8,7 +8,7 @@ import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import * as menu from '../src/index.ts'
+import * as menu from '../packages/core/src/index.ts'
 import { mountWorkspaces } from './workspaces.ts'
 import { mountPluginManagement } from './plugins.ts'
 

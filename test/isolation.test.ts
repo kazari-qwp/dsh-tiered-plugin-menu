@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { Context, Service } from '@deepseek-ai/cordis'
-import { isolateProvidedServices } from '../src/isolation.ts'
+import { isolateProvidedServices } from '../packages/core/src/isolation.ts'
 
 test('services provided dynamically belong to a scope and can be consumed by another component', async () => {
   const root = new Context()

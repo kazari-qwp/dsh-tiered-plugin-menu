@@ -7,11 +7,11 @@ import { create, type ReactTestRenderer } from 'react-test-renderer'
 import { JSDOM } from 'jsdom'
 import { Context, type Plugin } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
-import { sessionForm } from '../src/client/form.ts'
-import { captureRegisteredSettings } from '../src/client/registered-settings.tsx'
-import { ContextClient } from '../src/client/context-client.tsx'
-import type { MenuRemote } from '../src/remote-contract.ts'
-import { clientScope, type PluginRow, type Scope } from '../src/shared.ts'
+import { sessionForm } from '../packages/web/src/client/form.ts'
+import { captureRegisteredSettings } from '../packages/web/src/client/registered-settings.tsx'
+import { ContextClient } from '../packages/web/src/client/context-client.tsx'
+import type { MenuRemote } from '../packages/core/src/remote-contract.ts'
+import { clientScope, type PluginRow, type Scope } from '../packages/core/src/shared.ts'
 
 const require = createRequire(import.meta.url)
 function load<T>(filename: string, modules: Record<string, unknown> = {}): T {
@@ -197,7 +197,7 @@ test('原版 dsh-context 客户端：跟随当前会话的配置，关闭移除�
 test('打包入口：第三方全局从未启用，会话面板和配置卡也可用', async () => {
   const dom = new JSDOM('<!doctype html><html><head></head><body></body></html>')
   Object.assign(globalThis, { window: dom.window, document: dom.window.document })
-  const bundled = load<Plugin>('dist/client/index.js')
+  const bundled = load<Plugin>('packages/web/dist/client/index.js')
   const renderer = load<Plugin>(require.resolve('@deepseek-ai/dsh-client-ui-renderer/client'))
   const ctx = new Context()
   locale(ctx)
@@ -290,7 +290,7 @@ test('点击洞察离开对话页面后，插件面板仍存活；切换关闭�
   const originalFetch = globalThis.fetch
   globalThis.fetch = async () => Response.json({}) // 价格表/统计请求使用空数据，不访问网络。
   Object.assign(globalThis, { window: dom.window, document: dom.window.document, MutationObserver: dom.window.MutationObserver })
-  const bundled = load<Plugin>('dist/client/index.js')
+  const bundled = load<Plugin>('packages/web/dist/client/index.js')
   const original = load<Plugin>(require.resolve('dsh-context/client'))
   const renderer = load<Plugin>(require.resolve('@deepseek-ai/dsh-client-ui-renderer/client'))
   const ctx = new Context()

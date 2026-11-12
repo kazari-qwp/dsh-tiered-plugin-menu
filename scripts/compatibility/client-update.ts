@@ -8,8 +8,8 @@ import type * as Modules from '@deepseek-ai/dsh-client-modules/client'
 import { JSDOM } from 'jsdom'
 import { createElement, act } from 'react'
 import { create, type ReactTestRenderer } from 'react-test-renderer'
-import { sessionForm } from '../../src/client/form.ts'
-import type { Scope } from '../../src/shared.ts'
+import { sessionForm } from '../../packages/web/src/client/form.ts'
+import type { Scope } from '../../packages/core/src/shared.ts'
 
 const require = createRequire(import.meta.url)
 const replacement = process.argv[2]
@@ -79,7 +79,7 @@ for (const managed of [false, true]) {
     ctx.provide('modules', system as any)
     await system.entries.start(ctx.loader, manifest)
     if (managed) {
-      await ctx.plugin(load<Plugin>(process.argv[3] ?? 'dist/client/index.js'))
+      await ctx.plugin(load<Plugin>(process.argv[3] ?? 'packages/web/dist/client/index.js'))
       await ctx.loader.await()
       const observer = ctx.slots.entries('tiered-plugin-menu.active-session' as any)[0]!
       const controller = (observer.inject!() as any).controller

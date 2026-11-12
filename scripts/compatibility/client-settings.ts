@@ -6,9 +6,9 @@ import { Context, type Plugin } from '@deepseek-ai/cordis'
 import { JSDOM } from 'jsdom'
 import { createElement } from 'react'
 import { act, create } from 'react-test-renderer'
-import { ContextClient } from '../../src/client/context-client.tsx'
-import type { MenuRemote } from '../../src/remote-contract.ts'
-import type { PluginRow, Scope } from '../../src/shared.ts'
+import { ContextClient } from '../../packages/web/src/client/context-client.tsx'
+import type { MenuRemote } from '../../packages/core/src/remote-contract.ts'
+import type { PluginRow, Scope } from '../../packages/core/src/shared.ts'
 
 const require = createRequire(import.meta.url)
 const dom = new JSDOM('<!doctype html><html><head></head><body></body></html>', { url: 'http://localhost/' })

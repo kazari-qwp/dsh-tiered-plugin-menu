@@ -27,12 +27,19 @@ for (const name of extra) {
   fs.symlinkSync(path.join(root, 'node_modules', name), target, 'dir')
 }
 if (withMenu) {
-  const entry = path.resolve(process.env.COMPAT_MENU_ENTRY ?? path.join(root, 'dist/index.js'))
+  const entry = path.resolve(process.env.COMPAT_MENU_ENTRY ?? path.join(root, 'packages/web/dist/index.js'))
   const source = path.dirname(path.dirname(entry))
   const installed = path.join(dir, 'node_modules/dsh-tiered-plugin-menu')
   fs.mkdirSync(installed)
   for (const file of ['package.json', 'cordis.patch.yml', 'dist']) {
     fs.cpSync(path.join(source, file), path.join(installed, file), { recursive: true })
+  }
+  if (JSON.parse(fs.readFileSync(path.join(source, 'package.json'), 'utf8')).dependencies?.['dsh-tiered-plugin-core']) {
+    const core = path.join(dir, 'node_modules/dsh-tiered-plugin-core')
+    fs.mkdirSync(core)
+    for (const file of ['package.json', 'cordis.patch.yml', 'dist']) {
+      fs.cpSync(path.join(root, 'packages/core', file), path.join(core, file), { recursive: true })
+    }
   }
 }
 const fromPackage = (moduleName, packageName) => moduleName === packageName || moduleName.startsWith(packageName + '/')

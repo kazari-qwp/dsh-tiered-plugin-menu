@@ -24,7 +24,7 @@ test('原生模块图管理第三方样式：菜单不内嵌副本，最后一�
       mode: 'queue', pendingQueue, load: entry => { pendingQueue.push(entry) },
       create: options => modules.createClientModuleSystem(target, { id: '@deepseek-ai/dsh-client-modules', exports: modules }, options),
     }
-    for (const filename of ['dist/client/index.js', require.resolve('dsh-context/client')]) {
+    for (const filename of ['packages/web/dist/client/index.js', require.resolve('dsh-context/client')]) {
       new Function('window', readFileSync(filename, 'utf8'))({ __ModuleLoader__: target })
     }
     const order = [first, first === menuId ? contextId : menuId]

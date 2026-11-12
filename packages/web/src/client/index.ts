@@ -7,12 +7,12 @@ import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { PluginArtworkDefault } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TypertClientRemote } from '@deepseek-ai/dsh-typert-protocol'
-import { remoteContribution } from '../remote-contract.ts'
+import { remoteContribution } from 'dsh-tiered-plugin-core/remote-contract'
 import { ConversationSettings, LevelSettings, NativeSettings } from './menu.tsx'
 import { createMenuState, MenuOverlay, SessionButton } from './sidebar.tsx'
 import { createElement, useEffect, useState, type ReactElement } from 'react'
 import { ContextClient, ActiveSession, RegisteredSettings } from './context-client.tsx'
-import type { PluginRow, Scope } from '../shared.ts'
+import type { PluginRow, Scope } from 'dsh-tiered-plugin-core/shared'
 
 export const inject = ['slots', 'remote']
 

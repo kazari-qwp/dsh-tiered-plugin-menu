@@ -2,10 +2,10 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { ScopePanel } from '../src/client/menu.tsx'
-import { clientScope, type PluginRow, type ChangePlan } from '../src/shared.ts'
-import type { MenuRemote } from '../src/remote-contract.ts'
-import { dependencyPlan } from '../src/dependencies.ts'
+import { ScopePanel } from '../packages/web/src/client/menu.tsx'
+import { clientScope, type PluginRow, type ChangePlan } from '../packages/core/src/shared.ts'
+import type { MenuRemote } from '../packages/core/src/remote-contract.ts'
+import { dependencyPlan } from '../packages/core/src/dependencies.ts'
 
 test('package row opens component details; dependency dialogs cancel without writes and confirm the complete change', async () => {
   const enabled = new Set<string>()

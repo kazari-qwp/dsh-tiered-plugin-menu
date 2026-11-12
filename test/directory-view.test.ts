@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
-import { DirectoryView } from '../src/directory-view.ts'
+import { DirectoryView } from '../packages/core/src/directory-view.ts'
 
 test('directory mounts preserve relative paths, .. and realpath for two independent instances', async () => {
   const lab = fs.mkdtempSync(path.resolve('work/directory-view-'))

@@ -4,7 +4,7 @@ import http from 'node:http'
 import assert from 'node:assert/strict'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { createRequire } from 'node:module'
-import { resourceName } from '../../src/resource-names.ts'
+import { resourceName } from '../../packages/core/src/resource-names.ts'
 const local = createRequire(path.join(process.cwd(), 'package.json'))
 const { LlmAdapter, createUserMessage } = local('@deepseek-ai/dsh-llm')
 const { assembleContextFor } = local('@deepseek-ai/dsh-agent')

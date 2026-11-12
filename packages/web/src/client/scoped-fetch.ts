@@ -1,4 +1,4 @@
-import { scopeKey, type PluginRow } from '../shared.ts'
+import { scopeKey, type PluginRow } from 'dsh-tiered-plugin-core/shared'
 
 /** Same-origin plugin routes carry the currently selected instance, including pages without a sessionId. */
 export function scopePluginFetch() {

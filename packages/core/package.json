@@ -1,0 +1,82 @@
+{
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "repository": {
+    "url": "git+https://github.com/kazari-qwp/dsh-tiered-plugin-menu.git",
+    "type": "git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://github.com/kazari-qwp/dsh-tiered-plugin-menu#readme",
+  "bugs": {
+    "url": "https://github.com/kazari-qwp/dsh-tiered-plugin-menu/issues"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json",
+    "./shared": {
+      "types": "./dist/shared.d.ts",
+      "default": "./dist/shared.js"
+    },
+    "./remote-contract": {
+      "types": "./dist/remote-contract.d.ts",
+      "default": "./dist/remote-contract.js"
+    },
+    "./model": {
+      "types": "./dist/model.d.ts",
+      "default": "./dist/model.js"
+    },
+    "./isolation": {
+      "types": "./dist/isolation.d.ts",
+      "default": "./dist/isolation.js"
+    }
+  },
+  "files": [
+    "dist",
+    "cordis.patch.yml",
+    "README.md",
+    "THIRD_PARTY_NOTICES.txt",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "name": "dsh-tiered-plugin-core",
+  "version": "0.8.0",
+  "description": "DSH 分级配置共享核心：继承、实例隔离、MCP 与 Skill 管理。",
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "4.1.0",
+    "@deepseek-ai/cordis-plugin-loader": "1.1.0",
+    "@deepseek-ai/cosmokit": "1.9.0",
+    "@deepseek-ai/dsh-agent": "*",
+    "@deepseek-ai/dsh-app-boot": "*",
+    "@deepseek-ai/dsh-config-editor": "*",
+    "@deepseek-ai/dsh-home-paths": "*",
+    "@deepseek-ai/dsh-plugin-manager": "*",
+    "@deepseek-ai/dsh-scope": "*",
+    "@deepseek-ai/dsh-session": "*",
+    "@deepseek-ai/dsh-typert-protocol": "*",
+    "@deepseek-ai/dsh-typert-registry": "*",
+    "@deepseek-ai/dsh-workspace": "*",
+    "@deepseek-ai/schemastery": "3.19.0"
+  },
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "dsh",
+    "plugins",
+    "workspace",
+    "session",
+    "mcp",
+    "skills"
+  ]
+}

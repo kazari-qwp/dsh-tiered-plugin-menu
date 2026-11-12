@@ -37,6 +37,27 @@ async function disposeFiber(fiber: Fiber): Promise<void> {
 }
 
 export class PluginManager {
+  private platforms = new Set<string>()
+  private instanceListeners = new Set<() => void | Promise<void>>()
+
+  onInstancesChanged(listener: () => void | Promise<void>): () => void {
+    this.instanceListeners.add(listener)
+    return () => { this.instanceListeners.delete(listener) }
+  }
+
+  /** A host UI adapter lives with the shared core, even if another UI closes. */
+  async adaptService(name: string, install: (ctx: Context, manager: PluginManager) => void): Promise<void> {
+    if (this.platforms.has(name)) return
+    this.platforms.add(name)
+    await this.ctx.plugin({ inject: [name], apply: async (child: Context) => {
+      install(child, this)
+      // Already-running instances must register through the newly available adapter.
+      for (const id of this.managed) for (const entry of this.entries(id)) {
+        if (entry.fiber?.uid) await entry.fiber.restart()
+      }
+      for (const instances of this.instances.values()) for (const instance of instances.values()) await instance.plugin.restart()
+    } })
+  }
   readonly skills: SkillPolicies
   readonly instances = new Map<string, Map<string, Instance>>()
   private stopped = false
@@ -63,7 +84,8 @@ export class PluginManager {
   }
 
   private async refresh(): Promise<void> {
-    const plugins = (await installedPlugins(this.ctx)).filter(item => item.options.name !== mcpModule)
+    const infrastructure = ['dsh-tiered-plugin-core', 'dsh-tiered-plugin-menu', 'dsh-tiered-plugin-tui', 'dsh-tiered-plugin-go']
+    const plugins = (await installedPlugins(this.ctx)).filter(item => item.options.name !== mcpModule && !infrastructure.includes(item.package))
     for (const entry of this.ctx.loader.entries()) if (entry.parent.tree !== this.runtime && entry.options.name === mcpModule) {
       plugins.push(mcpAdapter(`mcp:${entry.id}`, entry.options, !entry.disabled))
     }
@@ -450,7 +472,10 @@ export class PluginManager {
       Object.assign(entry.ctx[Context.isolate], mounted.labels)
     }
     const adapter = [...this.plugins.values()].find(item => this.managed.has(item.id) && this.entries(item.id).includes(entry))
-    if (adapter) attachRoute(entry.ctx, { accepts: sessionId => this.accepts(clientScope, adapter.id, sessionId) })
+    if (adapter) {
+      const accepts = (sessionId: string) => this.accepts(clientScope, adapter.id, sessionId)
+      attachRoute(entry.ctx, { accepts, owner: { scope: clientScope, pluginId: adapter.id, package: adapter.package, accepts } })
+    }
   }
 
   private async manage(id: string): Promise<void> {
@@ -533,7 +558,7 @@ export class PluginManager {
     for (const adapter of this.plugins.values()) {
       if (!adapter.owned && !this.pluginIsolation && !this.store.hasScoped(adapter.id)) continue
       const definition = await this.definition(adapter.id) as Plugin.Object
-      if (definition.apply === this.ctx.fiber.runtime?.callback) continue
+      if (definition.apply === this.ctx.fiber.runtime?.callback || (definition as Plugin.Object & { tieredManagerFrontend?: boolean }).tieredManagerFrontend) continue
       targets.push(adapter)
     }
     // Release the old client registrations together before mounting private ones.
@@ -691,6 +716,7 @@ export class PluginManager {
       broker.refreshTools()
       await broker.refreshCommands()
     }
+    for (const listener of this.instanceListeners) await listener()
   }
 
   private realm(scope: Scope, packageName?: string): Record<string, symbol> {
@@ -795,7 +821,8 @@ export class PluginManager {
   private async mount(scope: Scope, adapter: InstalledPlugin, config: PluginConfig): Promise<void> {
     let isolated = isolateProvidedServices(this.ctx, this.realm(scope, adapter.package))
     for (const service of [...scopedServiceNames, 'settings', 'typert', 'agentPresets']) isolated = isolated.isolate(service)
-    const route = { accepts: (sessionId: string) => this.accepts(scope, adapter.id, sessionId) }
+    const accepts = (sessionId: string) => this.accepts(scope, adapter.id, sessionId)
+    const route = { accepts, owner: { scope, pluginId: adapter.id, package: adapter.package, accepts } }
     isolated = isolated.extend({ [routing]: route })
     const owner = await isolated.plugin(async (ctx: Context) => {
       ctx.provide('settings', { configure: () => () => {} })
@@ -875,6 +902,7 @@ export class PluginManager {
       try {
         restore?.()
         entry.ctx[Context.isolate] = isolation
+        delete (entry.ctx as Context & { [routing]?: unknown })[routing]
         // 菜单单独卸载时，把客户端入口交回 DSH；应用退出无需重启入口。
         if (this.ctx.root.fiber.state === 2 && running) { await entry.update({ disabled }); await entry.fiber?.await() }
         else entry.options.disabled = disabled

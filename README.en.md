@@ -8,6 +8,19 @@ For example, enable a plugin only in your coding workspace and keep it off elsew
 
 Settings inherit through **client → parent workspace → child workspace → session**, at any workspace depth. Keep the parent's settings by default, or override them for a workspace or an individual session.
 
+## Multi-platform components (development branch, not released)
+
+| Package | Role |
+| --- | --- |
+| `dsh-tiered-plugin-core` | Shared inheritance, instances, dependencies, MCP and Skills |
+| `dsh-tiered-plugin-menu` | Existing desktop/Web UI, keeping the package name and configuration path |
+| `dsh-tiered-plugin-tui` | Terminal panel using the host's React and dialogs |
+| `dsh-tiered-plugin-go` | Native mobile menu and scope routing for other native plugin contributions |
+
+Packages have independent versions. Adapters depend on a compatible core version range; a core patch does not require publishing all adapters. Interfaces attached to **one DSH host share one core and plugin instances**. Closing one interface leaves others and background tasks running. Separate DSH processes have separate managers.
+
+All interfaces manage plugins, MCP, Skills and child defaults. Web reuses original settings components; TUI edits fields and mobile uses JSON forms. See [TUI](packages/tui/README.md), [dsh-go](packages/dsh-go/README.md) and [architecture/testing](docs/COMPONENTS.md). Live terminal and Android visual verification remains pending.
+
 ## MCP and skills
 
 The left navigation switches between **Plugins / MCP / Skill**. All three reuse the same scope inheritance and new-child defaults. The child policy's Inherit/Independent switch covers all three categories; defaults are copied only when a child is created.
@@ -64,7 +77,7 @@ The release includes compiled host/browser code, the bundle patch and licenses. 
 - **Settings** expands the original plugin configuration cards when available, with a JSON editor as fallback. Cards from both Settings and plugin details are shown separately, divided by a line.
 - Disabling a scope blocks the inherited instance. An explicitly enabled child can still override a disabled parent.
 - Client scope uses the original DSH entries and native switches; lower scopes create separate instances. The optional experimental isolation switch also gives client entries private environments. Leaving a view does not stop background agents.
-- Disabling this menu releases its lower-scope instances, endpoints and UI while preserving saved settings for re-enabling. The original frontend is restored only for plugins enabled at client scope.
+- Closing an interface removes its UI. The last interface or standalone core releases lower-scope instances and endpoints, retaining saved settings. The original frontend is restored only for plugins enabled at client scope.
 - Choosing another session changes the active frontend binding; visiting Insights or Settings keeps that binding.
 - Updating an installed plugin replaces its scoped frontend and open configuration cards after DSH finishes reloading its module and CSS, keeping the selected session and its settings.
 
@@ -127,7 +140,7 @@ Data lives beside the menu configuration file in `<config-filename>.data/`, sepa
 
 ## Compatibility
 
-Current version: **0.7.1**. Tested with **DSH 0.2.2-rc.1 / rc.2** and Node.js 24. Package/component controls and dependency confirmation use shared DSH mechanisms, without adapters named after individual plugins or changes to DSH and third-party source code.
+Component releases are pending. Tested with **DSH 0.2.2-rc.1 / rc.2** and Node.js 24. Package/component controls and dependency confirmation use shared DSH mechanisms, without adapters named after individual plugins or changes to DSH and third-party source code.
 
 0.7.1 removes the exact DSH version restriction: `engines.dsh` is omitted and DSH host peer dependencies use `*`, so this plugin's manifest no longer blocks DSH upgrades solely because the version changed. When `agents.isOwnedBy` is absent, the menu uses session metadata to identify parent sessions. Development dependencies remain pinned for reproducible builds and tests.
 
@@ -178,14 +191,17 @@ In 0.5.4, `selfCompatible` replaces `supportsChildInstances`. Packages declaring
 ```sh
 npm ci --ignore-scripts
 npm run check
-npm pack
+npm run pack             # All four components in dist/
+npm run pack -- core     # Only the core package
 ```
 
-The checkout is self-contained. `vendor/` holds an unchanged MIT test fixture; no private repository access is needed. `check` covers type checking, building and 42 tests with real DSH services/plugins and React/jsdom. It uses neither browser automation nor paid model requests. Coverage includes child defaults, deep workspace trees, live inheritance changes, preset isolation and revision leases, session disposal/resume, native configuration cards and restart persistence.
+The checkout is self-contained. `vendor/` holds an unchanged MIT test fixture; no private repository access is needed. `check` runs type checking, building and serial regression tests against real DSH services/plugins and React/jsdom. It uses neither browser automation nor paid models. Coverage includes inheritance, presets, lifecycle, configuration cards, MCP/Skills, shared-core leases and TUI keyboard interaction. Official dsh-go SDK/bridge checks run separately; see [component development](docs/COMPONENTS.md).
 
 The broader third-party matrix runs in a disposable offline VM; see [reproduction instructions](docs/COMPATIBILITY.md#reproduce). No sample packages are installed into a personal DSH profile by these instructions.
 
-Core files: `src/manager.ts` (instances and scope inheritance), `src/dependencies.ts` (dependency plans), `src/runtime-tree.ts` (Loader entries), `src/isolation.ts` (private services), `src/scoped-services.ts` (shared registries), and `src/client/` (menus and original client bindings).
+Core implementation lives in `packages/core/src/`; the original Web client is in `packages/web/src/client/`. Terminal and mobile adapters live in `packages/tui/` and `packages/dsh-go/`.
+
+Uninstall currently preserves configuration and private data outside the package directory. DSH updates also use removal/reinstallation, so data deletion is not tied to a generic removal or instance disposal. Reinstallation restores saved settings.
 
 ## License
 

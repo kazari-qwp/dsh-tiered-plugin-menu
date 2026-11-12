@@ -1,0 +1,3 @@
+- insert:
+    - id: tiered-plugin-tui
+      name: dsh-tiered-plugin-tui

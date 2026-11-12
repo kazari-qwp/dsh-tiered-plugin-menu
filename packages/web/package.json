@@ -1,0 +1,72 @@
+{
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "repository": {
+    "url": "git+https://github.com/kazari-qwp/dsh-tiered-plugin-menu.git",
+    "type": "git",
+    "directory": "packages/web"
+  },
+  "homepage": "https://github.com/kazari-qwp/dsh-tiered-plugin-menu#readme",
+  "bugs": {
+    "url": "https://github.com/kazari-qwp/dsh-tiered-plugin-menu/issues"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json",
+    "./client": "./dist/client/index.js"
+  },
+  "files": [
+    "dist",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE",
+    "README.en.md",
+    "docs/images",
+    "screenshots.json",
+    "THIRD_PARTY_NOTICES.txt"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-api-gateway",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-workspace",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-plugin-manager"
+      ]
+    }
+  },
+  "name": "dsh-tiered-plugin-menu",
+  "version": "0.8.0",
+  "description": "为每个工作区和会话独立配置 DSH 插件、MCP 和 Skill，支持逐级继承与插件实例隔离。",
+  "dependencies": {
+    "dsh-tiered-plugin-core": "^0.8.0"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "4.1.0"
+  },
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "dsh",
+    "plugins",
+    "workspace",
+    "session",
+    "mcp",
+    "skills"
+  ]
+}

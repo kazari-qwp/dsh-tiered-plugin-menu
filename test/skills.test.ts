@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { Context } from '@deepseek-ai/cordis'
 import SkillRegistry, { type SkillProviderControl } from '@deepseek-ai/dsh-skill'
-import { ScopedServices, scopedServiceNames } from '../src/scoped-services.ts'
+import { ScopedServices, scopedServiceNames } from '../packages/core/src/scoped-services.ts'
 
 const scope = (id: string) => ({ id })
 const invocation = { modelInvocable: true, userInvocable: true }

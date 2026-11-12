@@ -21,7 +21,7 @@ const bundles = manifest.dsh.profile.bundles
 if (!bundles.includes('@deepseek-ai/dsh-web-app')) bundles.push('@deepseek-ai/dsh-web-app')
 fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n')
 const installed = createRequire(manifestPath)('dsh-tiered-plugin-menu/package.json')
-const expected = JSON.parse(fs.readFileSync(new URL('../../package.json', import.meta.url), 'utf8')).version
+const expected = JSON.parse(fs.readFileSync(new URL('../../packages/web/package.json', import.meta.url), 'utf8')).version
 assert.equal(installed.version, expected)
 const { loadProfileDirectory, loadLayeredEnv } = runtime('@deepseek-ai/dsh-app-boot')
 const { runProfile } = await import(pathToFileURL(runtime.resolve('@deepseek-ai/dsh/profile-boot')))

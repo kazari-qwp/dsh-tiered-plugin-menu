@@ -2,8 +2,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { ConversationSettings, MenuDialog } from '../src/client/menu.tsx'
-import { childScope, clientScope, isClientScope, scopeKey, type PluginRow, type SkillRow, type Scope } from '../src/shared.ts'
+import { ConversationSettings, MenuDialog } from '../packages/web/src/client/menu.tsx'
+import { childScope, clientScope, isClientScope, scopeKey, type PluginRow, type SkillRow, type Scope } from '../packages/core/src/shared.ts'
 import { withChangePlans } from './menu-api.ts'
 
 test('left resource tabs: MCP/Skill edits, scoped toggles and shared child defaults', async () => {

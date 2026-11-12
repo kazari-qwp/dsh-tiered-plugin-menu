@@ -10,9 +10,9 @@ import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deep
 import { SessionId } from '@deepseek-ai/dsh-session'
 import * as contextPlugin from 'dsh-context'
 import * as temporary from 'dsh-temporary-messages'
-import * as menu from '../src/index.ts'
-import { installedPlugins } from '../src/catalog.ts'
-import { clientScope } from '../src/shared.ts'
+import * as menu from '../packages/core/src/index.ts'
+import { installedPlugins } from '../packages/core/src/catalog.ts'
+import { clientScope } from '../packages/core/src/shared.ts'
 import { mountWorkspaces } from './workspaces.ts'
 import { mountPluginManagement } from './plugins.ts'
 

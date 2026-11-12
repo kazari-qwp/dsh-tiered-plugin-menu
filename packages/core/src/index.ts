@@ -1,4 +1,4 @@
-import { Context } from '@deepseek-ai/cordis'
+import { Context, type Fiber } from '@deepseek-ai/cordis'
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
 import { TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import type {} from '@deepseek-ai/dsh-typert-registry'
@@ -9,8 +9,12 @@ import { remoteContribution } from './remote-contract.ts'
 import type { Scope, PluginConfig, ChangeMode } from './shared.ts'
 
 export { PluginManager } from './manager.ts'
+export { registrationOwner } from './routing.ts'
+export type { RegistrationOwner } from './routing.ts'
+export const name = 'tiered-plugin-core'
+export const tieredManagerFrontend = true
 export const inject = ['agents', 'sessions', 'loader', 'typert', 'workspaceRegistry', 'pluginManager', 'profileContext', 'configEditor']
-export const Config = z.object({ dataFile: z.string().default(dshHomePath('plugins', 'tiered-plugin-menu.json')) })
+export const Config = z.object({ dataFile: z.string() })
 
 declare module '@deepseek-ai/cordis' { interface Context { tieredPlugins: PluginManager } }
 
@@ -40,7 +44,7 @@ class MenuService extends TypertRemoteService {
   }
 }
 
-export async function apply(ctx: Context, config: { dataFile: string }): Promise<void> {
+async function mount(ctx: Context, config: { dataFile: string }): Promise<void> {
   const manager = new PluginManager(ctx, new ConfigStore(config.dataFile))
   ctx.provide('tieredPlugins', manager)
   ctx.effect(() => () => manager.dispose())
@@ -52,4 +56,42 @@ export async function apply(ctx: Context, config: { dataFile: string }): Promise
     package: remoteContribution.package, face: 'host', schemas: [],
     model: { services: [], events: [], objects: [] }, invocations: remoteContribution.descriptors,
   }))
+}
+
+// All UI packages acquire the same host service. Closing one front end must
+// not tear down the other front ends or their background session instances.
+interface HostLease { users: number; dataFile: string; ready: Promise<Fiber>; closing?: Promise<void> }
+// Compatible package copies may coexist after independent adapter updates.
+const hostKey = Symbol.for('dsh-tiered-plugin-core.hosts.v1')
+const globalHosts = globalThis as typeof globalThis & { [hostKey]?: WeakMap<Context, HostLease> }
+const hosts = globalHosts[hostKey] ??= new WeakMap<Context, HostLease>()
+export async function acquireCore(ctx: Context, config: { dataFile?: string } = {}): Promise<PluginManager> {
+  const root = ctx.root
+  let host = hosts.get(root)
+  if (host?.closing) { await host.closing; return acquireCore(ctx, config) }
+  if (host && config.dataFile && config.dataFile !== host.dataFile) throw new Error('分级核心已经使用另一个配置文件')
+  if (!host) {
+    const dataFile = config.dataFile ?? dshHomePath('plugins', 'tiered-plugin-menu.json')
+    host = { users: 0, dataFile, ready: Promise.resolve(root.plugin({ inject, apply: mount }, { dataFile })) }
+    hosts.set(root, host)
+  }
+  const lease = host
+  lease.users++
+  ctx.effect(() => () => {
+    if (--lease.users) return
+    lease.closing = (async () => {
+      try {
+        const fiber = await lease.ready
+        await fiber.dispose()
+        await fiber.await()
+      } finally { hosts.delete(root) }
+    })()
+    return lease.closing
+  })
+  await lease.ready
+  return root.get('tieredPlugins')!
+}
+
+export async function apply(ctx: Context, config: { dataFile?: string } = {}): Promise<void> {
+  await acquireCore(ctx, config)
 }

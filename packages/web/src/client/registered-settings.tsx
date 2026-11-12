@@ -1,8 +1,8 @@
 import { Context, type Plugin } from '@deepseek-ai/cordis'
 import { createElement, Fragment, useSyncExternalStore, type ComponentType } from 'react'
 import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
-import type { PluginConfig } from '../shared.ts'
-import { isolateProvidedServices } from '../isolation.ts'
+import type { PluginConfig } from 'dsh-tiered-plugin-core/shared'
+import { isolateProvidedServices } from 'dsh-tiered-plugin-core/isolation'
 
 let nextCapture = 0
 

@@ -1,0 +1,57 @@
+{
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "repository": {
+    "url": "git+https://github.com/kazari-qwp/dsh-tiered-plugin-menu.git",
+    "type": "git",
+    "directory": "packages/tui"
+  },
+  "homepage": "https://github.com/kazari-qwp/dsh-tiered-plugin-menu#readme",
+  "bugs": {
+    "url": "https://github.com/kazari-qwp/dsh-tiered-plugin-menu/issues"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE",
+    "dsh-plugin.json"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "name": "dsh-tiered-plugin-tui",
+  "version": "0.1.0",
+  "description": "DSH 分级插件菜单的终端适配：独立配置插件、MCP 和 Skill。",
+  "dependencies": {
+    "dsh-tiered-plugin-core": "^0.8.0"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "4.1.0"
+  },
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "dsh",
+    "plugins",
+    "workspace",
+    "session",
+    "mcp",
+    "skills",
+    "dsh-tui"
+  ]
+}

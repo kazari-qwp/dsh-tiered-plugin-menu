@@ -1,7 +1,7 @@
 import { useEffect, useState, useSyncExternalStore, type ComponentType } from 'react'
 import { createPortal } from 'react-dom'
-import type { MenuRemote } from '../remote-contract.ts'
-import { clientScope, scopeKey } from '../shared.ts'
+import type { MenuRemote } from 'dsh-tiered-plugin-core/remote-contract'
+import { clientScope, scopeKey } from 'dsh-tiered-plugin-core/shared'
 import { labels, MenuDialog, type MenuTarget, type MenuUi } from './menu.tsx'
 
 export function createMenuState() {

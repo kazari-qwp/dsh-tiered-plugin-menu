@@ -1,0 +1,81 @@
+{
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "repository": {
+    "url": "git+https://github.com/kazari-qwp/dsh-tiered-plugin-menu.git",
+    "type": "git",
+    "directory": "packages/dsh-go"
+  },
+  "homepage": "https://github.com/kazari-qwp/dsh-tiered-plugin-menu#readme",
+  "bugs": {
+    "url": "https://github.com/kazari-qwp/dsh-tiered-plugin-menu/issues"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "name": "dsh-tiered-plugin-go",
+  "version": "0.1.0",
+  "description": "DSH 分级插件菜单的手机适配：独立配置插件、MCP 和 Skill。",
+  "dependencies": {
+    "dsh-tiered-plugin-core": "^0.8.0"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "4.1.0"
+  },
+  "dshGo": {
+    "v": 1,
+    "title": {
+      "zh": "分级配置",
+      "en": "Tiered settings"
+    },
+    "icon": "settings",
+    "contributes": {
+      "panels": [
+        {
+          "id": "menu",
+          "title": {
+            "zh": "分级配置",
+            "en": "Tiered settings"
+          },
+          "icon": "settings",
+          "placement": [
+            "session.tab",
+            "features",
+            "chat.panel"
+          ]
+        }
+      ]
+    }
+  },
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "dsh",
+    "plugins",
+    "workspace",
+    "session",
+    "mcp",
+    "skills",
+    "dsh-go"
+  ]
+}

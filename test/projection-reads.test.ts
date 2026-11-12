@@ -4,8 +4,8 @@ import { Context } from '@deepseek-ai/cordis'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { z } from 'zod'
-import { ScopedServices } from '../src/scoped-services.ts'
-import { resourceName } from '../src/resource-names.ts'
+import { ScopedServices } from '../packages/core/src/scoped-services.ts'
+import { resourceName } from '../packages/core/src/resource-names.ts'
 
 test('isolated projection reads use original keys for live and persisted statistics', async () => {
   const ctx = new Context()

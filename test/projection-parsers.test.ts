@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { Context } from '@deepseek-ai/cordis'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { ScopedServices } from '../src/scoped-services.ts'
+import { ScopedServices } from '../packages/core/src/scoped-services.ts'
 
 test('scoped projections accept parse-only schemas and preserve checkpoint transforms', async () => {
   const ctx = new Context()

@@ -8,8 +8,8 @@ import { JSDOM } from 'jsdom'
 import { Context, type Plugin } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import type * as Modules from '@deepseek-ai/dsh-client-modules/client'
-import { sessionForm } from '../src/client/form.ts'
-import type { Scope } from '../src/shared.ts'
+import { sessionForm } from '../packages/web/src/client/form.ts'
+import type { Scope } from '../packages/core/src/shared.ts'
 
 const require = createRequire(import.meta.url)
 function load<T>(filename: string): T {
@@ -80,7 +80,7 @@ test('native frontend replacement refreshes scoped panels, settings and CSS', as
       ctx.provide('modules', system as any)
       await system.entries.start(ctx.loader, manifest)
       if (managed) {
-        await ctx.plugin(load<Plugin>('dist/client/index.js'))
+        await ctx.plugin(load<Plugin>('packages/web/dist/client/index.js'))
         await ctx.loader.await()
         const observer = ctx.slots.entries('tiered-plugin-menu.active-session' as any)[0]!
         const controller = (observer.inject!() as any).controller

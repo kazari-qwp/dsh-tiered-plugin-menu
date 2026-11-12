@@ -1,7 +1,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
-import type { MenuRemote } from '../remote-contract.ts'
-import type { PluginRow, Scope } from '../shared.ts'
+import type { MenuRemote } from 'dsh-tiered-plugin-core/remote-contract'
+import type { PluginRow, Scope } from 'dsh-tiered-plugin-core/shared'
 
 /** Bind the original client's declared Remote methods to the selected host instance. */
 export function scopedRemote(ctx: Context, api: MenuRemote, row: PluginRow, scope: Scope) {

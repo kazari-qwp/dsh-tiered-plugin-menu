@@ -3,13 +3,42 @@
     "target": "ES2023",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "lib": ["ES2023", "DOM", "ESNext.Decorators"],
+    "lib": [
+      "ES2023",
+      "DOM",
+      "ESNext.Decorators"
+    ],
     "strict": true,
     "skipLibCheck": true,
     "noEmit": true,
     "allowImportingTsExtensions": true,
     "jsx": "react-jsx",
-    "types": ["node", "react"]
+    "types": [
+      "node",
+      "react"
+    ],
+    "paths": {
+      "dsh-tiered-plugin-core": [
+        "./packages/core/src/index.ts"
+      ],
+      "dsh-tiered-plugin-core/model": [
+        "./packages/core/src/model.ts"
+      ],
+      "dsh-tiered-plugin-core/remote-contract": [
+        "./packages/core/src/remote-contract.ts"
+      ],
+      "dsh-tiered-plugin-core/shared": [
+        "./packages/core/src/shared.ts"
+      ],
+      "dsh-tiered-plugin-core/isolation": [
+        "./packages/core/src/isolation.ts"
+      ]
+    }
   },
-  "include": ["src", "test", "tsdown.config.ts"]
+  "exclude": ["**/dist", "node_modules"],
+  "include": [
+    "packages",
+    "test",
+    "tsdown.config.ts"
+  ]
 }

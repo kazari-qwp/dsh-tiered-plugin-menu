@@ -9,10 +9,10 @@ import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import * as menu from '../src/index.ts'
-import { ConfigStore } from '../src/store.ts'
-import { resourceName } from '../src/resource-names.ts'
-import { clientScope } from '../src/shared.ts'
+import * as menu from '../packages/core/src/index.ts'
+import { ConfigStore } from '../packages/core/src/store.ts'
+import { resourceName } from '../packages/core/src/resource-names.ts'
+import { clientScope } from '../packages/core/src/shared.ts'
 import { mountWorkspaces } from './workspaces.ts'
 import { mountPluginManagement } from './plugins.ts'
 
@@ -214,7 +214,7 @@ test('an installed menu keeps its private helper services out of the host depend
     const plan = await manager.plan(clientScope, 'service-fixture', 'on')
     assert.deepEqual(plan.missing, [])
     const declarations = (manager as any).declarations as Map<string, { provides: Set<string> }>
-    assert.deepEqual([...declarations.get('menu-fixture')!.provides].sort(), ['tieredPluginMenu', 'tieredPlugins'])
+    assert.deepEqual([...declarations.get('menu-fixture')!.provides], [], '共享服务由独立核心持有，界面包不再提供这些服务')
     assert.deepEqual([...declarations.get('service-fixture')!.provides], ['publicValue'])
     const second = (await ctx.agents.create({ sessionId: SessionId('opened-later') })).agent
     await manager.sync()
