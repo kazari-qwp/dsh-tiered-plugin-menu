@@ -116,7 +116,7 @@ export function createPanel(ctx: Context, manager: PluginManager) {
       h(ui.Text, { dimColor: true }, 'l 层级 · c 本级/下级 · g 菜单设置'),
       scope.children ? h(ui.Text, {}, `下级默认：${manager.childSettings(ownScope(scope)).independent ? '独立' : '继承'}（d 切换）`) : null,
       ...rows.slice(start, start + size).map((row, i) => h(ui.Text, { key: row.id, bold: cursor === start + i },
-        `${cursor === start + i ? '›' : ' '} ${row.name} [${row.own ? row.enabled ? '启用' : '关闭' : '继承'}]`)),
+        `${cursor === start + i ? '›' : ' '} ${row.name} [${'partial' in row && row.partial ? '部分启用' : row.own ? row.enabled ? '启用' : '关闭' : '继承'}]`)),
       !rows.length ? h(ui.Text, {}, '没有可配置的项目') : null,
       h(ui.Text, { dimColor: true }, '↑↓ 选择 · Enter 开关/组件 · e 配置'),
       h(ui.Text, { dimColor: true }, 'a 添加 MCP · b 返回列表 · r 刷新'),

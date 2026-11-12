@@ -1,7 +1,7 @@
 import { Context, Inject, resolveConfig, type Fiber, type Plugin } from '@deepseek-ai/cordis'
 import { isVolatile } from '@deepseek-ai/cosmokit'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import type {} from '@deepseek-ai/cordis-plugin-loader'
+import { interpolate } from '@deepseek-ai/cordis-plugin-loader'
 import type {} from '@deepseek-ai/dsh-agent'
 import type { Agent, SessionStartSource } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-workspace'
@@ -122,6 +122,17 @@ export class PluginManager {
     return this.ctx.loader.unwrapExports(namespace)
   }
 
+  private async inspectDefinition(id: string, enabled: boolean): Promise<Plugin | undefined> {
+    try { return await this.definition(id) }
+    catch (error) {
+      // Bundles can retain disabled entries for modules absent on this host.
+      // Listing them must not activate or require those optional modules.
+      const code = (error as NodeJS.ErrnoException).code
+      if (!enabled && (code === 'ERR_MODULE_NOT_FOUND' || code === 'MODULE_NOT_FOUND')) return undefined
+      throw error
+    }
+  }
+
   private targets(id: string) {
     const group = [...this.plugins.values()].filter(item => item.parentId === id || item.package === id)
     return group.length ? group : [this.adapter(id)]
@@ -130,10 +141,12 @@ export class PluginManager {
   private async dependencyNodes(scope: Scope): Promise<DependencyNode[]> {
     const result: DependencyNode[] = []
     for (const item of this.plugins.values()) {
-      const plugin = await this.definition(item.id) as Plugin.Object
+      const source = this.source(scope, item.id)
+      const enabled = isClientScope(source) ? this.clientEnabled(item.id) : this.store.get(source, item.id)!.enabled
+      const plugin = await this.inspectDefinition(item.id, enabled) as Plugin.Object | undefined
       const declared = this.declarations.get(item.id) ?? { provides: new Set<string>(), requires: new Set<string>() }
-      for (const name of [plugin.provide ?? []].flat()) declared.provides.add(name)
-      for (const name of Object.keys(Inject.resolve(plugin.inject))) declared.requires.add(name)
+      for (const name of [plugin?.provide ?? []].flat()) declared.provides.add(name)
+      for (const name of Object.keys(Inject.resolve(plugin?.inject))) declared.requires.add(name)
       for (const name of Object.keys(Inject.resolve(item.options.inject))) declared.requires.add(name)
       const entry = this.entry(item.id)
       for (const runtime of this.ctx.registry.values()) for (const fiber of runtime.fibers) {
@@ -146,10 +159,9 @@ export class PluginManager {
         if (fiber.state === 2) for (const name of Object.keys(fiber.inject)) declared.requires.add(name)
       }
       this.declarations.set(item.id, declared)
-      const source = this.source(scope, item.id)
       result.push({ id: item.id, name: item.options.id, provides: [...declared.provides],
         requires: [...declared.requires].filter(name => !declared.provides.has(name)),
-        enabled: isClientScope(source) ? this.clientEnabled(item.id) : this.store.get(source, item.id)!.enabled })
+        enabled })
     }
     if (!isClientScope(scope)) return result
     const provided = new Set(result.flatMap(node => node.provides))
@@ -274,8 +286,12 @@ export class PluginManager {
     }
   }
 
-  private async normalize(id: string, config: PluginConfig): Promise<PluginConfig> {
-    const value = resolveConfig(await this.definition(id) as unknown as Plugin.Runtime, config) as PluginConfig
+  private async normalize(id: string, config: PluginConfig, enabled = true): Promise<PluginConfig> {
+    const definition = await this.inspectDefinition(id, enabled)
+    if (!definition) return structuredClone(config)
+    const entry = this.entry(id)
+    const evaluated = interpolate(entry?.fiber?.ctx ?? entry?.ctx ?? this.ctx, config)
+    const value = resolveConfig(definition as unknown as Plugin.Runtime, evaluated) as PluginConfig
     const parsed = isVolatile(value) ? value.get() as PluginConfig : value
     // Volatile snapshots are frozen; schema validators may normalize nested dictionaries in place.
     return structuredClone(Object.fromEntries(Object.entries(parsed ?? {}).map(([key, value]) => [key, isVolatile(value) ? value.get() : value])))
@@ -434,7 +450,7 @@ export class PluginManager {
         : this.store.get(source, adapter.id)!
       return {
         id: adapter.id, kind: adapter.kind, name: adapter.kind === 'mcp' ? String(saved.config.serverName ?? adapter.options.id) : adapter.parentId === adapter.id ? adapter.package : adapter.options.id, package: adapter.package, description: adapter.description, ...saved,
-        config: adapter.kind === 'mcp' && !saved.enabled ? saved.config : await this.normalize(adapter.id, saved.config),
+        config: adapter.kind === 'mcp' && !saved.enabled ? saved.config : await this.normalize(adapter.id, saved.config, saved.enabled),
         configNamespace: adapter.options.id,
         routes: this.services.get(adapter.id)?.paths() ?? [],
         routePrefix: this.services.get(adapter.id)?.routePrefix || undefined,

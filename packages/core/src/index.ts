@@ -66,13 +66,17 @@ const hostKey = Symbol.for('dsh-tiered-plugin-core.hosts.v1')
 const globalHosts = globalThis as typeof globalThis & { [hostKey]?: WeakMap<Context, HostLease> }
 const hosts = globalHosts[hostKey] ??= new WeakMap<Context, HostLease>()
 export async function acquireCore(ctx: Context, config: { dataFile?: string } = {}): Promise<PluginManager> {
+  return acquire(ctx, config, ctx.root)
+}
+
+async function acquire(ctx: Context, config: { dataFile?: string }, owner: Context): Promise<PluginManager> {
   const root = ctx.root
   let host = hosts.get(root)
-  if (host?.closing) { await host.closing; return acquireCore(ctx, config) }
+  if (host?.closing) { await host.closing; return acquire(ctx, config, owner) }
   if (host && config.dataFile && config.dataFile !== host.dataFile) throw new Error('分级核心已经使用另一个配置文件')
   if (!host) {
     const dataFile = config.dataFile ?? dshHomePath('plugins', 'tiered-plugin-menu.json')
-    host = { users: 0, dataFile, ready: Promise.resolve(root.plugin({ inject, apply: mount }, { dataFile })) }
+    host = { users: 0, dataFile, ready: Promise.resolve(owner.plugin({ inject, apply: mount }, { dataFile })) }
     hosts.set(root, host)
   }
   const lease = host
@@ -93,5 +97,7 @@ export async function acquireCore(ctx: Context, config: { dataFile?: string } = 
 }
 
 export async function apply(ctx: Context, config: { dataFile?: string } = {}): Promise<void> {
-  await acquireCore(ctx, config)
+  // A declared core entry owns its backend directly. Restricted UI hosts can
+  // consume this service without asking a UI plugin to mutate the root.
+  await acquire(ctx, config, ctx)
 }

@@ -10,6 +10,7 @@ import SkillRegistry from '@deepseek-ai/dsh-skill'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import * as menu from '../packages/core/src/index.ts'
+import * as web from '../packages/web/src/index.ts'
 import { ConfigStore } from '../packages/core/src/store.ts'
 import { resourceName } from '../packages/core/src/resource-names.ts'
 import { clientScope } from '../packages/core/src/shared.ts'
@@ -200,7 +201,7 @@ test('an installed menu keeps its private helper services out of the host depend
     mountPluginManagement(ctx, lab)
     await mountAgentLoopTestHarness(ctx)
     const nativeImport = ctx.loader.import.bind(ctx.loader)
-    ctx.loader.import = async name => name === 'menu-fixture' ? menu : nativeImport(name)
+    ctx.loader.import = async name => name === 'menu-fixture' ? web : nativeImport(name)
     const names = ['tools', 'sessions', 'systemPrompt', 'sessionProjections', 'typert'] as const
     const labels = names.map(name => ctx[Context.isolate][name])
     const first = (await ctx.agents.create({ sessionId: SessionId('already-open') })).agent

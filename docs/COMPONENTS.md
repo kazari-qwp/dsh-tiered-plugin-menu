@@ -15,6 +15,8 @@ packages/dsh-go   dsh-tiered-plugin-go         0.1.0
 
 界面调用 `acquireCore(ctx, config)` 取得管理器。共享状态以 DSH 根 Context 为键，每个界面持有一个引用。关闭单个界面不影响其他界面和后台实例；最后一个引用释放后关闭核心。最后一次释放与新界面打开交错时，新界面等待旧核心完成释放。
 
+TUI 的实际宿主禁止插件通过 `ctx.root.plugin` 新建根组件。在 TUI profile 中显式启用 `dsh-tiered-plugin-core` bundle，由核心在自己的 Context 内挂载后端；TUI 适配器声明依赖 `tieredPlugins`，等待核心就绪。显式核心入口本身也持有引用，关闭所有界面后仍可保留后端。npm 安装依赖文件不会自动启用这一 bundle。
+
 依赖树中出现两份兼容核心时，也通过版本化的全局符号共享同一个管理器和路由归属标记。此约定用于兼容的 API，未来破坏性更改需要新协议标识和明确迁移。
 
 分别启动两个 DSH 进程会创建两个宿主；共享目录不等于共享内存。此实现没有另造跨进程服务器。终端适配只针对 dsh-TUI 的 DSH 后端。
@@ -53,15 +55,17 @@ Web、TUI、Go 使用各自版本与标签：`web/v…`、`tui/v…`、`go/v…`
 
 ## 已完成验证与待测项
 
-本轮没有启动虚拟机，没有向个人 DSH profile 安装新组件，没有调用模型 API。
+已在隔离虚拟机加载实际 TUI/Web，未向个人 DSH profile 安装新组件，也未调用模型 API。详细过程、问题与截图见 [实际界面验证](LIVE_UI_TESTING.md)。
 
-- 完整回归 58 项通过；原桌面功能：DSH rc.1 SDK、真实第三方插件、实例隔离、MCP、Skill、React/jsdom。
+- 原桌面回归覆盖 DSH rc.1 SDK、真实第三方插件、实例隔离、MCP、Skill、React/jsdom；新增显式核心生命周期、禁用缺失组件和 Loader 表达式用例。
 - 共享核心：三个界面、兼容核心副本、交错关闭/打开、最后释放、重开恢复。
 - TUI：使用宿主 React 的键盘操作、二次确认取消/确认、字段配置、切换会话、下级默认。官方准入校验结果为 `compatible`。
 - dsh-go：官方 NativeCore 对照先复现同名覆盖，再验证按会话读取/点击、关闭继承插件撤下数据订阅、重读静态视图，关闭 A 不会断开 B 的原生数据流；官方 SDK 校验菜单、JSON 保存、无手势的层级选择、本级/下级及资源标签。
 - 实际 rc.2 runtime：在独立 profile 安装四个 tarball，加载三个适配入口，确认同一核心；MCP 分层、子/孙代理默认继承、Skill 覆盖和工作区预设目录通过。
 
-尚未验证：实际 TUI 的终端视觉/键位表现、Android 真机或模拟器界面、大规模外部插件在三个前端同时打开时的混装矩阵。旧的混装矩阵不能代替这次新平台的完整实机验证。
+实际界面验证：Ubuntu 虚拟机中加载 dsh-TUI 0.19.0 + DSH rc.1，Web 同进程运行；模板双向编辑、MCP 发现、Skill 工作区覆盖与会话关闭、下级默认、关闭 Web 后继续使用 TUI、重启读回和宽窄布局已检查。修复了显式核心挂载、禁用缺失组件、Loader 表达式读取，以及终端中“部分启用”的状态显示。官方 TUI 0.19.0 的版本声明不接受 rc.2，因此这次 TUI 实测使用 rc.1。
+
+尚未验证：Android 真机或模拟器界面、大规模外部插件在三个前端同时打开时的混装矩阵。旧的混装矩阵不能代替这次新平台的完整实机验证。
 
 官方源码检验版本：
 
@@ -82,4 +86,4 @@ Four independently versioned packages share one backend within a DSH root Contex
 
 The mobile adapter routes public native contributions by session, including live data lifecycles. The TUI adapter uses host React and public panel/dialog services. Neither changes upstream code. Native package-level contribution visibility and bounded editor inputs remain host limitations.
 
-Build with `npm run check`; package all components with `npm run pack`, or only one with `npm run pack -- core`. Publish changed components independently. Existing lockfiles require an explicit dependency update. Official bridge/SDK checks and an isolated real rc.2 runtime passed; live terminal/Android testing and the expanded multi-platform plugin matrix remain pending.
+Build with `npm run check`; package all components with `npm run pack`, or only one with `npm run pack -- core`. Publish changed components independently. Existing lockfiles require an explicit dependency update. Official bridge/SDK checks and an isolated real rc.2 runtime passed. Live VM testing additionally covered TUI 0.19.0 on rc.1 and Web sharing that host, with screenshots. TUI needs the standalone core bundle enabled. Android UI testing and the expanded multi-platform plugin matrix remain pending.

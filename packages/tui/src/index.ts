@@ -1,8 +1,9 @@
 import type { Context } from '@deepseek-ai/cordis'
-import { acquireCore } from 'dsh-tiered-plugin-core'
+import { acquireCore, inject as coreInject } from 'dsh-tiered-plugin-core'
 import { createPanel } from './panel.ts'
 
-export { Config, inject, tieredManagerFrontend } from 'dsh-tiered-plugin-core'
+export { Config, tieredManagerFrontend } from 'dsh-tiered-plugin-core'
+export const inject = [...coreInject, 'tieredPlugins']
 export const name = 'tiered-plugin-tui'
 export async function apply(ctx: Context, config: { dataFile?: string }): Promise<void> {
   const manager = await acquireCore(ctx, config)

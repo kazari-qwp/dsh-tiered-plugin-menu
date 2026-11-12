@@ -10,11 +10,42 @@ import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deep
 import { SessionId } from '@deepseek-ai/dsh-session'
 import * as temporary from 'dsh-temporary-messages'
 import { acquireCore } from '../packages/core/src/index.ts'
+import * as core from '../packages/core/src/index.ts'
 import { attachRoute } from '../packages/core/src/routing.ts'
 import { MenuModel } from '../packages/core/src/model.ts'
 import { installNativeRouting } from '../packages/dsh-go/src/routing.ts'
 import { mountWorkspaces } from './workspaces.ts'
 import { mountPluginManagement } from './plugins.ts'
+
+test('显式核心组件独立持有后端：界面关闭不释放它，核心重开无旧引用', async () => {
+  mkdirSync('work', { recursive: true })
+  const dataFile = resolve(mkdtempSync('work/core-owner-'), 'settings.json')
+  const ctx = new Context()
+  try {
+    await mountAgentLoopTestDependencies(ctx)
+    await mountWorkspaces(ctx)
+    await ctx.plugin(TypertRegistry)
+    await ctx.plugin(Loader)
+    ctx.loader.import = async () => temporary
+    await ctx.loader.root.update([{ id: 'temporary', name: 'dsh-temporary-messages', disabled: true }])
+    await ctx.loader.await()
+    mountPluginManagement(ctx)
+    await mountAgentLoopTestHarness(ctx)
+    const owner = await ctx.plugin(core, { dataFile })
+    const manager = ctx.tieredPlugins
+    const frontend = await ctx.plugin({ inject: ['tieredPlugins'], async apply(child: Context) {
+      assert.equal(await acquireCore(child), manager)
+    } })
+    await frontend.dispose(); await frontend.await()
+    assert.equal(ctx.tieredPlugins, manager)
+    await owner.dispose(); await owner.await()
+    assert.equal(ctx.get('tieredPlugins'), undefined)
+    const reopened = await ctx.plugin(core, { dataFile })
+    assert.notEqual(ctx.tieredPlugins, manager)
+    assert.ok(ctx.tieredPlugins)
+    await reopened.dispose()
+  } finally { await ctx.fiber.dispose() }
+})
 
 test('三个界面共用核心：跨界面配置、先关闭一个、最后释放、重开恢复', async () => {
   mkdirSync('work', { recursive: true })

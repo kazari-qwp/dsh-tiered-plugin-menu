@@ -21,7 +21,7 @@
 
 **挂在同一 DSH 宿主的界面共用一份核心和实例。** 关闭其中一个不会影响其他界面或后台任务；最后一个持有者退出才释放核心。分别启动的 DSH 进程各有自己的运行实例，不能仅靠共用文件夹实现内存共享。
 
-三端都提供插件 / MCP / Skill、本级 / 下级默认、继承 / 启用 / 关闭和配置编辑。桌面继续复用插件原设置页；TUI 逐字段编辑，手机使用 JSON 表单。详见 [TUI](packages/tui/README.md)、[dsh-go](packages/dsh-go/README.md) 和 [架构与验证](docs/COMPONENTS.md)。终端与手机真实界面验证尚未进行。
+三端都提供插件 / MCP / Skill、本级 / 下级默认、继承 / 启用 / 关闭和配置编辑。桌面继续复用插件原设置页；TUI 逐字段编辑，手机使用 JSON 表单。详见 [TUI](packages/tui/README.md)、[dsh-go](packages/dsh-go/README.md) 和 [架构与验证](docs/COMPONENTS.md)。已在隔离虚拟机验证实际 TUI 与 Web 共用后端，见 [测试截图与范围](docs/LIVE_UI_TESTING.md)；Android 界面尚未实测。
 
 ## 按钮位置
 
