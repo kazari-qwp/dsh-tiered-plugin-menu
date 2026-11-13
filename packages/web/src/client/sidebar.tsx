@@ -25,10 +25,17 @@ function PluginButton({ label, onClick }: { label: string; onClick(): void }) {
   </button>
 }
 
-export function SessionButton({ sessionId, open }: {
+interface SessionButtonProps {
   sessionId: string; open(target: MenuTarget): void
-}) {
+}
+
+export function SessionButton({ sessionId, open }: SessionButtonProps) {
   return <PluginButton label="会话插件" onClick={() => open({ scope: { level: 'session', id: sessionId } })} />
+}
+
+export function NewSessionButton({ sessionId, open }: SessionButtonProps) {
+  return <button type="button" className="tiered-new-session-button" aria-haspopup="dialog"
+    onClick={() => open({ scope: { level: 'session', id: sessionId } })}>分级配置</button>
 }
 
 interface SidebarAnchor { target: MenuTarget; mount: HTMLElement }
@@ -88,6 +95,9 @@ export function MenuOverlay({ api, Page, menu, ui }: {
 }
 
 const buttonStyles = `
+.tiered-new-session-button { color: var(--dsw-alias-label-secondary, #bfc0c5); background: transparent; border: 0; border-radius: var(--dsw-radius-md, 8px); padding: 4px 8px; font: inherit; font-size: 13px; line-height: 20px; white-space: nowrap; cursor: pointer; }
+.tiered-new-session-button:hover { background: var(--dsw-alias-interactive-bg-hover, #ffffff09); }
+.tiered-new-session-button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
 .tiered-workspace-action { display: contents; }
 .tiered-client-action { display: flex; flex: none; align-items: center; width: 28px; height: 28px; margin-left: auto; }
 .tiered-client-action + div { margin-left: 0; }

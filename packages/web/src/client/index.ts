@@ -9,7 +9,7 @@ import { PluginArtworkDefault } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TypertClientRemote } from '@deepseek-ai/dsh-typert-protocol'
 import { remoteContribution } from 'dsh-tiered-plugin-core/remote-contract'
 import { ConversationSettings, LevelSettings, NativeSettings } from './menu.tsx'
-import { createMenuState, MenuOverlay, SessionButton } from './sidebar.tsx'
+import { createMenuState, MenuOverlay, NewSessionButton, SessionButton } from './sidebar.tsx'
 import { createElement, useEffect, useState, type ReactElement } from 'react'
 import { ContextClient, ActiveSession, RegisteredSettings } from './context-client.tsx'
 import type { PluginRow, Scope } from 'dsh-tiered-plugin-core/shared'
@@ -123,6 +123,10 @@ export async function apply(ctx: Context): Promise<void> {
       name: 'conversation.view', id: 'tiered-plugin-menu.settings', order: 40,
       label: () => '分级配置', inject: () => ({ api, ui, Page: () => null }),
     }, ConversationSettings)))
+    child.effect(() => child.slots.inject('conversation.hero.options', () => child.slots.register({
+      name: 'conversation.hero.options', id: 'tiered-plugin-menu', order: 50,
+      inject: () => ({ open: menu.open }),
+    }, NewSessionButton)))
     child.effect(() => child.slots.inject('sidebar.workspaces.session.row.action', () => child.slots.register({
       name: 'sidebar.workspaces.session.row.action', id: 'tiered-plugin-menu', order: 50,
       inject: () => ({ open: menu.open }),

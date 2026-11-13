@@ -1,7 +1,9 @@
-import { copyFileSync, cpSync } from 'node:fs'
+import { copyFileSync, readFileSync, writeFileSync } from 'node:fs'
 
-for (const name of ['README.md', 'README.en.md', 'screenshots.json', 'THIRD_PARTY_NOTICES.txt']) {
-  copyFileSync(name, `packages/web/${name}`)
+for (const name of ['README.md', 'README.en.md']) {
+  const readme = readFileSync(name, 'utf8').replaceAll('](docs/images/',
+    '](https://raw.githubusercontent.com/kazari-qwp/dsh-tiered-plugin-menu/master/docs/images/')
+  writeFileSync(`packages/web/${name}`, readme)
 }
-cpSync('docs/images', 'packages/web/docs/images', { recursive: true })
+copyFileSync('THIRD_PARTY_NOTICES.txt', 'packages/web/THIRD_PARTY_NOTICES.txt')
 copyFileSync('THIRD_PARTY_NOTICES.txt', 'packages/core/THIRD_PARTY_NOTICES.txt')
