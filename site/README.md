@@ -14,3 +14,5 @@ node site/build.mjs
 可设置 `GITHUB_TOKEN` 使用认证 API；本地也可以先将 Release API 返回的数组保存为 JSON，再执行 `node site/build.mjs path/to/releases.json`。
 
 工作流在网站文件修改、正式 Release 发布/编辑/删除时部署，也支持在 Actions 中手动运行 **Download center**。创建 Release 时先在草稿中上传附件，再发布；如果后来补传了附件，编辑并保存 Release 说明或手动运行工作流即可刷新列表。无需增加插件版本或发布 npm。
+
+早于本工作流创建的旧标签不包含工作流文件，编辑这些旧 Release 时请手动运行刷新；后续发版使用包含该工作流的提交。
