@@ -69,7 +69,13 @@ dsh plugin --profile desktop add dsh-tiered-plugin-menu
 
 Web 版换成自己的 profile 名称，通常是 `web`。未开启热重载时重启 DSH。不需要预先安装临时消息等其他插件。
 
-**升级至 0.6.3：** 安装后重启 DSH。此版修复隔离插件在历史查询和会话面板中读不到投影数据的问题，包括 Context 洞察统计为空；同时包含 0.6.2 的 SDK 加载修复。已有会话日志不需要改写。[原因与验证](docs/PLUGIN_ISOLATION.md#063-projection-reads-and-panel-binding)。
+**核心 0.8.1：** 修复已安装但未启用的插件声明了必填配置时，打开菜单报 `id missing required value` 等校验错误的问题。此修复只更新 `dsh-tiered-plugin-core`；Web 0.8.0、TUI 0.1.0 和 dsh-go 0.1.0 均可继续使用。新安装会按依赖范围获取修复；已有安装可能锁定旧核心，请完全退出 DSH，在实际使用的 profile 上执行：
+
+```sh
+dsh plugin --profile desktop update dsh-tiered-plugin-core --depth 1
+```
+
+将 `desktop` 换成实际 profile 名称，并确保使用同一个 `DSH_HOME`。完成后重启 DSH；此命令更新依赖，不需要重新启用或重设界面插件。[复现与验证](docs/CORE_0.8.1.md)。
 
 发行包包含宿主、浏览器构建产物、bundle patch 与许可，不需要安装时运行构建脚本。GitHub 源码需要先构建，直接安装请使用 Release 的 tarball。这是 [DSH 官方打包教程](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/develop/basic/publish.zh.md)支持的分发方式。
 
@@ -166,7 +172,7 @@ MCP 的命令、环境变量、目录、URL 和请求头可以分级设置；远
 
 ## 兼容情况
 
-组件版尚未发布；测试环境为 **DSH 0.2.2-rc.1 / rc.2**、Node.js 24。支持整包、组件开关和依赖确认，通过 DSH 的通用机制实现，不按具体插件名称写适配，不修改 DSH 或第三方插件源码。
+组件已独立发布；测试环境为 **DSH 0.2.2-rc.1 / rc.2**、Node.js 24。支持整包、组件开关和依赖确认，通过 DSH 的通用机制实现，不按具体插件名称写适配，不修改 DSH 或第三方插件源码。
 
 0.7.1 取消 DSH 的精确版本限制：不再声明 `engines.dsh`，DSH 宿主依赖使用 `*`，升级 DSH 不会仅因版本号变化被本插件的声明拦截。新版移除 `agents.isOwnedBy` 后，菜单通过会话元数据识别父子关系。开发依赖仍固定版本，便于重复构建和测试。
 

@@ -11,8 +11,12 @@ const manager = await acquireCore(ctx)
 
 配置继续保存在 `DSH_HOME/plugins/tiered-plugin-menu.json`。界面间共享数据，但不同 DSH 进程各有自己的运行实例。此包独立发布，兼容修复不要求所有界面包一起发版。
 
+0.8.1 修复未加载插件的声明配置被漏读，导致整个菜单报必填字段缺失的问题。已有安装请完全退出 DSH，执行 `dsh plugin --profile desktop update dsh-tiered-plugin-core --depth 1` 后重启；将 `desktop` 换成实际 profile，并使用相同的 `DSH_HOME`。Web 0.8.0、TUI 0.1.0 和 dsh-go 0.1.0 无须升级界面包。
+
 MIT License。完整说明见 [项目仓库](https://github.com/kazari-qwp/dsh-tiered-plugin-menu)。
 
 ## English
 
 Shared backend for per-client, workspace and session plugin, MCP and Skill configuration. Web, TUI and mobile adapters acquire the same manager within one DSH host. The last lease releases it; background instances remain while another adapter or the standalone core is active. Versions are independent. Existing configuration paths are preserved. Separate DSH processes do not share an in-memory manager.
+
+0.8.1 reads declared configuration for installed but inactive plugins, preventing missing-required-field errors from blocking the menu. Quit DSH, update the core with the command above using your actual profile and `DSH_HOME`, then restart. Existing Web 0.8.0, TUI 0.1.0 and dsh-go 0.1.0 adapters remain compatible.

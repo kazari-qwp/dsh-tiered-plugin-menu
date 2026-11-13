@@ -76,7 +76,13 @@ Prebuilt `.tgz` packages are also available from [Releases](https://github.com/k
 
 For Web, use your profile name (usually `web`). Restart DSH if hot reload is disabled. No companion plugin is required.
 
-**Upgrading to 0.6.3:** restart DSH after installing. This fixes isolated plugins reading empty projection data in history queries and conversation panels, including Context insights. It also includes the SDK loading fixes from 0.6.2. Existing session logs do not need rewriting. [Cause and verification](docs/PLUGIN_ISOLATION.md#063-projection-reads-and-panel-binding).
+**Core 0.8.1:** fixes menu validation errors such as `id missing required value` when an installed but inactive plugin declares required configuration. Only `dsh-tiered-plugin-core` changes; Web 0.8.0, TUI 0.1.0 and dsh-go 0.1.0 remain compatible. New installs resolve the fix within their dependency range. Existing lockfiles may retain an older core; fully quit DSH, then run:
+
+```sh
+dsh plugin --profile desktop update dsh-tiered-plugin-core --depth 1
+```
+
+Replace `desktop` with the actual profile name and use the same `DSH_HOME`, then restart DSH. This updates the dependency without re-enabling or reconfiguring an interface package. [Reproduction and verification](docs/CORE_0.8.1.md).
 
 The release includes compiled host/browser code, the bundle patch and licenses. It needs no install-time build script. A GitHub source checkout must be built first; use the release tarball for installation. This follows the [official DSH packaging guide](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/develop/basic/publish.md).
 
@@ -151,7 +157,7 @@ Data lives beside the menu configuration file in `<config-filename>.data/`, sepa
 
 ## Compatibility
 
-Component releases are pending. Tested with **DSH 0.2.2-rc.1 / rc.2** and Node.js 24. Package/component controls and dependency confirmation use shared DSH mechanisms, without adapters named after individual plugins or changes to DSH and third-party source code.
+Components are published independently. Tested with **DSH 0.2.2-rc.1 / rc.2** and Node.js 24. Package/component controls and dependency confirmation use shared DSH mechanisms, without adapters named after individual plugins or changes to DSH and third-party source code.
 
 0.7.1 removes the exact DSH version restriction: `engines.dsh` is omitted and DSH host peer dependencies use `*`, so this plugin's manifest no longer blocks DSH upgrades solely because the version changed. When `agents.isOwnedBy` is absent, the menu uses session metadata to identify parent sessions. Development dependencies remain pinned for reproducible builds and tests.
 

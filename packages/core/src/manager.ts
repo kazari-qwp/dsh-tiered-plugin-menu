@@ -446,7 +446,7 @@ export class PluginManager {
       const source = this.source(scope, adapter.id)
       const saved = isClientScope(source)
         ? adapter.owned ? this.store.get(clientScope, adapter.id) ?? { enabled: false, config: adapter.options.config ?? {} }
-          : { enabled: this.clientEnabled(adapter.id), config: entry?.options.config ?? {} }
+          : { enabled: this.clientEnabled(adapter.id), config: entry?.options.config ?? adapter.options.config ?? {} }
         : this.store.get(source, adapter.id)!
       return {
         id: adapter.id, kind: adapter.kind, name: adapter.kind === 'mcp' ? String(saved.config.serverName ?? adapter.options.id) : adapter.parentId === adapter.id ? adapter.package : adapter.options.id, package: adapter.package, description: adapter.description, ...saved,
