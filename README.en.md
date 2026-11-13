@@ -2,6 +2,8 @@
 
 [简体中文](README.md) | English
 
+**[Download center: Desktop / Web · TUI · dsh-go](https://kazari-qwp.github.io/dsh-tiered-plugin-menu/)** — Separate latest versions and download histories for each interface. The shared core installs automatically.
+
 **Enable or disable DSH plugins, MCP servers and skills independently for each workspace and each session, with different settings for each.**
 
 For example, enable a plugin only in your coding workspace and keep it off elsewhere. Use configuration A in one session and configuration B in another. Open the menu from the small plugin buttons in the sidebar, then expand **Settings** to use the plugin's original configuration UI.

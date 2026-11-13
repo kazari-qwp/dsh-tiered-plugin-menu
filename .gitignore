@@ -1,6 +1,7 @@
 node_modules/
 dist/
 work/
+_site/
 *.tgz
 !vendor/*.tgz
 packages/web/README.md

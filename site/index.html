@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="分级插件菜单下载中心。按桌面/Web、TUI、dsh-go 分别下载最新版本与历史安装包，独立管理共享核心。">
+  <meta name="color-scheme" content="dark">
+  <title>下载中心 · 分级插件菜单</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="style.css">
+  <script src="copy.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#downloads">跳到下载列表</a>
+  <div class="shell">
+    <header class="topbar">
+      <a class="brand" href="./"><img src="favicon.svg" width="30" height="30" alt=""><span>分级插件菜单</span></a>
+      <nav aria-label="项目链接"><a href="%%REPO%%#readme">使用说明</a><a href="%%REPO%%/blob/master/README.en.md" lang="en">English</a><a href="%%REPO%%">GitHub ↗</a></nav>
+    </header>
+    <main>
+      <section class="intro">
+        <p class="eyebrow">DEEPSEEK HARNESS · DOWNLOADS</p>
+        <h1>选一个界面，<br>配置每一层。</h1>
+        <p class="lead">为每个工作区和会话独立配置插件、MCP 与 Skill。</p>
+        <div class="notice"><span class="notice-dot" aria-hidden="true"></span><p>只需安装你使用的界面包，<strong>共享核心会自动安装。</strong><br>各组件独立更新，版本号不必相同。</p></div>
+      </section>
+      <nav class="categories" aria-label="下载分类"><a href="#web">桌面 / Web</a><a href="#tui">TUI</a><a href="#go">dsh-go</a><a href="#core-downloads">共享核心</a></nav>
+      <div class="section-heading"><h2 id="downloads">界面安装包</h2><span>正式版本 · .tgz</span></div>
+      <div class="interfaces"><!-- INTERFACES --></div>
+      <details class="core-section" id="core-downloads">
+        <summary><div><strong>共享核心</strong><span>单独版本与历史下载，通常无需手动安装</span></div><span class="expand" aria-hidden="true">+</span></summary>
+        <!-- CORE -->
+      </details>
+      <section class="help" aria-labelledby="help-title">
+        <h2 id="help-title">如何安装与更新</h2>
+        <p>推荐在客户端中按包名安装，以便通过 Harness 检查更新。下载的 .tgz 也可以作为本地安装包使用；本地来源不保证自动检查升级。</p>
+        <p>TUI 使用命令行安装到实际连接的 profile。安装或更新后，若 Harness 提示重启，请重启再使用。</p>
+        <a href="%%REPO%%#readme">查看完整安装说明 ↗</a>
+      </section>
+    </main>
+    <footer><span>MIT 开源许可 · 允许商用</span><a href="%%REPO%%/releases">全部发布记录 ↗</a><a href="%%REPO%%/issues">反馈问题 ↗</a></footer>
+  </div>
+</body>
+</html>

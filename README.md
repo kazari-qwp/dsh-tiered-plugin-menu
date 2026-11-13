@@ -2,6 +2,8 @@
 
 简体中文 | [English](README.en.md)
 
+**[下载中心：桌面 / Web · TUI · dsh-go](https://kazari-qwp.github.io/dsh-tiered-plugin-menu/)** — 各端最新版本与历史安装包分别列出，共享核心自动安装。
+
 **让每个工作区、每个会话都能独立开关 DSH 插件、MCP 和 Skill，并使用各自不同的配置。**
 
 比如，只在写代码的工作区启用某个插件，在其他工作区关闭；同一个插件，在会话 A 使用配置 A，在会话 B 使用配置 B。直接从侧栏的小插件按钮打开菜单，在「设置」中使用原插件的配置界面。
@@ -76,7 +78,7 @@ dsh-tiered-plugin-menu
 dsh plugin --profile desktop add dsh-tiered-plugin-menu
 ```
 
-也可以从 [Releases](https://github.com/kazari-qwp/dsh-tiered-plugin-menu/releases) 下载构建好的 `.tgz` 安装。
+也可以从 [下载中心](https://kazari-qwp.github.io/dsh-tiered-plugin-menu/) 按客户端选择构建好的 `.tgz` 安装；完整发布记录见 [Releases](https://github.com/kazari-qwp/dsh-tiered-plugin-menu/releases)。
 
 Web 版换成自己的 profile 名称，通常是 `web`。未开启热重载时重启 DSH。不需要预先安装临时消息等其他插件。
 
