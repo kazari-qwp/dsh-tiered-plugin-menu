@@ -1,4 +1,4 @@
-import { Context, Inject, resolveConfig, type Fiber, type Plugin } from '@deepseek-ai/cordis'
+import { Context, Inject, Service, resolveConfig, type Fiber, type Plugin } from '@deepseek-ai/cordis'
 import { isVolatile } from '@deepseek-ai/cosmokit'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { interpolate } from '@deepseek-ai/cordis-plugin-loader'
@@ -7,6 +7,7 @@ import type { Agent, SessionStartSource } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-workspace'
 import type {} from '@deepseek-ai/dsh-config-editor'
 import { ConfigStore } from './store.ts'
+import { profileConfig, saveInactiveConfig } from './profile-config.ts'
 import { installedPlugins, mcpAdapter, mcpModule, type InstalledPlugin } from './catalog.ts'
 import { randomUUID } from 'node:crypto'
 import { relative, resolve } from 'node:path'
@@ -143,7 +144,8 @@ export class PluginManager {
     for (const item of this.plugins.values()) {
       const source = this.source(scope, item.id)
       const enabled = isClientScope(source) ? this.clientEnabled(item.id) : this.store.get(source, item.id)!.enabled
-      const plugin = await this.inspectDefinition(item.id, enabled) as Plugin.Object | undefined
+      const definition = await this.inspectDefinition(item.id, enabled)
+      const plugin = definition as Plugin.Object | undefined
       const declared = this.declarations.get(item.id) ?? { provides: new Set<string>(), requires: new Set<string>() }
       for (const name of [plugin?.provide ?? []].flat()) declared.provides.add(name)
       for (const name of Object.keys(Inject.resolve(plugin?.inject))) declared.requires.add(name)
@@ -160,6 +162,8 @@ export class PluginManager {
       }
       this.declarations.set(item.id, declared)
       result.push({ id: item.id, name: item.options.id, provides: [...declared.provides],
+        package: item.package,
+        dynamicProvides: typeof definition === 'function' && definition.prototype instanceof Service && !declared.provides.size,
         requires: [...declared.requires].filter(name => !declared.provides.has(name)),
         enabled })
     }
@@ -241,6 +245,21 @@ export class PluginManager {
     const plan = await this.plan(scope, id, mode)
     if (plan.signature !== signature) throw new Error('依赖状态已变化，请重新确认')
     if (plan.missing.length) throw new Error(`依赖不可用：${plan.missing.join('、')}`)
+    const targets = this.targets(id)
+    const bundle = targets[0]!
+    if (isClientScope(scope) && mode !== 'inherit' && !bundle.kind && !plan.dependencies.length
+      && (id === bundle.parentId || id === bundle.package)) {
+      // A bundle can also override existing host rows. Let DSH apply/remove
+      // the complete layer, rather than leaving those overrides behind.
+      if (this.pluginIsolation) for (const target of targets) await this.manage(target.id)
+      this.checkChange(await this.ctx.pluginManager.setBundleEnabled(bundle.package, mode === 'on'))
+      await this.refresh()
+      if (mode === 'on') for (const target of targets) for (const entry of this.entries(target.id)) {
+        if (entry.options.disabled === true) this.checkChange(await this.ctx.pluginManager.setPluginEnabled(entry.id as never, true))
+      }
+      await this.sync()
+      return
+    }
     // The UI confirms the whole list before the first write.
     const key = (change: { scope: Scope; id: string }) => `${scopeKey(change.scope)}/${change.id}`
     const previous = new Map(plan.changes.map(change => [key(change), this.store.get(change.scope, change.id)]))
@@ -446,10 +465,11 @@ export class PluginManager {
       const source = this.source(scope, adapter.id)
       const saved = isClientScope(source)
         ? adapter.owned ? this.store.get(clientScope, adapter.id) ?? { enabled: false, config: adapter.options.config ?? {} }
-          : { enabled: this.clientEnabled(adapter.id), config: entry?.options.config ?? adapter.options.config ?? {} }
+          : { enabled: this.clientEnabled(adapter.id), config: entry?.options.config ?? profileConfig(this.ctx, adapter.options) }
         : this.store.get(source, adapter.id)!
       return {
-        id: adapter.id, kind: adapter.kind, name: adapter.kind === 'mcp' ? String(saved.config.serverName ?? adapter.options.id) : adapter.parentId === adapter.id ? adapter.package : adapter.options.id, package: adapter.package, description: adapter.description, ...saved,
+        official: !adapter.kind && adapter.bundle.official,
+        id: adapter.id, kind: adapter.kind, name: adapter.kind === 'mcp' ? String(saved.config.serverName ?? adapter.options.id) : adapter.parentId === adapter.id ? adapter.title ?? adapter.package : adapter.options.id, package: adapter.package, description: adapter.description, ...saved,
         config: adapter.kind === 'mcp' && !saved.enabled ? saved.config : await this.normalize(adapter.id, saved.config, saved.enabled),
         configNamespace: adapter.options.id,
         routes: this.services.get(adapter.id)?.paths() ?? [],
@@ -467,7 +487,7 @@ export class PluginManager {
       const parent = this.adapter(row.id).parentId
       if (parent === row.id) { result.push(row); continue }
       let group = result.find(item => item.id === parent)
-      if (!group) { group = { ...row, id: parent, name: row.package, components: [] }; result.push(group) }
+      if (!group) { group = { ...row, id: parent, name: this.adapter(row.id).title ?? row.package, components: [] }; result.push(group) }
       group.components!.push(row)
     }
     for (const group of result) if (group.components) {
@@ -609,6 +629,29 @@ export class PluginManager {
 
   private checkChange(result: ChangeResult): void {
     if (result.error) throw new Error(result.error.diagnostic ?? result.error.code)
+  }
+
+  async saveConfig(scope: Scope, id: string, config: PluginConfig): Promise<void> {
+    await this.refresh()
+    const adapter = this.adapter(id)
+    id = adapter.id
+    if (isClientScope(scope) && !adapter.owned) {
+      await this.normalize(id, config, this.clientEnabled(id))
+      const entry = this.entry(id)
+      if (entry?.fiber?.state === 2) await this.ctx.configEditor.edit(entry, () => config)
+      else await saveInactiveConfig(this.ctx, adapter.options, config)
+      await this.services.get(id)?.refresh()
+      return
+    }
+    const saved = this.store.get(scope, id)
+    if (!saved) throw new Error('请先选择本级启用或关闭，再编辑配置')
+    // Read enablement here, not from a form opened before the switch changed.
+    if (!saved.enabled) {
+      await this.normalize(id, config, false)
+      this.store.set(scope, id, { ...saved, config })
+      return
+    }
+    await this.configure(scope, id, saved.enabled, config, true, true)
   }
 
   async configure(scope: Scope, id: string, enabled: boolean, config: PluginConfig, confirmed = false, applyingPlan = false): Promise<void> {
@@ -864,6 +907,11 @@ export class PluginManager {
       plugin = entry.fiber!
       const error = (await Promise.all(failures)).find(Boolean)
       if (error) throw error
+      const declared = this.declarations.get(adapter.id) ?? { provides: new Set<string>(), requires: new Set<string>() }
+      for (const runtime of this.ctx.registry.values()) for (const fiber of runtime.fibers) {
+        if (fiber.ctx.fiber.entry === entry) for (const provision of fiber.provisions) declared.provides.add(provision.name)
+      }
+      this.declarations.set(adapter.id, declared)
     } catch (error) {
       await disposeFiber(owner)
       throw error

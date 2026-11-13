@@ -67,13 +67,13 @@ export function createPanel(ctx: Context, manager: PluginManager) {
       if (key.upArrow || key.downArrow) {
         event.preventDefault(); setCursor(i => Math.max(0, Math.min(rows.length - 1, i + (key.upArrow ? -1 : 1)))); return
       }
-      if (!['1', '2', '3', 'l', 'c', 'd', 'e', 'a', 'b', 'r', 'g'].includes(input) && !key.return) return
+      if (!['1', '2', '3', '4', 'l', 'c', 'd', 'e', 'a', 'b', 'r', 'g'].includes(input) && !key.return) return
       event.preventDefault()
       if (busy.current) return
       busy.current = true
       void (async () => {
         const { scope, kind } = model.selection
-        if (['1', '2', '3'].includes(input)) select(scope, (['plugin', 'mcp', 'skill'] as ResourceKind[])[Number(input) - 1])
+        if (['1', '2', '3', '4'].includes(input)) select(scope, (['plugin', 'official', 'mcp', 'skill'] as ResourceKind[])[Number(input) - 1])
         else if (input === 'l') {
           const options = model.scopes().map(item => ({ id: JSON.stringify(item.scope), label: item.label }))
           const selected = await dialogs.select({ title: '配置层级', options })
@@ -112,7 +112,7 @@ export function createPanel(ctx: Context, manager: PluginManager) {
     const start = Math.floor(cursor / size) * size
     return h(ui.Box, { flexDirection: 'column' },
       h(ui.Text, { bold: true }, `${levelLabel(scope)} · ${scope.children ? '下级默认' : '本级'}`),
-      h(ui.Text, {}, `1 插件 | 2 MCP | 3 Skill · ${model.selection.kind}`),
+      h(ui.Text, {}, `1 插件 | 2 官方插件 | 3 MCP | 4 Skill · ${model.selection.kind}`),
       h(ui.Text, { dimColor: true }, 'l 层级 · c 本级/下级 · g 菜单设置'),
       scope.children ? h(ui.Text, {}, `下级默认：${manager.childSettings(ownScope(scope)).independent ? '独立' : '继承'}（d 切换）`) : null,
       ...rows.slice(start, start + size).map((row, i) => h(ui.Text, { key: row.id, bold: cursor === start + i },

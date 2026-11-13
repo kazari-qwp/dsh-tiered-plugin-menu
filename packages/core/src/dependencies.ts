@@ -4,6 +4,8 @@ export interface DependencyNode {
   provides: string[]
   requires: string[]
   enabled: boolean
+  package?: string
+  dynamicProvides?: boolean
 }
 
 export interface DependencyPlan {
@@ -34,7 +36,18 @@ export function dependencyPlan(nodes: DependencyNode[], targets: string[], enabl
         if (candidates.some(node => node.enabled && !changes.has(node.id))) continue
         const selected = candidates.find(node => changes.has(node.id)) ?? (candidates.length === 1 ? candidates[0] : undefined)
         if (selected) { changes.add(selected.id); visit(selected.id) }
-        else if (!hostServices.has(service)) missing.add(`${byId.get(id)!.name}: ${service}${candidates.length > 1 ? '（多个提供者，请先选择启用其中一个）' : ''}`)
+        else if (!hostServices.has(service)) {
+          // Service subclasses may name their service only in super(ctx, name).
+          // Keep the bundle's declared order for these unknown providers instead
+          // of inventing edges to every Service (which can reverse dependencies).
+          // The real Loader checks the service when the consumer mounts.
+          const node = byId.get(id)!
+          const dynamic = nodes.filter(other => other !== node && other.package && other.package === node.package
+            && other.dynamicProvides && changes.has(other.id))
+          const preceding = dynamic.filter(other => nodes.indexOf(other) < nodes.indexOf(node))
+          if (!candidates.length && dynamic.length) for (const provider of preceding.length ? preceding : dynamic) visit(provider.id)
+          else missing.add(`${node.name}: ${service}${candidates.length > 1 ? '（多个提供者，请先选择启用其中一个）' : ''}`)
+        }
       }
       order.push(id)
     }

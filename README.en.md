@@ -12,6 +12,8 @@ Settings inherit through **client → parent workspace → child workspace → s
 
 ## Multi-platform components
 
+All four packages are released as **1.0.0** and remain independently updatable. This release adds official plugin management, generic instance compatibility, configuration saves while disabled, and fixed Web category navigation. Saving preserves enablement; enabled plugins apply saves immediately. Existing users should update both the core and their interface to 1.0.0.
+
 | Package | Role |
 | --- | --- |
 | `dsh-tiered-plugin-core` | Shared inheritance, instances, dependencies, MCP and Skills |
@@ -21,7 +23,7 @@ Settings inherit through **client → parent workspace → child workspace → s
 
 Packages have independent versions. Adapters depend on a compatible core version range; a core patch does not require publishing all adapters. Interfaces attached to **one DSH host share one core and plugin instances**. Closing one interface leaves others and background tasks running. Separate DSH processes have separate managers.
 
-All interfaces manage plugins, MCP, Skills and child defaults. Web reuses original settings components; TUI edits fields and mobile uses JSON forms. See [TUI](packages/tui/README.md), [dsh-go](packages/dsh-go/README.md) and [architecture/testing](docs/COMPONENTS.md). Live tests cover TUI/Web in an isolated VM and the official Android APK connected to that VM, including UI operations and full cold starts. See [screenshots and coverage](docs/LIVE_UI_TESTING.md).
+All interfaces manage third-party and official plugins, MCP, Skills and child defaults. Web reuses original settings components; TUI edits fields and mobile uses JSON forms. See [TUI](packages/tui/README.md), [dsh-go](packages/dsh-go/README.md) and [architecture/testing](docs/COMPONENTS.md). Live tests cover TUI/Web in an isolated VM and the official Android APK connected to that VM, including UI operations and full cold starts. See [screenshots and coverage](docs/LIVE_UI_TESTING.md).
 
 ### Install one package for your interface
 
@@ -47,7 +49,11 @@ Registry-installed 0.7.1 can upgrade directly to 0.9.0. One interface update add
 
 ## MCP and skills
 
-The left navigation switches between **Plugins / MCP / Skill**. All three reuse the same scope inheritance and new-child defaults. The child policy's Inherit/Independent switch covers all three categories; defaults are copied only when a child is created.
+The left navigation switches between **Plugins / Official plugins / MCP / Skill**. All categories reuse scope inheritance and new-child defaults. The child policy's Inherit/Independent switch covers every category; defaults are copied only when a child is created.
+
+The official tab reads Harness bundle metadata, including locally shipped plugins that are disabled at client scope. Enable them independently for a workspace or session. Package controls affect all components; open details to configure individual components. Optional packages not present locally must first be installed through Harness. Host infrastructure is excluded.
+
+Official and third-party packages share the same dependency and instance handling, without plugin-name-specific patches. Self-compatibility still comes from package metadata. Tests cover activation, cold restoration and disposal for 12 official bundles in rc.3; see [coverage and limitations](docs/OFFICIAL_PLUGINS.md).
 
 - **MCP:** discovers existing `@deepseek-ai/dsh-mcp-client` entries and supports adding servers with JSON connection settings (stdio or streamable-http). Inherited configuration shares its parent's connection. A local override starts a separate connection, including a separate process for stdio. Tools, resources and server instructions follow the selected scope. Background connections survive navigation away from a session.
 - **Skills:** lists filesystem and plugin-provided skills available in the current scope. Each can be enabled or disabled, with optional overrides for its description, body and model/user invocation flags. Overrides live in the menu's configuration; original files remain unchanged. Skill providers, scripts and resource directories remain shared. Changes affect subsequent skill discovery/loading, not text already in conversation history.
@@ -100,6 +106,7 @@ The release includes compiled host/browser code, the bundle patch and licenses. 
 - The outer list shows **one row per package**. Its **Inherit | Enable | Disable** buttons apply to every component in the package.
 - Click a package to open its component list. Control components individually there; a mixed package displays **partially enabled**.
 - **Settings** expands the original plugin configuration cards when available, with a JSON editor as fallback. Cards from both Settings and plugin details are shown separately, divided by a line.
+- Official and third-party plugins can save configuration while locally disabled; enabling applies it. Saves apply immediately to enabled plugins and never change the enablement mode. Choose a local on/off override before editing inherited settings. The category navigation stays visible while the content scrolls.
 - Disabling a scope blocks the inherited instance. An explicitly enabled child can still override a disabled parent.
 - Client scope uses the original DSH entries and native switches; lower scopes create separate instances. The optional experimental isolation switch also gives client entries private environments. Leaving a view does not stop background agents.
 - Closing an interface removes its UI. The last interface component releases lower-scope instances and endpoints, retaining saved settings. The original frontend is restored only for plugins enabled at client scope.

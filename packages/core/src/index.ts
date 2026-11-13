@@ -44,6 +44,7 @@ class MenuService extends TypertRemoteService {
     return this.ctx.tieredPlugins.call(scope, id, namespace, method, args, this.ctx.invocation!.peer, signal)
   }
   inherit(scope: Scope, id: string) { return this.ctx.tieredPlugins.inherit(scope, id) }
+  saveConfig(scope: Scope, id: string, config: PluginConfig) { return this.ctx.tieredPlugins.saveConfig(scope, id, config) }
   async configure(scope: Scope, id: string, enabled: boolean, config: PluginConfig, confirmed = false) {
     await this.ctx.tieredPlugins.configure(scope, id, enabled, config, confirmed)
   }

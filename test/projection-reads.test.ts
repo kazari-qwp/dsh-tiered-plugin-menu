@@ -7,6 +7,35 @@ import { z } from 'zod'
 import { ScopedServices } from '../packages/core/src/scoped-services.ts'
 import { resourceName } from '../packages/core/src/resource-names.ts'
 
+test('a scoped projection handle can scan other sessions without publishing there', async () => {
+  const ctx = new Context()
+  try {
+    await mountAgentLoopTestDependencies(ctx)
+    await mountAgentLoopTestHarness(ctx)
+    const { agent: a } = await ctx.agents.create({ sessionId: SessionId('reader-A') })
+    const { agent: b } = await ctx.agents.create({ sessionId: SessionId('reader-B') })
+    const broker = new ScopedServices(ctx, 'scan')
+    const owner = await ctx.plugin(() => {})
+    const definition = {
+      key: 'count', stateVersion: 1, stateSchema: z.number(), init: () => 0,
+      apply: (count: number) => count + 1,
+      wire: { viewSchema: z.number(), view: (count: number) => count },
+    }
+    const handle = await broker.projection(owner.ctx, {
+      scope: { level: 'session', id: 'reader-A' }, accepts: id => id === 'reader-A', configKey: () => '',
+    }, definition as any)
+    assert.equal(handle.stateOf(a.session), a.session.snapshotEvents().length)
+    assert.equal(handle.stateOf(b.session), b.session.snapshotEvents().length)
+    const reader = handle.readerFor(b.session)
+    b.session.append('test/scan' as any, {} as any)
+    assert.equal(reader(), b.session.snapshotEvents().length, 'scan cache follows session sequence')
+    const key = resourceName('scan', 'count')
+    assert.equal((ctx.sessionProjections.snapshot(b.session).values as any)[key], null, 'no contribution leaks to the other session')
+    assert.equal((ctx.sessionProjections.snapshot(a.session).values as any)[key], a.session.snapshotEvents().length)
+    await owner.dispose()
+  } finally { await ctx.fiber.dispose() }
+})
+
 test('isolated projection reads use original keys for live and persisted statistics', async () => {
   const ctx = new Context()
   try {

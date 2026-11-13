@@ -16,7 +16,7 @@ dsh plugin --profile <profile> add dsh-tiered-plugin-tui
 
 | 按键 | 操作 |
 | --- | --- |
-| `1 / 2 / 3` | 插件 / MCP / Skill |
+| `1 / 2 / 3 / 4` | 插件 / 官方插件 / MCP / Skill |
 | `l` | 选择客户端、工作区或当前会话 |
 | `c` | 本级 / 下级默认 |
 | `d` | 下级默认：继承 / 独立 |
@@ -36,6 +36,6 @@ MIT License。
 
 From 0.2.0, install only `dsh-tiered-plugin-tui` in the DSH profile used by TUI. The bundle includes a core component and automatically registers the shared host through native package management. The extra core installation required by 0.1.0 is no longer needed. Restart if requested, then open **分级配置** in the sidebar panel picker.
 
-Core and interface versions update independently. Interfaces on the same DSH host share one backend. The core mounts beneath its own Context, without using root capabilities from TUI plugin activation. Keys: `1/2/3` resource type, `l` scope, `c` own/child defaults, `d` independent defaults, Enter state, `e` edit a JSON field, `g` manager settings. Long fields and third-party Web settings components should be edited in Web.
+Core and interface versions update independently. Interfaces on the same DSH host share one backend. The core mounts beneath its own Context, without using root capabilities from TUI plugin activation. Keys: `1/2/3/4` resource type (plugins, official plugins, MCP, Skills), `l` scope, `c` own/child defaults, `d` independent defaults, Enter state, `e` edit a JSON field, `g` manager settings. Long fields and third-party Web settings components should be edited in Web.
 
 The earlier live UI verification used dsh-TUI 0.19.0 with DSH rc.1; that upstream TUI release does not declare rc.2 support. See the repository's validation reports for the tested versions.

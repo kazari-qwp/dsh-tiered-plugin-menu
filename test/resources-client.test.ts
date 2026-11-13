@@ -6,6 +6,37 @@ import { ConversationSettings, MenuDialog } from '../packages/web/src/client/men
 import { childScope, clientScope, isClientScope, scopeKey, type PluginRow, type SkillRow, type Scope } from '../packages/core/src/shared.ts'
 import { withChangePlans } from './menu-api.ts'
 
+test('官方插件位于插件下一行，列表不重复，本级与下级使用相同作用域操作', async () => {
+  const scope: Scope = { level: 'session', id: 'A' }
+  const writes: Scope[] = []
+  const base: PluginRow = { id: 'community', name: '社区插件', package: 'community', description: '', source: clientScope,
+    config: {}, enabled: false, own: false, active: false, settings: 'native', verified: true }
+  const api = withChangePlans({
+    context: async () => ({ ok: true, value: { workspaces: [], workspaceId: null } }),
+    list: async () => ({ ok: true, value: [base, { ...base, id: 'official', name: '官方测试', package: 'official', official: true }] }),
+    configure: async s => { writes.push(s); return { ok: true, value: undefined } },
+    inherit: async s => { writes.push(s); return { ok: true, value: undefined } },
+  })
+  let view!: ReactTestRenderer
+  try {
+    await act(async () => { view = create(createElement(MenuDialog, { api, Page: () => null, ui: { Artwork: () => null, openDetails() {} }, target: { scope }, onClose() {} })) })
+    const tab = async (name: string) => act(async () => { view.root.findAllByProps({ role: 'tab' }).find(n => n.children.includes(name))!.props.onClick() })
+    const shown = () => view.root.findAllByProps({ className: 'tiered-card-open' }).map(n => n.children[0])
+    assert.deepEqual(view.root.findByProps({ 'aria-label': '资源类型' }).findAllByType('button').map(n => n.children[0]), ['插件', '官方插件', 'MCP', 'Skill'])
+    assert.deepEqual(shown(), ['社区插件'])
+    await tab('官方插件')
+    assert.deepEqual(shown(), ['官方测试'])
+    await act(async () => { view.root.findByProps({ 'data-mode': 'on' }).props.onClick() })
+    assert.deepEqual(writes.at(-1), scope)
+    await tab('下级')
+    await act(async () => { view.root.findAllByType('button').find(n => n.children.includes('独立'))!.props.onClick() })
+    await act(async () => { view.root.findByProps({ 'data-mode': 'on' }).props.onClick() })
+    assert.deepEqual(writes.at(-1), childScope(scope))
+    await tab('插件')
+    assert.deepEqual(shown(), ['社区插件'])
+  } finally { await act(async () => view?.unmount()) }
+})
+
 test('left resource tabs: MCP/Skill edits, scoped toggles and shared child defaults', async () => {
   const scope: Scope = { level: 'workspace', id: 'one' }
   const calls: { type: string; scope: Scope; config?: unknown }[] = []

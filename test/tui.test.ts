@@ -22,8 +22,8 @@ test('TUI 使用宿主 React：键盘修改作用域、确认、配置与切换�
     change: async (scope: Scope, id: string, mode: string) => {
       calls.push(['change', scope, id, mode]); values.set(JSON.stringify(scope), { enabled: mode === 'on', config: row(scope).config })
     },
-    configure: async (scope: Scope, id: string, enabled: boolean, config: unknown) => {
-      calls.push(['configure', scope, id, config]); values.set(JSON.stringify(scope), { enabled, config })
+    saveConfig: async (scope: Scope, id: string, config: unknown) => {
+      calls.push(['saveConfig', scope, id, config]); values.set(JSON.stringify(scope), { enabled: row(scope).enabled, config })
     },
     childSettings: (scope: Scope) => ({ independent: childScopes.has(JSON.stringify(scope)) }),
     setChildSettings: (scope: Scope, value: boolean) => { value ? childScopes.add(JSON.stringify(scope)) : childScopes.delete(JSON.stringify(scope)) },
@@ -58,7 +58,7 @@ test('TUI 使用宿主 React：键盘修改作用域、确认、配置与切换�
     replies.push('on', true); await send('', { return: true })
     assert.deepEqual(calls.at(-1)?.[1], { level: 'session', id: 'B' })
     assert.equal(own({ level: 'session', id: 'B' }).config.label, 'CLIENT')
-    await send('3')
+    await send('4')
     assert.match(JSON.stringify(renderer!.toJSON()), /没有可配置的项目/)
     const before = JSON.stringify(renderer!.toJSON())
     await send('1', { ctrl: true })

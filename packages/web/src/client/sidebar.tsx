@@ -90,7 +90,7 @@ export function MenuOverlay({ api, Page, menu, ui }: {
   return <>
     <style>{buttonStyles}</style>
     <SidebarButtons open={menu.open} />
-    {target && <MenuDialog key={scopeKey(target.scope)} api={api} Page={Page} ui={ui} target={target} onClose={menu.close} />}
+    {target && createPortal(<MenuDialog key={scopeKey(target.scope)} api={api} Page={Page} ui={ui} target={target} onClose={menu.close} />, document.body)}
   </>
 }
 

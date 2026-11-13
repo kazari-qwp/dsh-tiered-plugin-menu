@@ -1,11 +1,17 @@
 import type { MenuRemote } from '../packages/core/src/remote-contract.ts'
 import { isClientScope, scopeKey, type ChangePlan } from '../packages/core/src/shared.ts'
 
-export function withChangePlans(base: Omit<MenuRemote, 'plan' | 'change' | 'call' | 'childSettings' | 'setChildSettings' | 'settings' | 'setWorkspaceTreeInheritance' | 'setPluginIsolation' | 'addMcp' | 'skills' | 'skillConfig' | 'configureSkill' | 'inheritSkill'>): MenuRemote {
+export function withChangePlans(base: Omit<MenuRemote, 'plan' | 'change' | 'call' | 'childSettings' | 'setChildSettings' | 'settings' | 'setWorkspaceTreeInheritance' | 'setPluginIsolation' | 'addMcp' | 'skills' | 'skillConfig' | 'configureSkill' | 'inheritSkill' | 'saveConfig'>): MenuRemote {
   const children = new Set<string>()
   let inheritWorkspaceTree = true
   let pluginIsolation = false
   const api: MenuRemote = { ...base,
+    saveConfig: async (scope, id, config) => {
+      const result = await base.list(scope)
+      if (!result.ok) throw new Error(result.error.message)
+      const row = result.value.flatMap(row => row.components ?? [row]).find(row => row.id === id)!
+      return base.configure(scope, id, row.enabled, config, false)
+    },
     addMcp: async () => ({ ok: true, value: 'mcp:test' }),
     skills: async () => ({ ok: true, value: [] }),
     skillConfig: async () => ({ ok: true, value: {} }),

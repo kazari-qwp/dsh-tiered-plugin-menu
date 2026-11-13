@@ -11,6 +11,7 @@ export interface InstalledPlugin {
   owned?: boolean
   id: string
   package: string
+  title?: string
   description: string
   bundle: BundleInfo
   options: EntryOptions
@@ -32,7 +33,8 @@ export function mcpAdapter(id: string, options: EntryOptions, enabled: boolean, 
 
 export async function installedPlugins(ctx: Context): Promise<InstalledPlugin[]> {
   const bundles = await ctx.pluginManager.listBundles()
-  return bundles.filter(bundle => bundle.installed).flatMap(bundle => {
+  return bundles.filter(bundle => bundle.installed || bundle.official && bundle.availability === 'installation'
+    && (bundle.listedByDefault !== false || bundle.enabled)).flatMap(bundle => {
     let metadata: TieredPluginMetadata | undefined
     let peers: string[] = []
     const declared = new Map<string, EntryOptions>()
@@ -45,7 +47,10 @@ export async function installedPlugins(ctx: Context): Promise<InstalledPlugin[]>
       for (const filename of bundlePatchPaths(directory, manifest.dsh.bundle)) {
         const collect = (patches: any[]) => {
           for (const patch of patches) {
-            if (patch.insert) for (const row of patch.insert) declared.set(row.id, row)
+            if (patch.insert) for (const row of patch.insert) {
+              declared.set(row.id, row)
+              if (row.group && Array.isArray(row.config)) collect([{ insert: row.config }])
+            }
             if (patch.config && Array.isArray(patch.config)) collect(patch.config)
           }
         }
@@ -54,9 +59,10 @@ export async function installedPlugins(ctx: Context): Promise<InstalledPlugin[]>
     } catch { /* 元数据不可读仍列出插件，自兼容状态为未验证。 */ }
     const rows = bundle.rows.length ? bundle.rows : [{ rowId: bundle.name, moduleName: bundle.name }]
     const parentId = rows.length === 1 ? rows[0]!.rowId : bundle.name
+    const text = (value: string | Record<string, string> | undefined) => typeof value === 'string' ? value : value?.['zh-CN'] ?? value?.zh ?? value?.en
     return rows.map(row => ({
       id: rows.length === 1 ? parentId : `${bundle.name}#${row.rowId}`,
-      parentId, package: bundle.name, description: bundle.description ?? '', bundle: { ...bundle, rows: [row] },
+      parentId, package: bundle.name, title: text(bundle.meta?.title), description: text(bundle.meta?.description) ?? bundle.description ?? '', bundle: { ...bundle, rows: [row] },
       options: declared.get(row.rowId) ?? { id: row.rowId, name: row.moduleName },
       selfCompatible: metadata?.selfCompatible === true,
       peers,

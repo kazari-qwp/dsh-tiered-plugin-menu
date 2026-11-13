@@ -8,7 +8,7 @@
 
 配置继续保存在 `DSH_HOME/plugins/tiered-plugin-menu.json`。旧界面的自定义 `dataFile` 同样保留。不同 DSH 进程不共享内存中的管理器。
 
-核心版本与界面独立发布。0.9.0 包含 0.8.1 的未启用插件声明配置读取修复。
+核心版本与界面独立发布。1.0.0 加入官方组合包发现、通用服务注册隔离和独立的配置保存接口：关闭时保存待用，启用时应用，运行中保存立即更新；保存不会改变启用状态。保留此前未启用插件的配置读取修复。
 
 MIT License。完整说明见 [项目仓库](https://github.com/kazari-qwp/dsh-tiered-plugin-menu)。
 

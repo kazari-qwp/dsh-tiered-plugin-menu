@@ -38,6 +38,9 @@ export function mountPluginManagement(ctx: Context, directory = resolve('.')) {
     async setBundleEnabled(name: string, enabled: boolean) {
       calls.push({ package: name, enabled })
       selected.set(name, enabled)
+      for (const entry of ctx.loader.entries()) if (entry.parent.tree.store === ctx.loader.store && entry.options.name === name) {
+        await entry.update({ disabled: !enabled })
+      }
       return { changed: true, application: 'applied', stage: 'enable', target: name, enabled }
     },
   } as Context['pluginManager'])

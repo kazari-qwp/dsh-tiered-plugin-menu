@@ -16,6 +16,33 @@ import { clientScope } from '../packages/core/src/shared.ts'
 import { mountWorkspaces } from './workspaces.ts'
 import { mountPluginManagement } from './plugins.ts'
 
+test('官方分类依据宿主元数据：安装自带包与独立安装包均收录，未安装目录和基础设施不收录，保留嵌套默认配置', async () => {
+  const root = resolve(mkdtempSync('work/official-discovery-'))
+  const name = 'official-test-bundle'
+  const dir = join(root, 'node_modules', name)
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'test-profile' }))
+  writeFileSync(join(dir, 'package.json'), JSON.stringify({ name, dsh: { bundle: { patch: './cordis.patch.yml' } } }))
+  writeFileSync(join(dir, 'cordis.patch.yml'), JSON.stringify([{ insert: [{ id: 'group', name: 'cordis:group', group: true,
+    config: [{ id: 'nested', name: 'nested-service', config: { path: ':memory:' } }] }] }]))
+  const base = { name, official: true, availability: 'installation' as const, installed: false, optional: true,
+    enabled: false, removable: false, updatable: false, overrides: [], rows: [{ rowId: 'nested', moduleName: 'nested-service' }],
+    meta: { title: { en: 'Test', zh: '官方测试' } } }
+  const ctx = new Context()
+  try {
+    ctx.provide('profileContext', { dir: root, installAnchor: join(root, 'package.json') } as Context['profileContext'])
+    ctx.provide('pluginManager', { listBundles: async () => [base,
+      { ...base, name: 'absent', availability: 'missing' }, { ...base, name: 'infrastructure', official: false },
+      { ...base, name: 'hidden', listedByDefault: false }, { ...base, name: 'installed-official', availability: 'profile', installed: true },
+    ] } as unknown as Context['pluginManager'])
+    const rows = await installedPlugins(ctx)
+    assert.deepEqual(rows.map(r => r.package), [name, 'installed-official'])
+    assert.equal(rows[0]!.title, '官方测试')
+    assert.deepEqual(rows[0]!.options.config, { path: ':memory:' })
+    assert.equal(rows[0]!.selfCompatible, false)
+  } finally { await ctx.fiber.dispose() }
+})
+
 test('原生插件清单：禁用包仍被发现，自兼容状态只取元数据，自有插件没有特例', async () => {
   mkdirSync('work', { recursive: true })
   const root = resolve(mkdtempSync('work/discovery-'))

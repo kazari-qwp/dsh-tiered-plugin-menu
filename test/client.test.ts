@@ -7,7 +7,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { Context, type Plugin } from '@deepseek-ai/cordis'
 import { captureSettings } from '../packages/web/src/client/capture.ts'
 import { sessionForm } from '../packages/web/src/client/form.ts'
-import { LevelSettings, MenuDialog } from '../packages/web/src/client/menu.tsx'
+import { LevelSettings, MenuDialog, ScopePanel } from '../packages/web/src/client/menu.tsx'
 import type { MenuRemote } from '../packages/core/src/remote-contract.ts'
 import { withChangePlans } from './menu-api.ts'
 import { ContextClient, RegisteredSettings } from '../packages/web/src/client/context-client.tsx'
@@ -20,6 +20,41 @@ function originalClient(): Plugin {
   new Function('window', source)({ __ModuleLoader__: { load: ({ factory }: { factory: (require: NodeJS.Require) => Plugin }) => { plugin = factory(require) } } })
   return plugin
 }
+
+test('官方和普通插件的 JSON 设置：关闭可保存，保存不修改开关', async () => {
+  for (const official of [false, true]) {
+    let row: PluginRow = { id: 'example', name: 'example', package: 'example', description: '',
+      source: clientScope, own: true, enabled: false, active: false, verified: true, official, settings: 'native', config: { count: 1 } }
+    const api = withChangePlans({
+      context: async () => ({ ok: true, value: { workspaces: [], workspaceId: null } }),
+      list: async () => ({ ok: true, value: [row] }),
+      inherit: async () => ({ ok: true, value: undefined }),
+      configure: async (_scope, _id, enabled, config) => { row = { ...row, enabled, config }; return { ok: true, value: undefined } },
+    })
+    let tree!: ReactTestRenderer
+    try {
+      await act(async () => { tree = create(createElement(ScopePanel, { api, scope: clientScope, kind: official ? 'official' : 'plugin',
+        Page: () => null, ui: { Artwork: () => null, openDetails() {} } })) })
+      const button = (text: string) => tree.root.findAllByType('button').find(node => node.children.includes(text))!
+      assert.equal(button('设置').props.disabled, false)
+      await act(async () => button('设置').props.onClick())
+      const save = async (count: number) => {
+        await act(async () => tree.root.findByType('textarea').props.onChange({ target: { value: JSON.stringify({ count }) } }))
+        await act(async () => button('保存设置').props.onClick())
+      }
+      await save(2)
+      assert.equal(row.enabled, false)
+      assert.deepEqual(row.config, { count: 2 })
+      await act(async () => tree.root.findByProps({ 'data-mode': 'on' }).props.onClick())
+      await save(3)
+      assert.equal(row.enabled, true)
+      assert.deepEqual(row.config, { count: 3 })
+      await act(async () => tree.root.findByProps({ 'data-mode': 'off' }).props.onClick())
+      await save(4)
+      assert.equal(row.enabled, false, '之前已打开的表单不恢复旧开关状态')
+    } finally { await act(async () => tree.unmount()) }
+  }
+})
 
 test('复用原设置页：工作区/会话独立入口分别保存，取消覆盖，下级默认配置', { timeout: 10000 }, async () => {
   const ctx = new Context()
@@ -67,6 +102,17 @@ test('复用原设置页：工作区/会话独立入口分别保存，取消覆�
     await act(async () => { button('仍然启用').props.onClick() })
     await saveTemplate('SESSION A')
     assert.equal(saved.get(scopeKey(session))!.config.template, 'SESSION A')
+    await mode('off')
+    assert.equal(button('设置').props.disabled, false, '关闭仍允许编辑')
+    await act(async () => { tree!.root.findByProps({ id: 'temporary-template' }).props.onChange({ target: { value: 'SAVED WHILE OFF' } }) })
+    await act(async () => { await button('保存设置').props.onClick() })
+    assert.equal(saved.get(scopeKey(session))!.enabled, false, '已打开的原生配置页保存不改变关闭状态')
+    assert.equal(saved.get(scopeKey(session))!.config.template, 'SAVED WHILE OFF')
+    await mode('on')
+    await act(async () => { button('仍然启用').props.onClick() })
+    assert.equal(saved.get(scopeKey(session))!.config.template, 'SAVED WHILE OFF', '启用保留已保存的配置')
+    await act(async () => { tree!.root.findByProps({ id: 'temporary-template' }).props.onChange({ target: { value: 'SESSION A' } }) })
+    await act(async () => { await button('保存设置').props.onClick() })
     assert.equal(button('设置').props['aria-expanded'], true)
     await act(async () => { button('设置').props.onClick() })
     assert.equal(tree!.root.findAllByProps({ id: 'temporary-template' }).length, 0)

@@ -26,7 +26,7 @@ export function NativeSettings({ api, row, scope, ui, onSaved }: {
   const [notice, setNotice] = useState('')
   const save = async () => {
     try {
-      value(await api.configure(scope, row.id, true, JSON.parse(text), false))
+      value(await api.saveConfig(scope, row.id, JSON.parse(text)))
       await onSaved()
       setNotice('已保存')
     } catch (error) { setNotice(String(error)) }
@@ -70,7 +70,7 @@ export function ConfirmEnable({ plan, onCancel, onConfirm }: {
   </div>
 }
 
-export function ScopePanel({ api, scope, sessionId = null, Page, ui, disabled = false }: MenuProps & { scope: Scope; sessionId?: string | null; disabled?: boolean }) {
+export function ScopePanel({ api, scope, sessionId = null, Page, ui, disabled = false, kind = 'plugin' }: MenuProps & { scope: Scope; sessionId?: string | null; disabled?: boolean; kind?: 'plugin' | 'official' }) {
   const panelId = useId()
   const [rows, setRows] = useState<PluginRow[]>([])
   const [selected, setSelected] = useState<string | null>(null)
@@ -78,8 +78,8 @@ export function ScopePanel({ api, scope, sessionId = null, Page, ui, disabled = 
   const [pending, setPending] = useState<ChangePlan | null>(null)
   const [details, setDetails] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const refresh = async () => { setRows(value(await api.list(scope)).filter(row => row.kind !== 'mcp')); ui.changed?.() }
-  useEffect(() => { void refresh().catch(error => setNotice(String(error))) }, [api, scopeKey(scope)])
+  const refresh = async () => { setRows(value(await api.list(scope)).filter(row => row.kind !== 'mcp' && !!row.official === (kind === 'official'))); ui.changed?.() }
+  useEffect(() => { void refresh().catch(error => setNotice(String(error))) }, [api, scopeKey(scope), kind])
   const execute = async (plan: ChangePlan) => {
     setBusy(true)
     try {
@@ -112,7 +112,7 @@ export function ScopePanel({ api, scope, sessionId = null, Page, ui, disabled = 
     <ul className="tiered-plugin-list">
       {group.rows.map(item => {
         const mode = item.partial ? 'partial' : !item.own ? 'inherit' : item.enabled ? 'on' : 'off'
-        const expanded = selected === item.id && item.own && item.enabled
+        const expanded = selected === item.id && item.own
         const settingsId = `${panelId}-${item.id}-settings`
         const descriptionId = `${panelId}-${item.id}-description`
         const inheritHint = isClientScope(scope) ? '客户端没有上级'
@@ -135,7 +135,7 @@ export function ScopePanel({ api, scope, sessionId = null, Page, ui, disabled = 
                     void configure(item, option.value)
                   }}>{option.label}</button>)}
               </div>
-              <button type="button" className="tiered-expand" disabled={disabled || !item.components && (!item.own || !item.enabled)}
+              <button type="button" className="tiered-expand" disabled={disabled || !item.components && !item.own}
                 aria-expanded={expanded} aria-controls={settingsId}
                 onClick={() => item.components ? setDetails(item.id) : setSelected(expanded ? null : item.id)}>设置<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7" /></svg></button>
             </div>
@@ -177,7 +177,7 @@ function ChildPanel({ api, scope, Page, ui, kind = 'plugin' }: MenuProps & { sco
     </div>
     {settings && <>
       {!settings.independent && <p className="tiered-hint">{settings.source ? `沿用上级${labels[settings.source.level]}的下级默认设置。` : '沿用本级的有效配置。'}切换为「独立」后可以单独设置。</p>}
-      {kind === 'plugin' ? <ScopePanel key={String(settings.independent)} api={api} scope={childScope(scope)} Page={Page} ui={ui} disabled={!settings.independent || busy} />
+      {kind === 'plugin' || kind === 'official' ? <ScopePanel key={`${kind}-${settings.independent}`} api={api} scope={childScope(scope)} Page={Page} ui={ui} kind={kind} disabled={!settings.independent || busy} />
         : <ResourcePanel key={`${kind}-${settings.independent}`} api={api} scope={childScope(scope)} kind={kind} disabled={!settings.independent || busy} />}
     </>}
     {notice && <p className="tiered-notice" role="status">{notice}</p>}
@@ -194,7 +194,7 @@ export function ScopeTabs(props: MenuProps & { scope: Scope; sessionId?: string 
         onClick={() => setTab(option.value)}>{option.label}</button>)}
     </div>
     <div role="tabpanel" id={`${id}-panel`} aria-labelledby={`${id}-${tab}`}>
-      {tab === 'own' ? props.kind && props.kind !== 'plugin' ? <ResourcePanel key={props.kind} api={props.api} scope={props.scope} kind={props.kind} /> : <ScopePanel {...props} /> : <ChildPanel key={props.kind} {...props} />}
+      {tab === 'own' ? props.kind === 'mcp' || props.kind === 'skill' ? <ResourcePanel key={props.kind} api={props.api} scope={props.scope} kind={props.kind} /> : <ScopePanel {...props} key={props.kind} kind={props.kind} /> : <ChildPanel key={props.kind} {...props} />}
     </div>
   </>
 }
@@ -258,7 +258,7 @@ export function ScopeContent({ api, Page, ui, scope }: MenuProps & { scope: Scop
   return (
       <div className="tiered-resource-layout">
         <div className="tiered-resource-tabs" role="tablist" aria-label="资源类型" aria-orientation="vertical">
-          {([{ kind: 'plugin', label: '插件' }, { kind: 'mcp', label: 'MCP' }, { kind: 'skill', label: 'Skill' }] as const).map(tab =>
+          {([{ kind: 'plugin', label: '插件' }, { kind: 'official', label: '官方插件' }, { kind: 'mcp', label: 'MCP' }, { kind: 'skill', label: 'Skill' }] as const).map(tab =>
             <button type="button" key={tab.kind} role="tab" id={`${id}-${tab.kind}`} aria-selected={kind === tab.kind} aria-controls={`${id}-resources`} onClick={() => setKind(tab.kind)}>{tab.label}</button>)}
         </div>
         <div className="tiered-resource-content" role="tabpanel" id={`${id}-resources`} aria-labelledby={`${id}-${kind}`}>
@@ -286,13 +286,13 @@ export function MenuDialog({ api, Page, ui, target, onClose }: MenuProps & { tar
 }
 
 const styles = `
-.tiered-conversation { padding: 24px; overflow: auto; height: 100%; box-sizing: border-box; }
+.tiered-conversation { display: flex; flex-direction: column; padding: 24px; overflow: hidden; height: 100%; box-sizing: border-box; }
 .tiered-menu { color: var(--dsw-alias-label-primary, #ededee); font: inherit; line-height: 1.6; }
-.tiered-menu .tiered-resource-layout { display: flex; gap: 24px; }
-.tiered-menu .tiered-resource-tabs { display: flex; flex-direction: column; gap: 4px; width: 84px; flex-shrink: 0; padding-right: 16px; border-right: 1px solid var(--dsw-alias-border-l3, #ffffff16); }
-.tiered-menu .tiered-resource-tabs button { border: 0; border-radius: 7px; background: transparent; color: inherit; padding: 8px 12px; text-align: left; }
+.tiered-menu .tiered-resource-layout { display: flex; flex: 1; min-height: 0; gap: 24px; }
+.tiered-menu .tiered-resource-tabs { display: flex; flex-direction: column; gap: 4px; width: 112px; flex-shrink: 0; padding-right: 16px; border-right: 1px solid var(--dsw-alias-border-l3, #ffffff16); }
+.tiered-menu .tiered-resource-tabs button { border: 0; border-radius: 7px; background: transparent; color: inherit; padding: 8px 12px; text-align: left; white-space: nowrap; }
 .tiered-menu .tiered-resource-tabs button[aria-selected="true"] { background: var(--dsw-alias-interactive-bg-hover, #ffffff12); font-weight: 600; }
-.tiered-menu .tiered-resource-content { flex: 1; min-width: 0; }
+.tiered-menu .tiered-resource-content { flex: 1; min-width: 0; min-height: 0; overflow: auto; overscroll-behavior: contain; }
 .tiered-menu .tiered-resource-toolbar { margin: 0 0 14px; }
 .tiered-menu .tiered-resource-editor { margin: 12px 0; }
 .tiered-menu .tiered-resource-editor label { display: block; font-size: 13px; }
@@ -355,14 +355,14 @@ const styles = `
 .tiered-menu .tiered-hint { margin: 0 0 12px; }
 .tiered-menu .tiered-notice { margin: 10px 0 0; }
 .tiered-menu .tiered-backdrop { position: fixed; inset: 0; box-sizing: border-box; padding: max(24px, var(--dsh-frame-overlay-top, 24px)) 24px; background: var(--dsw-alias-bg-mask-1, #0008); z-index: 1000; display: flex; align-items: center; justify-content: center; pointer-events: auto; }
-.tiered-menu .tiered-panel { box-sizing: border-box; color: inherit; background: var(--dsw-alias-bg-layer-2, #252527); border: 1px solid var(--dsw-alias-border-l3, #ffffff16); border-radius: var(--dsw-radius-panel, 16px); box-shadow: var(--dsw-elevation-prominent, 0 20px 70px #0005); padding: 24px; width: min(920px, 100%); max-height: 100%; overflow: auto; }
+.tiered-menu .tiered-panel { display: flex; flex-direction: column; box-sizing: border-box; color: inherit; background: var(--dsw-alias-bg-layer-2, #252527); border: 1px solid var(--dsw-alias-border-l3, #ffffff16); border-radius: var(--dsw-radius-panel, 16px); box-shadow: var(--dsw-elevation-prominent, 0 20px 70px #0005); padding: 24px; width: min(920px, 100%); max-height: 100%; overflow: hidden; }
 @media (max-width: 640px) {
-  .tiered-menu .tiered-resource-layout { gap: 12px; }
-  .tiered-menu .tiered-resource-tabs { width: 58px; padding-right: 8px; }
+  .tiered-menu .tiered-resource-layout { flex-direction: column; gap: 12px; }
+  .tiered-menu .tiered-resource-tabs { flex-direction: row; width: auto; padding: 0 0 8px; border-right: 0; border-bottom: 1px solid var(--dsw-alias-border-l3, #ffffff16); }
   .tiered-menu .tiered-resource-tabs button { padding: 8px; }
   .tiered-menu .tiered-panel { padding: 18px; }
   .tiered-menu .tiered-row-head { flex-wrap: wrap; }
-  .tiered-menu .tiered-controls { margin-left: 62px; }
-  .tiered-menu .tiered-card-main { flex-basis: calc(100% - 62px); }
+  .tiered-menu .tiered-controls { margin-left: 0; flex-wrap: wrap; flex-basis: 100%; }
+  .tiered-menu .tiered-card-main { flex-basis: 0; }
 }
 @media (prefers-reduced-motion: reduce) { .tiered-menu .tiered-expand svg { transition: none; } }`

@@ -34,7 +34,7 @@ export function mountMenu(ctx: Context, manager: PluginManager): void {
       options: scopes.slice(state.scopePage * 24, (state.scopePage + 1) * 24).map(item => ({ label: item.label, value: JSON.stringify(item.scope) })), onChange: 'scope' })
     if (scopes.length > 24) children.push(buttons(button('上一组层级', 'scopePage', { value: -1 }), button('下一组层级', 'scopePage', { value: 1 })))
     children.push(buttons(button('本级', 'children', { value: false }), button('下级', 'children', { value: true })))
-    children.push(buttons(...(['plugin', 'mcp', 'skill'] as const).map((value, i) => button(['插件', 'MCP', 'Skill'][i]!, 'kind', { value }))))
+    children.push(buttons(...(['plugin', 'official', 'mcp', 'skill'] as const).map((value, i) => button(['插件', '官方插件', 'MCP', 'Skill'][i]!, 'kind', { value }))))
     if (target.level === 'client' && !target.children) {
       const settings = manager.settings()
       children.push(buttons(button(`工作区树继承：${settings.inheritWorkspaceTree ? '开' : '关'}`, 'tree'),
@@ -71,7 +71,7 @@ export function mountMenu(ctx: Context, manager: PluginManager): void {
       if (!disabled) children.push(buttons(...(['inherit', 'on', 'off'] as const).filter(mode => mode !== 'inherit' || target.level !== 'client' || target.children)
         .map((mode) => button({ inherit: '继承', on: '启用', off: '关闭' }[mode], 'change', { id: row.id, mode }))))
       if ((row as PluginRow).components) children.push(buttons(button('组件', 'components', { id: row.id })))
-      else if (!disabled && row.own && row.enabled) children.push(buttons(button('设置', 'edit', { id: row.id })))
+      else if (!disabled && row.own) children.push(buttons(button('设置', 'edit', { id: row.id })))
     }
     if (!rows.length) children.push(text('此范围没有可配置的项目'))
     children.push(buttons(button('上一页', 'page', { value: -1 }), button(`${state.page + 1} / ${Math.max(1, Math.ceil(rows.length / pageSize))}`, 'refresh'), button('下一页', 'page', { value: 1 })))

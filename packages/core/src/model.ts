@@ -25,7 +25,8 @@ export class MenuModel {
   async rows(): Promise<(PluginRow | SkillRow)[]> {
     const { scope, kind, component } = this.selection
     if (kind === 'skill') return this.manager.skills.rows(scope)
-    const rows = (await this.manager.rows(scope)).filter(row => kind === 'mcp' ? row.kind === 'mcp' : row.kind !== 'mcp')
+    const rows = (await this.manager.rows(scope)).filter(row => kind === 'mcp' ? row.kind === 'mcp'
+      : row.kind !== 'mcp' && !!row.official === (kind === 'official'))
     return component ? rows.find(row => row.id === component)?.components ?? [] : rows
   }
 
@@ -62,9 +63,9 @@ export class MenuModel {
     const config = JSON.parse(text)
     if (!config || typeof config !== 'object' || Array.isArray(config)) throw new Error('配置应为 JSON 对象')
     const row = (await this.rows()).find(row => row.id === id)
-    if (!row?.own || !row.enabled) throw new Error('请先在本级启用，再编辑配置')
-    if (this.selection.kind === 'skill') await this.manager.skills.configure(this.selection.scope, id, true, config)
-    else await this.manager.configure(this.selection.scope, id, true, config, true)
+    if (!row?.own) throw new Error('请先选择本级启用或关闭，再编辑配置')
+    if (this.selection.kind === 'skill') await this.manager.skills.configure(this.selection.scope, id, row.enabled, config)
+    else await this.manager.saveConfig(this.selection.scope, id, config)
   }
 
   async addMcp(text: string): Promise<void> {

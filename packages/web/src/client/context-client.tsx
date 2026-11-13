@@ -23,7 +23,6 @@ export class ContextClient {
   private managed = false
   private clientEnabled = false
   private forms = new Map<string, ReturnType<typeof sessionForm>>()
-  private formRows = new Map<string, PluginRow>()
   private cards = new Map<string, Promise<{ Page: ComponentType; dispose(): unknown }>>()
   private fetch = scopePluginFetch()
 
@@ -79,11 +78,10 @@ export class ContextClient {
 
   private form(row: PluginRow, scope: Scope) {
     const key = `${scopeKey(scope)}/${row.id}`
-    this.formRows.set(key, row)
     let form = this.forms.get(key)
     if (!form) {
       form = sessionForm(row.config, async config => {
-        const result = await this.api.configure(scope, row.id, this.formRows.get(key)!.enabled, config, false)
+        const result = await this.api.saveConfig(scope, row.id, config)
         if (!result.ok) throw new Error(result.error.message)
         void this.refresh().catch(error => this.ctx.logger.error(error))
       })

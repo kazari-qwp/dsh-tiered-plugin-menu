@@ -18,6 +18,7 @@ export interface MenuRemote {
   change(scope: Scope, id: string, mode: ChangeMode, signature: string): Promise<RemoteResult<void>>
   call(scope: Scope, id: string, namespace: string, method: string, args: PluginConfig): Promise<RemoteResult<unknown>>
   inherit(scope: Scope, id: string): Promise<RemoteResult<void>>
+  saveConfig(scope: Scope, id: string, config: PluginConfig): Promise<RemoteResult<void>>
   configure(scope: Scope, id: string, enabled: boolean, config: PluginConfig, confirmed: boolean): Promise<RemoteResult<void>>
 }
 
@@ -56,6 +57,7 @@ export const remoteContribution: TypertRemoteContribution = {
     ['change', [['scope', 'scope'], ['id', 'string'], ['mode', 'string'], ['signature', 'string']]],
     ['call', [['scope', 'scope'], ['id', 'string'], ['namespace', 'string'], ['method', 'string'], ['args', 'config']]],
     ['inherit', [['scope', 'scope'], ['id', 'string']]],
+    ['saveConfig', [['scope', 'scope'], ['id', 'string'], ['config', 'config']]],
     ['configure', [['scope', 'scope'], ['id', 'string'], ['enabled', 'boolean'], ['config', 'config'], ['confirmed', 'boolean']]],
   ].map(([method, parameters]) => ({
     id: `tieredPluginMenu/${method}`, service: 'tieredPluginMenu', namespace: 'tieredPluginMenu', method: method as string,

@@ -11,6 +11,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { McpResourceProvider } from '@deepseek-ai/dsh-mcp-resources'
 import { createScope, type Scope as RegistrationScope } from '@deepseek-ai/dsh-scope'
 import { resourceName } from './resource-names.ts'
+import { scopedSlot } from './scoped-slots.ts'
 
 interface Owner { scope: Scope; accepts(sessionId: string): boolean; applies?(scope: Scope): boolean; configKey(): string }
 interface Contribution<T> { owner: Owner; value: T }
@@ -46,8 +47,6 @@ export class ScopedServices {
   private resources = new Map<string, { entries: Contribution<McpResourceProvider>[]; mounted: Map<Agent, { entry: Contribution<McpResourceProvider>; dispose(): void }> }>()
   private resourceScopes = new Map<Agent, RegistrationScope>()
   private web = new Map<string, { entries: Contribution<any>[]; dispose(): void }>()
-  private titles: Contribution<any>[] = []
-  private removeTitle?: () => void
   private commands = new Map<string, { entries: Contribution<any>[]; mounted: Map<string, Fiber> }>()
   private projections = new Map<string, {
     entries: Contribution<Definition>[]; handle?: ProjectionHandle<ProjectionState>; pending: Promise<void>
@@ -305,20 +304,7 @@ export class ScopedServices {
   }
 
   title(ctx: Context, owner: Owner, value: any) {
-    return ctx.effect(() => {
-      const entry = { owner, value }; this.titles.push(entry)
-      this.removeTitle ??= (this.root.get('sessionTitle') as any).register({ ...value,
-        generate: (request: any) => {
-          const selected = this.pick(this.titles, request.session.id)
-          if (!selected) throw new Error('此会话未启用标题插件')
-          return selected.value.generate(request)
-        },
-      })
-      return () => {
-        this.titles.splice(this.titles.indexOf(entry), 1)
-        if (!this.titles.length) { this.removeTitle!(); this.removeTitle = undefined }
-      }
-    })
+    return scopedSlot(this.root, 'sessionTitle', 'registration').register(ctx, owner, 'register', value)
   }
 
   command(ctx: Context, owner: Owner, value: any) {
@@ -420,9 +406,20 @@ export class ScopedServices {
       group.entries.splice(group.entries.indexOf(entry), 1)
       await this.refreshProjection(value.key)
     })
+    const reads = new WeakMap<Session, { seq: number; value: unknown }>()
     const stateOf = (session: Session) => {
       const state = group.handle?.stateOf(session)
-      return state?.owner === scopeKey(owner.scope) ? state.value : undefined
+      if (state?.owner === scopeKey(owner.scope)) return state.value
+      // A native handle can read any session, including during startup scans.
+      // These reads do not publish a scoped contribution outside its owner.
+      let cached = reads.get(session)
+      if (cached?.seq !== session.seq) {
+        let folded = value.init(session.header, session.inheritedEventCount)
+        for (const event of session.snapshotEvents()) folded = value.apply(folded, event)
+        cached = { seq: session.seq, value: folded }
+        reads.set(session, cached)
+      }
+      return cached!.value
     }
     const handle = { dispose: async () => { await dispose() }, stateOf, readerFor: (session: Session) => () => stateOf(session) }
     // DSH 同时支持旧式 disposer 和 await 后取得的 reader handle。
@@ -518,7 +515,7 @@ export class ScopedServices {
     return ctx.plugin((child: Context) => {
       for (const [name, Factory] of [
         ['systemPrompt', PromptFacade], ['sessionProjections', ProjectionFacade], ['sessionProjectionCache', ProjectionCacheFacade], ['connection', ConnectionFacade],
-        ['tools', ToolsFacade], ['webServer', WebFacade], ['sessionTitle', TitleFacade],
+        ['tools', ToolsFacade], ['webServer', WebFacade], ['sessionTitle', TitleFacade], ['permissionPresets', PermissionFacade],
         ['commands', CommandsFacade], ['skills', SkillsFacade], ['mcpResources', McpResourcesFacade],
       ] as const) {
         child.effect(() => broker.root.inject([name], async () => {
@@ -575,6 +572,11 @@ class TitleFacade extends Service {
   generate(...args: any[]) { return (this.root.get('sessionTitle') as any).generate(...args) }
 }
 
+class PermissionFacade extends Service {
+  constructor(ctx: Context, private broker: ScopedServices, private owner: Owner, private root: Context) { super(ctx, 'permissionPresets'); forwardService(this, root, 'permissionPresets') }
+  registerAuto(admit: () => void) { return scopedSlot(this.root, 'permissionPresets', 'autoAdmit').register(this.ctx, this.owner, 'registerAuto', admit) }
+}
+
 class PromptFacade extends Service {
   constructor(ctx: Context, private broker: ScopedServices, private owner: Owner, private root: Context) { super(ctx, 'systemPrompt') }
   section(value: PromptSection) { return this.broker.prompt(this.ctx, this.owner, 'section', value) }
@@ -616,4 +618,4 @@ class ConnectionFacade extends Service {
   get rpc() { return (this.root.get('connection') as Context['connection']).rpc }
 }
 
-export const scopedServiceNames = ['systemPrompt', 'sessionProjections', 'sessionProjectionCache', 'connection', 'tools', 'webServer', 'sessionTitle', 'commands', 'skills', 'mcpResources'] as const
+export const scopedServiceNames = ['systemPrompt', 'sessionProjections', 'sessionProjectionCache', 'connection', 'tools', 'webServer', 'sessionTitle', 'permissionPresets', 'commands', 'skills', 'mcpResources'] as const

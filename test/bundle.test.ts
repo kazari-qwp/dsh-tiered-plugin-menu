@@ -65,7 +65,7 @@ test('打包客户端：侧栏按钮绑定正确层级，点击不切换行，�
     await ctx.plugin(TypertRegistry)
     installConnection(ctx, { interactions: 'none', transport: { rpc: {
       async call(_channel, endpoint, payload) {
-        if (endpoint.endsWith('/configure')) {
+        if (endpoint.endsWith('/saveConfig')) {
           configured.push((payload as { args: { scope: Scope } }).args.scope)
           return { ok: true, value: undefined }
         }
