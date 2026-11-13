@@ -11,13 +11,14 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import * as temporary from 'dsh-temporary-messages'
 import { acquireCore } from '../packages/core/src/index.ts'
 import * as core from '../packages/core/src/index.ts'
+import * as coreHost from '../packages/core/src/host.ts'
 import { attachRoute } from '../packages/core/src/routing.ts'
 import { MenuModel } from '../packages/core/src/model.ts'
 import { installNativeRouting } from '../packages/dsh-go/src/routing.ts'
 import { mountWorkspaces } from './workspaces.ts'
 import { mountPluginManagement } from './plugins.ts'
 
-test('显式核心组件独立持有后端：界面关闭不释放它，核心重开无旧引用', async () => {
+test('显式核心供多个界面租用：不调用根挂载，核心更新后重新连接', async () => {
   mkdirSync('work', { recursive: true })
   const dataFile = resolve(mkdtempSync('work/core-owner-'), 'settings.json')
   const ctx = new Context()
@@ -31,18 +32,34 @@ test('显式核心组件独立持有后端：界面关闭不释放它，核心�
     await ctx.loader.await()
     mountPluginManagement(ctx)
     await mountAgentLoopTestHarness(ctx)
-    const owner = await ctx.plugin(core, { dataFile })
-    const manager = ctx.tieredPlugins
-    const frontend = await ctx.plugin({ inject: ['tieredPlugins'], async apply(child: Context) {
-      assert.equal(await acquireCore(child), manager)
+    const owner = await ctx.plugin(coreHost, { dataFile })
+    const plugin = ctx.plugin
+    // TUI rejects root capabilities from plugin apply. The declared host must
+    // own the backend beneath its own Context, including after an update.
+    Object.defineProperty(ctx, 'plugin', { configurable: true, value: function(this: Context, ...args: any[]) {
+      assert.notEqual(this, ctx, 'plugin activation must not mount on ctx.root')
+      return Reflect.apply(plugin, this, args)
     } })
+    const holders: unknown[] = []
+    const front = { inject: ['tieredCore'], async apply(child: Context) { holders.push(await acquireCore(child)) } }
+    const frontend = await plugin.call(ctx, front)
+    const second = await plugin.call(ctx, front)
+    const manager = ctx.tieredPlugins
+    assert.ok(manager)
+    assert.equal(holders[0], holders[1])
+    manager.setWorkspaceTreeInheritance(false)
     await frontend.dispose(); await frontend.await()
     assert.equal(ctx.tieredPlugins, manager)
     await owner.dispose(); await owner.await()
     assert.equal(ctx.get('tieredPlugins'), undefined)
-    const reopened = await ctx.plugin(core, { dataFile })
+    const reopened = await plugin.call(ctx, coreHost, { dataFile })
+    await second.await()
     assert.notEqual(ctx.tieredPlugins, manager)
     assert.ok(ctx.tieredPlugins)
+    assert.equal(ctx.tieredPlugins.settings().inheritWorkspaceTree, false)
+    await second.dispose(); await second.await()
+    assert.equal(ctx.get('tieredPlugins'), undefined, 'last interface releases the backend')
+    delete (ctx as any).plugin
     await reopened.dispose()
   } finally { await ctx.fiber.dispose() }
 })

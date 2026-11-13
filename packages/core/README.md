@@ -1,22 +1,19 @@
-# DSH 分级管理核心
+# DSH 分级配置共享核心
 
-供 Web、dsh-TUI 和 dsh-go 界面共用的后端组件，负责插件、MCP、Skill 的分级配置、继承、依赖检查与实例生命周期。
+负责插件、MCP、Skill 的分级配置、继承、依赖检查与实例生命周期，供桌面/Web、TUI 和 dsh-go 共用。
 
-Web 和 dsh-go 界面包会依赖并取得此核心。TUI 宿主限制界面插件挂载根组件，需在 profile 中显式启用核心 bundle，再启用 TUI 适配器。同一 DSH 宿主中只运行一份管理核心。最后一个持有者退出时才释放核心；显式核心入口也是持有者，可保持后台运行。
+通常只需安装对应端的菜单包。Web 0.9.0、TUI / dsh-go 0.2.0 会自动把这个核心包登记到 Harness 原生更新器。在「插件」页刷新即可分别检查核心和界面更新；若 Harness 提示重启，请重启后使用新核心。
 
-```ts
-import { acquireCore } from 'dsh-tiered-plugin-core'
-const manager = await acquireCore(ctx)
-```
+核心包的 bundle 负责提供宿主入口，界面包中的核心组件持有使用引用。同一 DSH 进程只有一个运行中的管理器；关闭一个界面不影响其他界面，最后一个界面组件关闭后释放后台实例。再次启用会读取保存的配置。TUI 无需从插件调用 `ctx.root.plugin`。
 
-配置继续保存在 `DSH_HOME/plugins/tiered-plugin-menu.json`。界面间共享数据，但不同 DSH 进程各有自己的运行实例。此包独立发布，兼容修复不要求所有界面包一起发版。
+配置继续保存在 `DSH_HOME/plugins/tiered-plugin-menu.json`。旧界面的自定义 `dataFile` 同样保留。不同 DSH 进程不共享内存中的管理器。
 
-0.8.1 修复未加载插件的声明配置被漏读，导致整个菜单报必填字段缺失的问题。已有安装请完全退出 DSH，执行 `dsh plugin --profile desktop update dsh-tiered-plugin-core --depth 1` 后重启；将 `desktop` 换成实际 profile，并使用相同的 `DSH_HOME`。Web 0.8.0、TUI 0.1.0 和 dsh-go 0.1.0 无须升级界面包。
+核心版本与界面独立发布。0.9.0 包含 0.8.1 的未启用插件声明配置读取修复。
 
 MIT License。完整说明见 [项目仓库](https://github.com/kazari-qwp/dsh-tiered-plugin-menu)。
 
 ## English
 
-Shared backend for per-client, workspace and session plugin, MCP and Skill configuration. Web, TUI and mobile adapters acquire the same manager within one DSH host. The last lease releases it; background instances remain while another adapter or the standalone core is active. Versions are independent. Existing configuration paths are preserved. Separate DSH processes do not share an in-memory manager.
+Shared backend for per-client, workspace and session plugin, MCP and Skill configuration. Install one interface package; Web 0.9.0 and TUI / dsh-go 0.2.0 register the core automatically with Harness's native package manager. Refresh the Plugins page to check core and interface updates independently. Restart when requested by Harness.
 
-0.8.1 reads declared configuration for installed but inactive plugins, preventing missing-required-field errors from blocking the menu. Quit DSH, update the core with the command above using your actual profile and `DSH_HOME`, then restart. Existing Web 0.8.0, TUI 0.1.0 and dsh-go 0.1.0 adapters remain compatible.
+The core bundle provides the host. Interface components acquire leases on it, sharing one manager per DSH process. The last component releases runtime instances while retaining saved settings. Reopening restores configuration. Core activation owns its backend under its own Context, including in TUI's restricted host. Existing configuration paths and custom `dataFile` values are preserved.

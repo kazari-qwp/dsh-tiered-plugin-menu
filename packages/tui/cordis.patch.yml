@@ -1,3 +1,7 @@
 - insert:
+    - id: tiered-plugin-core-tui
+      name: dsh-tiered-plugin-core/component
+      config:
+        service: tieredTui
     - id: tiered-plugin-tui
       name: dsh-tiered-plugin-tui

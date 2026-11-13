@@ -21,16 +21,27 @@ Packages have independent versions. Adapters depend on a compatible core version
 
 All interfaces manage plugins, MCP, Skills and child defaults. Web reuses original settings components; TUI edits fields and mobile uses JSON forms. See [TUI](packages/tui/README.md), [dsh-go](packages/dsh-go/README.md) and [architecture/testing](docs/COMPONENTS.md). Live tests cover TUI/Web in an isolated VM and the official Android APK connected to that VM, including UI operations and full cold starts. See [screenshots and coverage](docs/LIVE_UI_TESTING.md).
 
-### TUI installation: enable the core as well
+### Install one package for your interface
 
-For TUI 0.1.0, run both commands against the **same DSH profile used by TUI**, core first. Replace `<profile>` with your actual profile name:
+| Interface | Package |
+| --- | --- |
+| Desktop / Web | `dsh-tiered-plugin-menu` |
+| dsh-TUI | `dsh-tiered-plugin-tui` |
+| dsh-go | `dsh-tiered-plugin-go` |
+
+Starting with Web 0.9.0 and TUI / dsh-go 0.2.0, each interface bundle declares a core component and an interface component. It automatically registers and enables the shared core through Harness package management. No separate core installation is required.
 
 ```sh
-dsh plugin --profile <profile> add dsh-tiered-plugin-core
 dsh plugin --profile <profile> add dsh-tiered-plugin-tui
 ```
 
-Fully restart TUI and its DSH backend, then open **分级配置** in the sidebar panel picker. The first command installs and enables the core bundle in that profile. Installing the npm dependency alone does not enable its DSH entry. For manually configured profiles, retain existing bundles and include both packages in `dsh.profile.bundles`, core before TUI. Web installation is unchanged and does not require this extra core activation. See [TUI usage](packages/tui/README.md).
+Use the profile actually used by your interface. Restart when Harness requests it, then open **分级配置** in TUI's sidebar panel picker.
+
+### Update in Harness
+
+Click **Refresh** on the Plugins page, then update the package you want. Core and interface versions are managed separately. The interface's **Component versions** section links to core management.
+
+Registry-installed 0.7.1 can upgrade directly to 0.9.0. One interface update adds core management automatically and preserves existing settings, including custom `dataFile` paths. Harness may require a restart after changing package locations. Later core fixes do not require an interface release. Local `.tgz` installs remain subject to Harness's local-source update limitations. [Upgrade verification](docs/COMPONENT_UPDATES.md).
 
 ## MCP and skills
 
@@ -76,13 +87,7 @@ Prebuilt `.tgz` packages are also available from [Releases](https://github.com/k
 
 For Web, use your profile name (usually `web`). Restart DSH if hot reload is disabled. No companion plugin is required.
 
-**Core 0.8.1:** fixes menu validation errors such as `id missing required value` when an installed but inactive plugin declares required configuration. Only `dsh-tiered-plugin-core` changes; Web 0.8.0, TUI 0.1.0 and dsh-go 0.1.0 remain compatible. New installs resolve the fix within their dependency range. Existing lockfiles may retain an older core; fully quit DSH, then run:
-
-```sh
-dsh plugin --profile desktop update dsh-tiered-plugin-core --depth 1
-```
-
-Replace `desktop` with the actual profile name and use the same `DSH_HOME`, then restart DSH. This updates the dependency without re-enabling or reconfiguring an interface package. [Reproduction and verification](docs/CORE_0.8.1.md).
+The new core includes the inactive-plugin configuration fix from 0.8.1. See the [0.8.1 regression report](docs/CORE_0.8.1.md).
 
 The release includes compiled host/browser code, the bundle patch and licenses. It needs no install-time build script. A GitHub source checkout must be built first; use the release tarball for installation. This follows the [official DSH packaging guide](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/develop/basic/publish.md).
 
@@ -94,7 +99,7 @@ The release includes compiled host/browser code, the bundle patch and licenses. 
 - **Settings** expands the original plugin configuration cards when available, with a JSON editor as fallback. Cards from both Settings and plugin details are shown separately, divided by a line.
 - Disabling a scope blocks the inherited instance. An explicitly enabled child can still override a disabled parent.
 - Client scope uses the original DSH entries and native switches; lower scopes create separate instances. The optional experimental isolation switch also gives client entries private environments. Leaving a view does not stop background agents.
-- Closing an interface removes its UI. The last interface or standalone core releases lower-scope instances and endpoints, retaining saved settings. The original frontend is restored only for plugins enabled at client scope.
+- Closing an interface removes its UI. The last interface component releases lower-scope instances and endpoints, retaining saved settings. The original frontend is restored only for plugins enabled at client scope.
 - Choosing another session changes the active frontend binding; visiting Insights or Settings keeps that binding.
 - Updating an installed plugin replaces its scoped frontend and open configuration cards after DSH finishes reloading its module and CSS, keeping the selected session and its settings.
 

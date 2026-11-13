@@ -19,22 +19,33 @@
 | `dsh-tiered-plugin-tui` | 终端侧栏面板；使用 TUI 宿主 React 与对话框 |
 | `dsh-tiered-plugin-go` | dsh-go 原生菜单，并按会话转发其他原生插件的界面注册 |
 
-**挂在同一 DSH 宿主的界面共用一份核心和实例。** 关闭其中一个不会影响其他界面或后台任务；最后一个持有者退出才释放核心。分别启动的 DSH 进程各有自己的运行实例，不能仅靠共用文件夹实现内存共享。
+**挂在同一 DSH 宿主的界面共用一份核心和实例。** 关闭其中一个不会影响其他界面或后台任务；最后一个界面组件退出才释放运行中的管理器，核心宿主入口可以留待下次使用。分别启动的 DSH 进程各有自己的运行实例，不能仅靠共用文件夹实现内存共享。
 
 三端都提供插件 / MCP / Skill、本级 / 下级默认、继承 / 启用 / 关闭和配置编辑。桌面继续复用插件原设置页；TUI 逐字段编辑，手机使用 JSON 表单。详见 [TUI](packages/tui/README.md)、[dsh-go](packages/dsh-go/README.md) 和 [架构与验证](docs/COMPONENTS.md)。已验证隔离虚拟机中的实际 TUI/Web，以及连接虚拟机后端的 Android 官方 APK；包括界面操作和完整冷启动，见 [测试截图与范围](docs/LIVE_UI_TESTING.md)。
 
-### TUI 安装：需要同时启用核心
+### 只安装对应端的一个包
 
-TUI 0.1.0 需要在 **TUI 实际使用的同一个 DSH profile** 中执行下面两条命令，先核心、后界面。把 `<profile>` 换成你的 profile 名称（不要原样输入尖括号）：
+| 使用的客户端 | 安装包 |
+| --- | --- |
+| 桌面 / Web | `dsh-tiered-plugin-menu` |
+| dsh-TUI | `dsh-tiered-plugin-tui` |
+| dsh-go | `dsh-tiered-plugin-go` |
+
+从 Web 0.9.0、TUI / dsh-go 0.2.0 起，每个界面包都声明「共享核心组件 + 界面组件」，并自动把核心登记到 Harness 原生包管理器。**不需要再手动安装或启用核心。** 多个界面仍共用一个核心。
+
+TUI 示例（把 `<profile>` 换成实际 profile 名称）：
 
 ```sh
-dsh plugin --profile <profile> add dsh-tiered-plugin-core
 dsh plugin --profile <profile> add dsh-tiered-plugin-tui
 ```
 
-随后完全退出并重新启动 TUI 和它的 DSH 后端，在侧栏面板选择器中打开「分级配置」。这里的“启用核心 bundle”就是第一条 `dsh plugin add`：它既安装包，也将核心入口加入该 profile。只执行 `npm install`，或只添加 TUI 包，虽然会下载核心依赖，却不会启用核心入口。
+核心登记或更新后，如果 Harness 提示重启，请重启后使用。TUI 重启后在侧栏面板选择器打开「分级配置」。
 
-如果已手动配置 profile，请保留其他 bundle，并确保 `dsh.profile.bundles` 包含 `dsh-tiered-plugin-core` 和 `dsh-tiered-plugin-tui`，核心排在 TUI 之前。Web 的原安装命令不变，无须额外执行上述核心安装步骤。详见 [TUI 使用说明](packages/tui/README.md)。
+### 在 Harness 中更新
+
+在「插件」页点 **刷新**，选择需要更新的包。核心和界面各有自己的版本和更新入口；界面详情页的「组件版本」列出两者，可跳转管理核心。
+
+npm 来源的 0.7.1 可以直接更新到 0.9.0：更新一次界面包会自动补齐核心登记，原有设置和自定义 `dataFile` 路径保留。首次迁移可能需要重启，这是 Harness 的包路径切换要求；不是重新安装或重新配置。后续只修核心时，不必再升级界面包。本地 `.tgz` 来源仍按 Harness 的本地安装方式处理，不保证自动检查更新。[升级验证记录](docs/COMPONENT_UPDATES.md)。
 
 ## 按钮位置
 
@@ -69,13 +80,7 @@ dsh plugin --profile desktop add dsh-tiered-plugin-menu
 
 Web 版换成自己的 profile 名称，通常是 `web`。未开启热重载时重启 DSH。不需要预先安装临时消息等其他插件。
 
-**核心 0.8.1：** 修复已安装但未启用的插件声明了必填配置时，打开菜单报 `id missing required value` 等校验错误的问题。此修复只更新 `dsh-tiered-plugin-core`；Web 0.8.0、TUI 0.1.0 和 dsh-go 0.1.0 均可继续使用。新安装会按依赖范围获取修复；已有安装可能锁定旧核心，请完全退出 DSH，在实际使用的 profile 上执行：
-
-```sh
-dsh plugin --profile desktop update dsh-tiered-plugin-core --depth 1
-```
-
-将 `desktop` 换成实际 profile 名称，并确保使用同一个 `DSH_HOME`。完成后重启 DSH；此命令更新依赖，不需要重新启用或重设界面插件。[复现与验证](docs/CORE_0.8.1.md)。
+核心 0.8.1 中针对未启用插件必填配置的修复已包含在新核心中。旧版用户也可查看 [0.8.1 修复记录](docs/CORE_0.8.1.md)。
 
 发行包包含宿主、浏览器构建产物、bundle patch 与许可，不需要安装时运行构建脚本。GitHub 源码需要先构建，直接安装请使用 Release 的 tarball。这是 [DSH 官方打包教程](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/develop/basic/publish.zh.md)支持的分发方式。
 
@@ -87,7 +92,7 @@ dsh plugin --profile desktop update dsh-tiered-plugin-core --depth 1
 - 「设置」展开原插件的配置卡；没有可复用的配置卡时提供 JSON 编辑器。设置页与详情页都有配置卡时分别显示，中间用横线分隔。
 - 本层关闭后不再执行继承来的实例；下级明确启用仍可覆盖上级关闭。
 - 客户端级使用 DSH 原有入口和开关，下两级创建独立实例；可选的实验性隔离开关也会给客户端入口提供独立环境。离开页面不会卸载后台会话的实例。
-- 关闭界面时移除其界面入口；最后一个界面或独立核心关闭时，释放下级实例与接口，保留持久化配置；再次开启时恢复。只有客户端级原本启用的插件会恢复原生前端。
+- 关闭界面时移除其界面入口；最后一个界面组件关闭时，释放下级实例与接口，保留持久化配置；再次开启时恢复。只有客户端级原本启用的插件会恢复原生前端。
 - 选中另一个会话时切换前端绑定；进入洞察、设置等页面保留当前绑定。
 - 更新已安装插件时，等待 DSH 完成模块与 CSS 重载，再更新下级前端和已打开的配置卡，保留选中的会话及其配置。
 

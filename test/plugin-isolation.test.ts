@@ -186,7 +186,9 @@ test('an installed menu keeps its private helper services out of the host depend
     const directory = path.join(lab, 'node_modules', name)
     fs.mkdirSync(directory, { recursive: true })
     fs.writeFileSync(path.join(directory, 'package.json'), JSON.stringify({ name, version: '1.0.0', type: 'module', main: 'index.js' }))
-    fs.writeFileSync(path.join(directory, 'index.js'), `export function apply(ctx) { ctx.provide('publicValue', 'public'); ctx.isolate('privateValue').provide('privateValue', 'private') }`)
+    fs.writeFileSync(path.join(directory, 'index.js'), name === 'menu-fixture'
+      ? `export * from ${JSON.stringify(pathToFileURL(path.resolve('packages/web/dist/index.js')).href)}`
+      : `export function apply(ctx) { ctx.provide('publicValue', 'public'); ctx.isolate('privateValue').provide('privateValue', 'private') }`)
   }
   fs.writeFileSync(path.join(lab, 'package.json'), JSON.stringify({ name: 'test-profile', dependencies: { 'menu-fixture': '*', 'service-fixture': '*' } }))
   const dataFile = path.join(lab, 'menu.json')
@@ -205,6 +207,8 @@ test('an installed menu keeps its private helper services out of the host depend
     const names = ['tools', 'sessions', 'systemPrompt', 'sessionProjections', 'typert'] as const
     const labels = names.map(name => ctx[Context.isolate][name])
     const first = (await ctx.agents.create({ sessionId: SessionId('already-open') })).agent
+    // The interface is now a separate component; the core owns its services.
+    await ctx.plugin(menu, { dataFile })
     // The menu must appear in the installed package inventory, as it does in DSH.
     await ctx.loader.root.update([
       { id: 'menu-fixture', name: 'menu-fixture', config: { dataFile } },

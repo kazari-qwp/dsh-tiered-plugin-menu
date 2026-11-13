@@ -1,14 +1,14 @@
 import type { Context } from '@deepseek-ai/cordis'
-import { acquireCore } from 'dsh-tiered-plugin-core'
 import { installNativeRouting } from './routing.ts'
 import { mountMenu } from './menu.ts'
 
-export { Config, inject, tieredManagerFrontend } from 'dsh-tiered-plugin-core'
+export { Config, tieredManagerFrontend } from 'dsh-tiered-plugin-core'
+export const inject: string[] = []
 export const name = 'tiered-plugin-go'
-export async function apply(ctx: Context, config: { dataFile?: string }): Promise<void> {
-  const manager = await acquireCore(ctx, config)
-  await manager.adaptService('dshGo', installNativeRouting)
-  ctx.inject(['dshGo'], child => {
+export async function apply(ctx: Context): Promise<void> {
+  ctx.inject(['tieredPlugins', 'tieredGo', 'dshGo'], async child => {
+    const manager = child.tieredPlugins
+    await manager.adaptService('dshGo', installNativeRouting)
     mountMenu(child, manager)
   })
 }

@@ -16,7 +16,12 @@ export const tieredManagerFrontend = true
 export const inject = ['agents', 'sessions', 'loader', 'typert', 'workspaceRegistry', 'pluginManager', 'profileContext', 'configEditor']
 export const Config = z.object({ dataFile: z.string() })
 
-declare module '@deepseek-ai/cordis' { interface Context { tieredPlugins: PluginManager } }
+declare module '@deepseek-ai/cordis' {
+  interface Context {
+    tieredPlugins: PluginManager
+    tieredCore: { acquire(ctx: Context, config?: { dataFile?: string }): Promise<PluginManager> }
+  }
+}
 
 class MenuService extends TypertRemoteService {
   static inject = ['tieredPlugins']
@@ -66,6 +71,8 @@ const hostKey = Symbol.for('dsh-tiered-plugin-core.hosts.v1')
 const globalHosts = globalThis as typeof globalThis & { [hostKey]?: WeakMap<Context, HostLease> }
 const hosts = globalHosts[hostKey] ??= new WeakMap<Context, HostLease>()
 export async function acquireCore(ctx: Context, config: { dataFile?: string } = {}): Promise<PluginManager> {
+  const core = ctx.get('tieredCore')
+  if (core) return core.acquire(ctx, config)
   return acquire(ctx, config, ctx.root)
 }
 
@@ -97,7 +104,13 @@ async function acquire(ctx: Context, config: { dataFile?: string }, owner: Conte
 }
 
 export async function apply(ctx: Context, config: { dataFile?: string } = {}): Promise<void> {
-  // A declared core entry owns its backend directly. Restricted UI hosts can
-  // consume this service without asking a UI plugin to mutate the root.
   await acquire(ctx, config, ctx)
+}
+
+export function applyHost(ctx: Context, config: { dataFile?: string } = {}): void {
+  // The host owns the backend; interface components hold leases. This also
+  // works in TUI, where plugins cannot mount children directly on ctx.root.
+  ctx.provide('tieredCore', {
+    acquire: (consumer, local = {}) => acquire(consumer, { dataFile: config.dataFile ?? local.dataFile }, ctx),
+  })
 }

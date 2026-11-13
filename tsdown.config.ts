@@ -2,7 +2,7 @@ import { defineConfig } from 'tsdown'
 
 export default defineConfig([
   {
-    entry: { index: 'packages/core/src/index.ts', shared: 'packages/core/src/shared.ts', 'remote-contract': 'packages/core/src/remote-contract.ts', model: 'packages/core/src/model.ts', isolation: 'packages/core/src/isolation.ts' }, outDir: 'packages/core/dist',
+    entry: { index: 'packages/core/src/index.ts', host: 'packages/core/src/host.ts', component: 'packages/core/src/component.ts', shared: 'packages/core/src/shared.ts', 'remote-contract': 'packages/core/src/remote-contract.ts', model: 'packages/core/src/model.ts', isolation: 'packages/core/src/isolation.ts' }, outDir: 'packages/core/dist',
     format: 'esm', platform: 'node', target: 'es2023',
     dts: true, sourcemap: true, clean: true, fixedExtension: false,
     deps: { onlyBundle: ['zod'], neverBundle: [/^@deepseek-ai\//] },

@@ -42,7 +42,8 @@ test('原生插件清单：禁用包仍被发现，自兼容状态只取元数�
     })
     await ctx.plugin(NativePluginManager)
     const found = await installedPlugins(ctx)
-    assert.deepEqual(found.map(plugin => plugin.package).sort(), packages.sort())
+    assert.deepEqual([...new Set(found.map(plugin => plugin.package))].sort(), packages.sort())
+    assert.equal(found.filter(plugin => plugin.package === 'dsh-tiered-plugin-menu').length, 2)
     for (const name of ['dsh-temporary-messages', 'dsh-context', 'dsh-tiered-plugin-menu']) {
       assert.equal(found.find(plugin => plugin.package === name)!.selfCompatible, false)
     }

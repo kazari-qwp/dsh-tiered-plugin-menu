@@ -2,22 +2,17 @@
 
 dsh-TUI 的终端菜单，使用 `dsh-tiered-plugin-core` 管理客户端、工作区、会话及下级默认配置。只适用于 TUI 的 DSH 后端。与 Web、dsh-go 挂在同一 DSH 宿主时，共用核心和插件实例。
 
-在 TUI 的 DSH profile 中同时启用 `dsh-tiered-plugin-core` 和 `dsh-tiered-plugin-tui` 两个 bundle，核心放在 TUI 之前。npm 依赖会安装核心文件，但不等于启用其 DSH 入口。随后在侧栏面板选择器中打开“分级配置”。使用宿主 React、公共面板接口和对话框，不附带另一套终端渲染器。
+## 安装
 
-### TUI 安装：需要同时启用核心
-
-TUI 0.1.0 需要在 **TUI 实际使用的同一个 DSH profile** 中执行下面两条命令，先核心、后界面。把 `<profile>` 换成你的 profile 名称（不要原样输入尖括号）：
+0.2.0 起只需在 TUI 使用的 DSH profile 中安装一个包：
 
 ```sh
-dsh plugin --profile <profile> add dsh-tiered-plugin-core
 dsh plugin --profile <profile> add dsh-tiered-plugin-tui
 ```
 
-随后完全退出并重新启动 TUI 和它的 DSH 后端，在侧栏面板选择器中打开「分级配置」。这里的“启用核心 bundle”就是第一条 `dsh plugin add`：它既安装包，也将核心入口加入该 profile。只执行 `npm install`，或只添加 TUI 包，虽然会下载核心依赖，却不会启用核心入口。
+把 `<profile>` 换成实际名称。共享核心组件随包声明，并自动登记到 Harness 的包管理器；不再需要 0.1.0 的第二条核心安装命令。按照提示重启后，在侧栏面板选择器打开「分级配置」。
 
-如果已手动配置 profile，请保留其他 bundle，并确保 `dsh.profile.bundles` 包含 `dsh-tiered-plugin-core` 和 `dsh-tiered-plugin-tui`，核心排在 TUI 之前。Web 的原安装命令不变，无须额外执行上述核心安装步骤。
-
-TUI 禁止界面插件通过 `ctx.root.plugin` 挂载其他组件，因此由显式核心入口持有后端；TUI 面板等待 `tieredPlugins` 服务就绪。Web 同时打开时使用这同一份核心。
+核心和界面分别显示版本、分别检查更新。Web 同时连接同一宿主时，两个界面共用核心和后台实例。核心在自己的 Context 内挂载后端，遵守 TUI 的根能力限制。
 
 | 按键 | 操作 |
 | --- | --- |
@@ -39,16 +34,8 @@ MIT License。
 
 ## English
 
-### TUI installation: enable the core as well
+From 0.2.0, install only `dsh-tiered-plugin-tui` in the DSH profile used by TUI. The bundle includes a core component and automatically registers the shared host through native package management. The extra core installation required by 0.1.0 is no longer needed. Restart if requested, then open **分级配置** in the sidebar panel picker.
 
-For TUI 0.1.0, run both commands against the **same DSH profile used by TUI**, core first. Replace `<profile>` with your actual profile name:
+Core and interface versions update independently. Interfaces on the same DSH host share one backend. The core mounts beneath its own Context, without using root capabilities from TUI plugin activation. Keys: `1/2/3` resource type, `l` scope, `c` own/child defaults, `d` independent defaults, Enter state, `e` edit a JSON field, `g` manager settings. Long fields and third-party Web settings components should be edited in Web.
 
-```sh
-dsh plugin --profile <profile> add dsh-tiered-plugin-core
-dsh plugin --profile <profile> add dsh-tiered-plugin-tui
-```
-
-Fully restart TUI and its DSH backend, then open **分级配置** in the sidebar panel picker. The first command installs and enables the core bundle in that profile. Installing the npm dependency alone does not enable its DSH entry. For manually configured profiles, retain existing bundles and include both packages in `dsh.profile.bundles`, core before TUI. Web installation is unchanged and does not require this extra core activation.
-
-
-A native dsh-TUI panel for the DSH backend. Enable both the core and TUI adapter bundles in the DSH profile, with the core before TUI. The explicit core owns the backend without violating TUI's root-mutation restriction. Open **分级配置** in the sidebar panel picker. `1/2/3` switches resource type, `l` selects scope, `c` selects own/child defaults, `d` toggles independent defaults, Enter changes state, `e` edits a JSON field, and `g` opens manager options. Long fields must be edited through Web; third-party Web settings components are not rendered in a terminal. Live VM testing used dsh-TUI 0.19.0 with DSH rc.1, including bidirectional Web/TUI configuration sharing. This upstream TUI release does not declare rc.2 support.
+The earlier live UI verification used dsh-TUI 0.19.0 with DSH rc.1; that upstream TUI release does not declare rc.2 support. See the repository's validation reports for the tested versions.

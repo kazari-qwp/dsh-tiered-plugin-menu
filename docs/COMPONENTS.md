@@ -1,21 +1,27 @@
 # 多界面组件架构
 
-原包已拆为四个 npm workspace；以下组件已发布。
+原包拆为四个 npm workspace，按组件分别版本化。
 
 ```text
-packages/core     dsh-tiered-plugin-core       0.8.0
-packages/web      dsh-tiered-plugin-menu       0.8.0
-packages/tui      dsh-tiered-plugin-tui        0.1.0
-packages/dsh-go   dsh-tiered-plugin-go         0.1.0
+packages/core     dsh-tiered-plugin-core       0.9.0
+packages/web      dsh-tiered-plugin-menu       0.9.0
+packages/tui      dsh-tiered-plugin-tui        0.2.0
+packages/dsh-go   dsh-tiered-plugin-go         0.2.0
 ```
 
-三个界面都依赖 `dsh-tiered-plugin-core: ^0.8.0`。后端从构建产物外部导入核心，未把它打成三份副本。浏览器只打包可在浏览器运行的类型/协议辅助代码；TUI 使用宿主 React，dsh-go 输出原生 JSON 组件。
+三个界面都依赖 `dsh-tiered-plugin-core: ^0.9.0`。后端从构建产物外部导入核心，未把它打成三份副本。浏览器只打包可在浏览器运行的类型/协议辅助代码；TUI 使用宿主 React，dsh-go 输出原生 JSON 组件。
 
 ## 同宿主共享
 
-界面调用 `acquireCore(ctx, config)` 取得管理器。共享状态以 DSH 根 Context 为键，每个界面持有一个引用。关闭单个界面不影响其他界面和后台实例；最后一个引用释放后关闭核心。最后一次释放与新界面打开交错时，新界面等待旧核心完成释放。
+每个界面 bundle 声明两行：`dsh-tiered-plugin-core/component` 和自身界面。各端核心组件的行 ID 不同，可单独卸载或更新某个界面而不误删另一端的核心引用。
 
-TUI 的实际宿主禁止插件通过 `ctx.root.plugin` 新建根组件。在 TUI profile 中显式启用 `dsh-tiered-plugin-core` bundle，由核心在自己的 Context 内挂载后端；TUI 适配器声明依赖 `tieredPlugins`，等待核心就绪。显式核心入口本身也持有引用，关闭所有界面后仍可保留后端。npm 安装依赖文件不会自动启用这一 bundle。
+共享核心的独立 bundle 声明 `dsh-tiered-plugin-core/host`，提供 `tieredCore` 服务。界面中的核心组件向它取得使用引用；后端挂在核心宿主的 Context 下。多个引用共用一个管理器，最后一个引用释放时回收后台实例。核心更新时，依赖它的引用自动释放并在新宿主出现后重新连接。TUI 无需使用禁止的根节点挂载能力。
+
+第一次启用界面组件时，通过官方 `pluginManager.installBundle` 自动将核心登记为 profile 的直接依赖并启用。仅有 npm 间接依赖不会出现在原生更新列表中。在客户端安装过程中，登记等到 `plugin-manager/operation` 的完成事件再执行，避免继承 HMR 的异步事务上下文而触发嵌套事务错误。
+
+核心的宿主行不重复声明在界面 bundle 中：DSH 更新前会卸载目标包，如果同一行仍被另一个 bundle 持有，会拒绝更新并报 `bundle-in-use`。当前的宿主与引用组件分工避免了这个问题。
+
+原有 `acquireCore()` 和直接挂载核心的入口继续保留。新界面使用声明的组件，不需要自行挂载后端。
 
 依赖树中出现两份兼容核心时，也通过版本化的全局符号共享同一个管理器和路由归属标记。此约定用于兼容的 API，未来破坏性更改需要新协议标识和明确迁移。
 
@@ -48,10 +54,12 @@ npm run pack -- core
 npm version patch --workspace dsh-tiered-plugin-core --no-git-tag-version
 npm run check
 npm run pack -- core
-# 人工核对 tarball 后发布该核心包，并使用 core/v0.8.x 标签
+# 人工核对 tarball 后发布该核心包，并使用 core-v<version> 标签
 ```
 
-Web、TUI、Go 使用各自版本与标签：`web/v…`、`tui/v…`、`go/v…`。不批量提升未改动的界面版本。核心兼容更新无需重发界面，但已有安装仍须通过包管理器更新依赖并重启宿主；锁文件不会因发布自动变化。
+主安装 Release 使用 `v<web-version>`，附件列出各端自身版本；核心独立 Release 使用 `core-v<version>` 并标为「组件更新」，不设为 Latest。主安装 Release 保持 Latest，避免把核心包误认为完整界面安装包。不批量提升未改动的界面版本。已有用户在 Harness 刷新检查更新，并按宿主提示重启。
+
+本次从 0.7.1 的原生升级、核心独立更新和多端关闭/重开验证见 [双组件升级验证](COMPONENT_UPDATES.md)。下列 UI 测试是 0.8.0 阶段的历史基线，不能等同于本次重新测试整个终端和 Android 界面。
 
 ## 已完成验证与待测项
 
@@ -84,8 +92,10 @@ node scripts/conformance.mjs --manifest /path/to/this-repo/packages/tui/dsh-plug
 
 ## English
 
-Four independently versioned packages share one backend within a DSH root Context. Adapters hold leases; the last lease disposes the core. Compatible duplicate core installations share the same process-level registry. Separate DSH processes are not merged. Existing settings and data paths are preserved.
+Four independently versioned packages share one backend per DSH process. Each interface bundle declares a core lease component and its interface. The separately managed core bundle provides a host. It owns the backend under its own Context, including in TUI; the last interface lease releases runtime instances. Existing direct-core APIs remain available.
+
+The core registers with native package management after the interface install transaction finishes. This avoids nested HMR transactions and lets the host update the core without removing a row still owned by another bundle. Existing settings and custom paths are preserved. Separate DSH processes are not merged.
 
 The mobile adapter routes public native contributions by session, including live data lifecycles. The TUI adapter uses host React and public panel/dialog services. Neither changes upstream code. Native package-level contribution visibility and bounded editor inputs remain host limitations.
 
-Build with `npm run check`; package all components with `npm run pack`, or only one with `npm run pack -- core`. Publish changed components independently. Existing lockfiles require an explicit dependency update. Official bridge/SDK checks and an isolated real rc.2 runtime passed. Live VM testing additionally covered TUI 0.19.0 on rc.1 and Web sharing that host, with screenshots. TUI needs the standalone core bundle enabled. Live Android 15 emulator checks with the official 1.0.15 APK and a VM SSH backend covered scoped edits, MCP, native Toolbox actions and full cold restoration. Physical phones, local PRoot and the expanded multi-platform plugin matrix remain pending.
+Build with `npm run check`; package all components with `npm run pack`, or only one with `npm run pack -- core`. Publish changed components independently. The core is automatically registered as a direct profile dependency so Harness can update it separately. Native updates may require a restart after package mappings move. Official bridge/SDK checks and an isolated real rc.2 runtime passed. Live VM testing additionally covered TUI 0.19.0 on rc.1 and Web sharing that host, with screenshots. The interface component enables the core host automatically; no extra TUI core installation is required. Live Android 15 emulator checks with the official 1.0.15 APK and a VM SSH backend covered scoped edits, MCP, native Toolbox actions and full cold restoration. Physical phones, local PRoot and the expanded multi-platform plugin matrix remain pending.

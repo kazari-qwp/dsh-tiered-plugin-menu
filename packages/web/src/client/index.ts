@@ -13,6 +13,7 @@ import { createMenuState, MenuOverlay, SessionButton } from './sidebar.tsx'
 import { createElement, useEffect, useState, type ReactElement } from 'react'
 import { ContextClient, ActiveSession, RegisteredSettings } from './context-client.tsx'
 import type { PluginRow, Scope } from 'dsh-tiered-plugin-core/shared'
+import { ComponentVersions } from './component-versions.tsx'
 
 export const inject = ['slots', 'remote']
 
@@ -26,6 +27,12 @@ export async function apply(ctx: Context): Promise<void> {
   const remote = ctx.get('remote') as TypertClientRemote
   const unmount = await remote.$mount(remoteContribution)
   ctx.effect(() => unmount)
+  ctx.inject(['remote.pluginManager', 'pluginNavigation'], child => {
+    child.effect(() => child.slots.inject('plugins.detail.section', () => child.slots.register({
+      name: 'plugins.detail.section', id: 'tiered-plugin-menu.component-versions',
+      inject: () => ({ remote, open: (name: string) => child.pluginNavigation.openBundle(name) }),
+    }, ComponentVersions)))
+  })
   ctx.inject(['remote.tieredPluginMenu', 'pluginNavigation'], child => {
     const api = (child.get('remote') as TypertClientRemote).tieredPluginMenu
     const menu = createMenuState()

@@ -2,7 +2,7 @@
   "manifestVersion": "0.15",
   "id": "kazari-tiered-plugin-menu",
   "name": "分级配置",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "facets": {
     "host": {
       "entry": "dist/index.js",

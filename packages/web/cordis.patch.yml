@@ -1,3 +1,7 @@
 - insert:
+    - id: tiered-plugin-core-web
+      name: dsh-tiered-plugin-core/component
+      config:
+        service: tieredWeb
     - id: tiered-plugin-menu
       name: dsh-tiered-plugin-menu
