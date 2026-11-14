@@ -38,6 +38,7 @@ class MenuService extends TypertRemoteService {
   inheritSkill(scope: Scope, name: string) { return this.ctx.tieredPlugins.skills.inherit(scope, name) }
   childSettings(scope: Scope) { return this.ctx.tieredPlugins.childSettings(scope) }
   setChildSettings(scope: Scope, independent: boolean) { return this.ctx.tieredPlugins.setChildSettings(scope, independent) }
+  resetChildSettings(scope: Scope) { return this.ctx.tieredPlugins.resetChildSettings(scope) }
   plan(scope: Scope, id: string, mode: ChangeMode) { return this.ctx.tieredPlugins.plan(scope, id, mode) }
   change(scope: Scope, id: string, mode: ChangeMode, signature: string) { return this.ctx.tieredPlugins.change(scope, id, mode, signature) }
   call(scope: Scope, id: string, namespace: string, method: string, args: PluginConfig, signal: AbortSignal) {

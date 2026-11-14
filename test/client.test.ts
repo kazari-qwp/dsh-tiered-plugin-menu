@@ -9,6 +9,7 @@ import { captureSettings } from '../packages/web/src/client/capture.ts'
 import { sessionForm } from '../packages/web/src/client/form.ts'
 import { LevelSettings, MenuDialog, ScopePanel } from '../packages/web/src/client/menu.tsx'
 import type { MenuRemote } from '../packages/core/src/remote-contract.ts'
+import { MenuModel } from '../packages/core/src/model.ts'
 import { withChangePlans } from './menu-api.ts'
 import { ContextClient, RegisteredSettings } from '../packages/web/src/client/context-client.tsx'
 import { childScope, clientScope, isClientScope, scopeKey, type PluginRow, type Scope } from '../packages/core/src/shared.ts'
@@ -20,6 +21,40 @@ function originalClient(): Plugin {
   new Function('window', source)({ __ModuleLoader__: { load: ({ factory }: { factory: (require: NodeJS.Require) => Plugin }) => { plugin = factory(require) } } })
   return plugin
 }
+
+test('客户端整包开关跟随官方选择，组件详情保留独立开关，官方变化即时刷新', async () => {
+  let enabled = true
+  const first: PluginRow = { id: 'bundle#first', name: 'first', package: 'bundle', description: '',
+    own: true, source: clientScope, enabled: false, active: false, verified: true, settings: 'native', config: {} }
+  const rows = (): PluginRow[] => [{ ...first, id: 'bundle', name: 'bundle', bundleEnabled: enabled,
+    partial: enabled, components: [first, { ...first, id: 'bundle#second', name: 'second', enabled }] }]
+  const listeners = new Set<() => void>()
+  const ui = { Artwork: () => null, openDetails() {}, subscribe(listener: () => void) {
+    listeners.add(listener); return () => { listeners.delete(listener) }
+  } }
+  const api = { list: async (scope: Scope) => ({ ok: true, value: rows().map(row => scope.children ? { ...row, own: false, bundleEnabled: undefined } : row) }) } as unknown as MenuRemote
+  let tree!: ReactTestRenderer
+  try {
+    await act(async () => { tree = create(createElement(ScopePanel, { api, scope: clientScope, Page: () => null, ui })) })
+    assert.equal(tree.root.findByProps({ 'data-mode': 'on' }).props['aria-pressed'], true)
+    enabled = false
+    await act(async () => { for (const listener of listeners) listener() })
+    assert.equal(tree.root.findByProps({ 'data-mode': 'off' }).props['aria-pressed'], true)
+    enabled = true
+    await act(async () => { for (const listener of listeners) listener() })
+    assert.equal(tree.root.findByProps({ 'data-mode': 'on' }).props['aria-pressed'], true)
+    await act(async () => tree.root.findByProps({ className: 'tiered-card-open' }).props.onClick())
+    const firstSwitch = tree.root.findByProps({ 'aria-label': 'first配置方式' })
+    assert.equal(firstSwitch.findByProps({ 'data-mode': 'off' }).props['aria-pressed'], true)
+    const model = new MenuModel({ rows: async () => rows() } as any, null)
+    assert.equal((await model.rows())[0]!.enabled, true, 'TUI/Go share native bundle selection')
+    model.select({ scope: clientScope, kind: 'plugin', component: 'bundle' })
+    assert.equal((await model.rows())[0]!.enabled, false, 'component view retains its override')
+    await act(async () => { tree.update(createElement(ScopePanel, { key: 'children', api, scope: childScope(clientScope), Page: () => null, ui })) })
+    assert.equal(tree.root.findByProps({ 'data-mode': 'inherit' }).props['aria-pressed'], true, 'inheriting a partially enabled bundle still selects Inherit')
+  } finally { await act(async () => tree.unmount()) }
+  assert.equal(listeners.size, 0)
+})
 
 test('官方和普通插件的 JSON 设置：关闭可保存，保存不修改开关', async () => {
   for (const official of [false, true]) {
@@ -146,14 +181,17 @@ test('复用原设置页：工作区/会话独立入口分别保存，取消覆�
     await act(async () => { button('设置').props.onClick() })
     assert.equal(tree!.root.findByProps({ id: 'temporary-template' }).props.value, 'WORKSPACE ONE')
     await act(async () => { button('下级').props.onClick() })
-    assert.equal(tree!.root.findByProps({ 'aria-label': '下级默认配置方式' }).findAllByType('button')[0]!.props['aria-pressed'], true)
-    assert.equal(tree!.root.findByProps({ 'data-mode': 'on' }).props.disabled, true)
-    await act(async () => { button('独立').props.onClick() })
+    assert.equal(tree!.root.findAllByProps({ 'aria-label': '下级默认配置方式' }).length, 0)
+    assert.equal(tree!.root.findByProps({ 'data-mode': 'on' }).props.disabled, false)
     await mode('on')
     await act(async () => { button('仍然启用').props.onClick() })
     await saveTemplate('NEW SESSIONS ONLY')
     assert.equal(saved.get(scopeKey(childScope(workspace)))!.config.template, 'NEW SESSIONS ONLY')
     assert.equal(saved.get(scopeKey(workspace))!.config.template, 'WORKSPACE ONE')
+    await act(async () => { button('全部重置为继承').props.onClick() })
+    assert.equal(saved.has(scopeKey(childScope(workspace))), false)
+    assert.equal(tree!.root.findByProps({ 'data-mode': 'inherit' }).props['aria-pressed'], true)
+    assert.equal(tree!.root.findByProps({ 'data-mode': 'on' }).props.disabled, false, '重置后仍可直接逐项修改')
     await act(async () => { button('本级').props.onClick() })
     await act(async () => { button('设置').props.onClick() })
     assert.equal(tree!.root.findByProps({ id: 'temporary-template' }).props.value, 'WORKSPACE ONE')
@@ -195,7 +233,7 @@ test('两份配置表修改互不影响', async () => {
   assert.equal(b.getSnapshot().value?.template, 'B')
 })
 
-test('分组和二次确认：取消无写入，确认才启用，客户端不弹确认，自兼容声明统一适用下级', async () => {
+test('分组和二次确认：取消无写入，确认才启用，客户端不弹确认，兼容声明统一适用下级', async () => {
   const calls: { scope: Scope; id: string; confirmed: boolean }[] = []
   const saved = new Set<string>()
   const ui = { Artwork: () => createElement('svg'), openDetails() {} }
@@ -232,7 +270,7 @@ test('分组和二次确认：取消无写入，确认才启用，客户端不�
     await open(workspace)
     assert.equal(tree!.root.findAllByType('ul').length, 2)
     assert.equal(tree!.root.findAllByProps({ className: 'tiered-card-open' })[0]!.children[0], 'declared')
-    assert.equal(tree!.root.findByProps({ role: 'separator' }).findByType('span').children[0], '未验证自兼容性')
+    assert.equal(tree!.root.findByProps({ role: 'separator' }).findByType('span').children[0], '未验证兼容性')
     await enable('temporary')
     assert.equal(tree!.root.findAllByProps({ role: 'alertdialog' }).length, 1)
     assert.equal(calls.length, 0)

@@ -1,7 +1,7 @@
 import type { MenuRemote } from '../packages/core/src/remote-contract.ts'
-import { isClientScope, scopeKey, type ChangePlan } from '../packages/core/src/shared.ts'
+import { childScope, isClientScope, scopeKey, type ChangePlan } from '../packages/core/src/shared.ts'
 
-export function withChangePlans(base: Omit<MenuRemote, 'plan' | 'change' | 'call' | 'childSettings' | 'setChildSettings' | 'settings' | 'setWorkspaceTreeInheritance' | 'setPluginIsolation' | 'addMcp' | 'skills' | 'skillConfig' | 'configureSkill' | 'inheritSkill' | 'saveConfig'>): MenuRemote {
+export function withChangePlans(base: Omit<MenuRemote, 'plan' | 'change' | 'call' | 'childSettings' | 'setChildSettings' | 'resetChildSettings' | 'settings' | 'setWorkspaceTreeInheritance' | 'setPluginIsolation' | 'addMcp' | 'skills' | 'skillConfig' | 'configureSkill' | 'inheritSkill' | 'saveConfig'>): MenuRemote {
   const children = new Set<string>()
   let inheritWorkspaceTree = true
   let pluginIsolation = false
@@ -23,6 +23,14 @@ export function withChangePlans(base: Omit<MenuRemote, 'plan' | 'change' | 'call
     childSettings: async scope => ({ ok: true, value: { independent: children.has(scopeKey(scope)), source: children.has(scopeKey(scope)) ? scope : null } }),
     setChildSettings: async (scope, independent) => {
       independent ? children.add(scopeKey(scope)) : children.delete(scopeKey(scope))
+      return { ok: true, value: undefined }
+    },
+    resetChildSettings: async scope => {
+      const target = childScope(scope)
+      const result = await base.list(target)
+      if (!result.ok) return result
+      for (const row of result.value) await base.inherit(target, row.id)
+      children.delete(scopeKey(scope))
       return { ok: true, value: undefined }
     },
     call: async () => ({ ok: true, value: undefined }),

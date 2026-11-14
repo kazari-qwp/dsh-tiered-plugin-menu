@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useId, useState, type ComponentType } from 'react'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { MenuRemote } from 'dsh-tiered-plugin-core/remote-contract'
-import { childScope, isClientScope, scopeKey, type ChildSettings, type PluginRow, type Scope, type ChangePlan, type ChangeMode, type ResourceKind } from 'dsh-tiered-plugin-core/shared'
+import { childScope, isClientScope, scopeKey, type PluginRow, type Scope, type ChangePlan, type ChangeMode, type ResourceKind } from 'dsh-tiered-plugin-core/shared'
 import { ResourcePanel } from './resources.tsx'
 
 export const labels = { client: '客户端', workspace: '工作区', session: '会话' }
@@ -15,6 +15,7 @@ export interface MenuUi {
   openDetails(packageName: string): void
   Settings?: ComponentType<{ row: PluginRow; scope: Scope }>
   changed?(): void
+  subscribe?(listener: () => void): () => void
 }
 type MenuProps = { api: MenuRemote; Page: PageType; ui: MenuUi }
 export const modes = [{ value: 'inherit', label: '继承' }, { value: 'on', label: '启用' }, { value: 'off', label: '关闭' }] as const
@@ -56,11 +57,11 @@ export function ConfirmEnable({ plan, onCancel, onConfirm }: {
     }
   }}>
     <section className="tiered-confirm" role="alertdialog" aria-modal="true" aria-labelledby={`${id}-title`} aria-describedby={`${id}-body`}>
-      <h3 id={`${id}-title`}>{plan.dependencies.length ? plan.dependencies.some(item => item.mode === 'on') ? '需要启用依赖组件' : '需要先关闭依赖它的组件' : '启用未验证自兼容性的插件？'}</h3>
+      <h3 id={`${id}-title`}>{plan.dependencies.length ? plan.dependencies.some(item => item.mode === 'on') ? '需要启用依赖组件' : '需要先关闭依赖它的组件' : '启用未验证兼容性的插件？'}</h3>
       <div id={`${id}-body`}>
         {plan.dependencies.length > 0 && <><p>{plan.dependencies.some(item => item.mode === 'on') ? '继续启用需要同时启用：' : '仍有以下组件依赖它，必须先关闭：'}</p>
           <ul>{plan.dependencies.map(item => <li key={`${scopeKey(item.scope)}/${item.id}`}>{item.name}（{labels[item.scope.level]}）</li>)}</ul></>}
-        {plan.unverified.length > 0 && <p>{plan.unverified.join('、')} 尚未声明自兼容性，多实例运行可能出现配置串用、重复注册或运行错误。</p>}
+        {plan.unverified.length > 0 && <p>{plan.unverified.join('、')} 的作者尚未声明已测试与分级菜单兼容。确认在本级启用？</p>}
       </div>
       <div className="tiered-confirm-actions">
         <button type="button" className="tiered-action" autoFocus onClick={onCancel}>取消</button>
@@ -79,7 +80,11 @@ export function ScopePanel({ api, scope, sessionId = null, Page, ui, disabled = 
   const [details, setDetails] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const refresh = async () => { setRows(value(await api.list(scope)).filter(row => row.kind !== 'mcp' && !!row.official === (kind === 'official'))); ui.changed?.() }
-  useEffect(() => { void refresh().catch(error => setNotice(String(error))) }, [api, scopeKey(scope), kind])
+  useEffect(() => {
+    const update = () => { void refresh().catch(error => setNotice(String(error))) }
+    update()
+    return ui.subscribe?.(update)
+  }, [api, scopeKey(scope), kind, ui])
   const execute = async (plan: ChangePlan) => {
     setBusy(true)
     try {
@@ -108,10 +113,11 @@ export function ScopePanel({ api, scope, sessionId = null, Page, ui, disabled = 
       <h3>{packageRow.name}</h3><p className="tiered-hint">包含的组件 · {shown.length} 个</p>
       <button type="button" className="tiered-action" onClick={() => ui.openDetails(packageRow.package)}>查看原生插件详情</button></div>}
     {groups.filter(group => group.rows.length).map(group => <Fragment key={group.id}>
-    {group.id === 'unverified' && <div className="tiered-divider" role="separator"><span>未验证自兼容性</span></div>}
+    {group.id === 'unverified' && <div className="tiered-divider" role="separator"><span>未验证兼容性</span></div>}
     <ul className="tiered-plugin-list">
       {group.rows.map(item => {
-        const mode = item.partial ? 'partial' : !item.own ? 'inherit' : item.enabled ? 'on' : 'off'
+        const mode = !packageRow && item.bundleEnabled !== undefined ? item.bundleEnabled ? 'on' : 'off'
+          : !item.own ? 'inherit' : item.partial ? 'partial' : item.enabled ? 'on' : 'off'
         const expanded = selected === item.id && item.own
         const settingsId = `${panelId}-${item.id}-settings`
         const descriptionId = `${panelId}-${item.id}-description`
@@ -155,31 +161,23 @@ export function ScopePanel({ api, scope, sessionId = null, Page, ui, disabled = 
 }
 
 function ChildPanel({ api, scope, Page, ui, kind = 'plugin' }: MenuProps & { scope: Scope; kind?: ResourceKind }) {
-  const [settings, setSettings] = useState<ChildSettings>()
+  const [revision, setRevision] = useState(0)
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
   const target = { client: '新顶层工作区及无工作区的新会话', workspace: '新会话，以及按工作区树继承时的新子工作区', session: '新子 agent（包括后续各级子 agent）' }[scope.level]
-  const refresh = async () => setSettings(value(await api.childSettings(scope)))
-  useEffect(() => { void refresh().catch(error => setNotice(String(error))) }, [api, scopeKey(scope)])
-  const select = async (independent: boolean) => {
+  const reset = async () => {
     setBusy(true)
-    try { value(await api.setChildSettings(scope, independent)); await refresh(); setNotice('已保存') }
+    try { value(await api.resetChildSettings(scope)); setRevision(value => value + 1); setNotice('全部下级默认配置已重置为继承') }
     catch (error) { setNotice(String(error)) } finally { setBusy(false) }
   }
   return <>
     <div className="tiered-child-heading">
       <p className="tiered-hint">{target}的默认配置，只在新建时应用。</p>
-      <div className="tiered-mode" role="group" aria-label="下级默认配置方式">
-        {([{ value: false, label: '继承' }, { value: true, label: '独立' }] as const).map(option => <button type="button" key={option.label}
-          aria-pressed={settings?.independent === option.value} disabled={!settings || busy}
-          onClick={() => { if (settings?.independent !== option.value) void select(option.value) }}>{option.label}</button>)}
-      </div>
+      <button type="button" className="tiered-action" disabled={busy} onClick={() => void reset()}
+        title="清除当前层级的全部下级默认配置，包括插件、官方插件、MCP 和 Skill；不影响已有实例">全部重置为继承</button>
     </div>
-    {settings && <>
-      {!settings.independent && <p className="tiered-hint">{settings.source ? `沿用上级${labels[settings.source.level]}的下级默认设置。` : '沿用本级的有效配置。'}切换为「独立」后可以单独设置。</p>}
-      {kind === 'plugin' || kind === 'official' ? <ScopePanel key={`${kind}-${settings.independent}`} api={api} scope={childScope(scope)} Page={Page} ui={ui} kind={kind} disabled={!settings.independent || busy} />
-        : <ResourcePanel key={`${kind}-${settings.independent}`} api={api} scope={childScope(scope)} kind={kind} disabled={!settings.independent || busy} />}
-    </>}
+    {kind === 'plugin' || kind === 'official' ? <ScopePanel key={`${kind}-${revision}`} api={api} scope={childScope(scope)} Page={Page} ui={ui} kind={kind} disabled={busy} />
+      : <ResourcePanel key={`${kind}-${revision}`} api={api} scope={childScope(scope)} kind={kind} disabled={busy} />}
     {notice && <p className="tiered-notice" role="status">{notice}</p>}
   </>
 }

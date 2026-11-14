@@ -14,6 +14,7 @@ export interface MenuRemote {
   inheritSkill(scope: Scope, name: string): Promise<RemoteResult<void>>
   childSettings(scope: Scope): Promise<RemoteResult<ChildSettings>>
   setChildSettings(scope: Scope, independent: boolean): Promise<RemoteResult<void>>
+  resetChildSettings(scope: Scope): Promise<RemoteResult<void>>
   plan(scope: Scope, id: string, mode: ChangeMode): Promise<RemoteResult<ChangePlan>>
   change(scope: Scope, id: string, mode: ChangeMode, signature: string): Promise<RemoteResult<void>>
   call(scope: Scope, id: string, namespace: string, method: string, args: PluginConfig): Promise<RemoteResult<unknown>>
@@ -53,6 +54,7 @@ export const remoteContribution: TypertRemoteContribution = {
     ['inheritSkill', [['scope', 'scope'], ['name', 'string']]],
     ['childSettings', [['scope', 'scope']]],
     ['setChildSettings', [['scope', 'scope'], ['independent', 'boolean']]],
+    ['resetChildSettings', [['scope', 'scope']]],
     ['plan', [['scope', 'scope'], ['id', 'string'], ['mode', 'string']]],
     ['change', [['scope', 'scope'], ['id', 'string'], ['mode', 'string'], ['signature', 'string']]],
     ['call', [['scope', 'scope'], ['id', 'string'], ['namespace', 'string'], ['method', 'string'], ['args', 'config']]],

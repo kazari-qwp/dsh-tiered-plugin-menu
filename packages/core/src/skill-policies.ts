@@ -74,15 +74,16 @@ export class SkillPolicies {
   }
 
   configure(scope: Scope, name: string, enabled: boolean, config: PluginConfig): void {
+    this.chain(scope)
     if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name)) throw new Error('无效的技能名称')
     for (const field of ['description', 'content']) if (config[field] !== undefined && typeof config[field] !== 'string') throw new Error(`${field} 应为文本`)
     for (const field of ['modelInvocable', 'userInvocable']) if (config[field] !== undefined && typeof config[field] !== 'boolean') throw new Error(`${field} 应为布尔值`)
-    if (scope.children && !this.store.children(scope).independent) throw new Error('请先切换为独立下级设置')
     this.store.set(scope, key(name), { enabled, config })
     this.ctx.emit('skills/change')
   }
 
   inherit(scope: Scope, name: string): void {
+    this.chain(scope)
     if (isClientScope(scope)) throw new Error('客户端没有上级配置')
     this.store.remove(scope, key(name))
     this.ctx.emit('skills/change')

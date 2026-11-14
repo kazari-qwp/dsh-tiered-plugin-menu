@@ -39,17 +39,17 @@ test('官方分类依据宿主元数据：安装自带包与独立安装包均�
     assert.deepEqual(rows.map(r => r.package), [name, 'installed-official'])
     assert.equal(rows[0]!.title, '官方测试')
     assert.deepEqual(rows[0]!.options.config, { path: ':memory:' })
-    assert.equal(rows[0]!.selfCompatible, false)
+    assert.equal(rows[0]!.compatible, false)
   } finally { await ctx.fiber.dispose() }
 })
 
-test('原生插件清单：禁用包仍被发现，自兼容状态只取元数据，自有插件没有特例', async () => {
+test('原生插件清单：禁用包仍被发现，兼容状态只取元数据，自有插件没有特例', async () => {
   mkdirSync('work', { recursive: true })
   const root = resolve(mkdtempSync('work/discovery-'))
   const custom = join(root, 'node_modules', 'declared-test-plugin')
   mkdirSync(custom, { recursive: true })
   const manifest = { name: 'declared-test-plugin', version: '1.0.0', main: 'index.js',
-    dsh: { bundle: { patch: './cordis.patch.yml' }, tieredPluginMenu: { selfCompatible: true } } }
+    dsh: { bundle: { patch: './cordis.patch.yml' }, tieredPluginMenu: { Compatible: true } } }
   writeFileSync(join(custom, 'package.json'), JSON.stringify(manifest))
   writeFileSync(join(custom, 'index.js'), 'module.exports = {}')
   writeFileSync(join(custom, 'cordis.patch.yml'), '- insert:\n    - id: declared-test-plugin\n      name: declared-test-plugin\n')
@@ -72,14 +72,21 @@ test('原生插件清单：禁用包仍被发现，自兼容状态只取元数�
     assert.deepEqual([...new Set(found.map(plugin => plugin.package))].sort(), packages.sort())
     assert.equal(found.filter(plugin => plugin.package === 'dsh-tiered-plugin-menu').length, 2)
     for (const name of ['dsh-temporary-messages', 'dsh-context', 'dsh-tiered-plugin-menu']) {
-      assert.equal(found.find(plugin => plugin.package === name)!.selfCompatible, false)
+      assert.equal(found.find(plugin => plugin.package === name)!.compatible, false)
     }
     assert.equal(found.find(plugin => plugin.package === 'dsh-context')!.bundle.enabled, false)
     const declared = found.find(plugin => plugin.package === manifest.name)!
-    assert.equal(declared.selfCompatible, true)
-    manifest.dsh.tieredPluginMenu.selfCompatible = false
+    assert.equal(declared.compatible, true)
+    manifest.dsh.tieredPluginMenu.Compatible = false
     writeFileSync(join(custom, 'package.json'), JSON.stringify(manifest))
-    assert.equal((await installedPlugins(ctx)).find(plugin => plugin.package === manifest.name)!.selfCompatible, false)
+    assert.equal((await installedPlugins(ctx)).find(plugin => plugin.package === manifest.name)!.compatible, false)
+    for (const metadata of [{}, { Compatible: 'true' }, { selfCompatible: true }, { supportsChildInstances: true }]) {
+      writeFileSync(join(custom, 'package.json'), JSON.stringify({ ...manifest,
+        dsh: { ...manifest.dsh, tieredPluginMenu: metadata },
+      }))
+      assert.equal((await installedPlugins(ctx)).find(plugin => plugin.package === manifest.name)!.compatible, false,
+        '只有 Compatible 布尔值 true 才表示作者声明与菜单兼容')
+    }
   } finally { await ctx.fiber.dispose() }
 })
 

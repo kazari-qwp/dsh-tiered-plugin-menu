@@ -5,12 +5,11 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { Context } from '@deepseek-ai/cordis'
 import { createPanel, type PanelProps } from '../packages/tui/src/panel.ts'
 import type { PluginManager } from '../packages/core/src/index.ts'
-import { clientScope, type Scope } from '../packages/core/src/shared.ts'
+import { childScope, clientScope, type Scope } from '../packages/core/src/shared.ts'
 
 test('TUI 使用宿主 React：键盘修改作用域、确认、配置与切换会话', async () => {
   const ctx = new Context()
   const calls: any[] = [], replies: any[] = []
-  const childScopes = new Set<string>()
   const values = new Map<string, any>()
   const own = (scope: Scope) => values.get(JSON.stringify(scope))
   const row = (scope: Scope) => ({ id: 'example', name: 'Example', package: 'example', description: '', verified: false,
@@ -25,8 +24,7 @@ test('TUI 使用宿主 React：键盘修改作用域、确认、配置与切换�
     saveConfig: async (scope: Scope, id: string, config: unknown) => {
       calls.push(['saveConfig', scope, id, config]); values.set(JSON.stringify(scope), { enabled: row(scope).enabled, config })
     },
-    childSettings: (scope: Scope) => ({ independent: childScopes.has(JSON.stringify(scope)) }),
-    setChildSettings: (scope: Scope, value: boolean) => { value ? childScopes.add(JSON.stringify(scope)) : childScopes.delete(JSON.stringify(scope)) },
+    resetChildSettings: (scope: Scope) => { values.delete(JSON.stringify(childScope(scope))); calls.push(['reset', scope]) },
     skills: { rows: async () => [] },
   } as unknown as PluginManager
   ctx.provide('tuiDialogs', { select: async () => replies.shift(), confirm: async () => replies.shift(), input: async () => replies.shift() })
@@ -51,8 +49,13 @@ test('TUI 使用宿主 React：键盘修改作用域、确认、配置与切换�
     replies.push('label', '"FROM TUI"')
     await send('e')
     assert.equal(own({ level: 'session', id: 'A' }).config.label, 'FROM TUI')
-    await send('c'); await send('d')
-    assert.ok(childScopes.has(JSON.stringify({ level: 'session', id: 'A' })))
+    await send('c')
+    replies.push('on', true); await send('', { return: true })
+    assert.equal(own(childScope({ level: 'session', id: 'A' })).enabled, true)
+    await send('d')
+    assert.equal(own(childScope({ level: 'session', id: 'A' })), undefined)
+    assert.equal(own({ level: 'session', id: 'A' }).config.label, 'FROM TUI')
+    assert.match(JSON.stringify(renderer!.toJSON()), /全部重置为继承/)
     sessionId = 'B'
     await act(async () => { renderer.update(React.createElement(Panel, props)) })
     replies.push('on', true); await send('', { return: true })

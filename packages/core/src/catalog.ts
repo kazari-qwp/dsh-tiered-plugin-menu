@@ -16,7 +16,7 @@ export interface InstalledPlugin {
   bundle: BundleInfo
   options: EntryOptions
   parentId: string
-  selfCompatible: boolean
+  compatible: boolean
   peers: string[]
 }
 
@@ -25,7 +25,7 @@ export const mcpModule = '@deepseek-ai/dsh-mcp-client'
 /** A configured MCP server uses the same lifecycle and scoped services as a plugin entry. */
 export function mcpAdapter(id: string, options: EntryOptions, enabled: boolean, owned = false): InstalledPlugin {
   return { id, parentId: id, kind: 'mcp', owned, package: mcpModule,
-    description: 'MCP 服务器', options, selfCompatible: true, peers: [],
+    description: 'MCP 服务器', options, compatible: true, peers: [],
     bundle: { name: mcpModule, enabled, installed: true, optional: false, removable: false, official: true, availability: 'profile', updatable: false, overrides: [],
       rows: owned ? [{ rowId: options.id, moduleName: mcpModule }] : [{ rowId: options.id, moduleName: mcpModule, entryId: id.slice(4) as never }] },
   }
@@ -56,7 +56,7 @@ export async function installedPlugins(ctx: Context): Promise<InstalledPlugin[]>
         }
         collect(loadOverlayPatches('dsh', filename))
       }
-    } catch { /* 元数据不可读仍列出插件，自兼容状态为未验证。 */ }
+    } catch { /* 元数据不可读仍列出插件，兼容状态为未验证。 */ }
     const rows = bundle.rows.length ? bundle.rows : [{ rowId: bundle.name, moduleName: bundle.name }]
     const parentId = rows.length === 1 ? rows[0]!.rowId : bundle.name
     const text = (value: string | Record<string, string> | undefined) => typeof value === 'string' ? value : value?.['zh-CN'] ?? value?.zh ?? value?.en
@@ -64,7 +64,7 @@ export async function installedPlugins(ctx: Context): Promise<InstalledPlugin[]>
       id: rows.length === 1 ? parentId : `${bundle.name}#${row.rowId}`,
       parentId, package: bundle.name, title: text(bundle.meta?.title), description: text(bundle.meta?.description) ?? bundle.description ?? '', bundle: { ...bundle, rows: [row] },
       options: declared.get(row.rowId) ?? { id: row.rowId, name: row.moduleName },
-      selfCompatible: metadata?.selfCompatible === true,
+      compatible: metadata?.Compatible === true,
       peers,
     }))
   })

@@ -37,7 +37,8 @@ test('未加载插件读取包内声明配置，运行配置和分级覆盖仍�
     } as any)
     await mountAgentLoopTestHarness(ctx)
     await ctx.plugin(core, { dataFile: resolve(directory, 'settings.json') })
-    const workspace: Scope = { level: 'workspace', id: 'new-workspace' }
+    const created = await ctx.workspaceRegistry.create(directory)
+    const workspace: Scope = { level: 'workspace', id: String(created.id) }
     const session: Scope = { level: 'session', id: 'new-session' }
     for (const scope of [clientScope, workspace, session]) {
       const [row] = await ctx.tieredPlugins.rows(scope)

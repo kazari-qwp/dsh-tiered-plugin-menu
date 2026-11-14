@@ -62,7 +62,6 @@ test(`new-child defaults: workspaces, sessions, recursive subagents, inheritance
     let manager = ctx.tieredPlugins
     const row = async (scope: Scope) => (await manager.rows(scope))[0]!
     const defaults = async (scope: Scope, template: string, enabled = true) => {
-      manager.setChildSettings(scope, true)
       await manager.configure(childScope(scope), id, enabled, { template }, true)
     }
     const send = async (agent: Agent, text: string) => {
@@ -88,6 +87,9 @@ test(`new-child defaults: workspaces, sessions, recursive subagents, inheritance
     assert.equal((await row({ level: 'workspace', id: two.id })).config.template, 'LATER WORKSPACE')
     const before = await create('before-default', one.path)
     await defaults(ws, 'SESSION A')
+    await manager.configure(sessionScope('preconfigured'), id, true, { template: 'BEFORE FIRST MESSAGE' }, true)
+    const preconfigured = await create('preconfigured', one.path)
+    await send(preconfigured.agent, 'BEFORE FIRST MESSAGE')
     const a = await create('a', one.path)
     // The original DSH API has not attached this session yet; first model call already sees its defaults.
     await send(a.agent, 'SESSION A')
@@ -105,8 +107,19 @@ test(`new-child defaults: workspaces, sessions, recursive subagents, inheritance
     assert.equal(manager.childSettings(sessionScope(child.agent.id)).independent, false)
     assert.deepEqual(manager.childSettings(sessionScope(child.agent.id)).source, sessionScope(a.agent.id))
     assert.notEqual(manager.instance(sessionScope(child.agent.id), id), manager.instance(sessionScope(grandchild.agent.id), id))
+    manager.skills.configure(childScope(sessionScope(a.agent.id)), 'parent-skill', false, {})
+    manager.skills.configure(childScope(sessionScope(child.agent.id)), 'child-skill', false, {})
+    assert.equal((await row(childScope(sessionScope(child.agent.id)))).config.template, 'CHILD', 'editing one default retains inherited defaults for other items')
     await defaults(sessionScope(child.agent.id), 'NEAREST')
     const next = await create('grandchild-next', one.path, child.agent)
+    assert.equal(manager.store.get(sessionScope(next.agent.id), 'skill:parent-skill')?.enabled, false)
+    assert.equal(manager.store.get(sessionScope(next.agent.id), 'skill:child-skill')?.enabled, false)
+    manager.resetChildSettings(sessionScope(child.agent.id))
+    const resetChild = await create('grandchild-reset', one.path, child.agent)
+    await send(resetChild.agent, 'CHILD')
+    assert.equal(manager.store.get(sessionScope(resetChild.agent.id), 'skill:child-skill'), undefined)
+    assert.equal(manager.store.get(sessionScope(resetChild.agent.id), 'skill:parent-skill')?.enabled, false)
+    await defaults(sessionScope(child.agent.id), 'NEAREST')
     const great = await create('great-grandchild', one.path, next.agent)
     await send(next.agent, 'NEAREST'); await send(great.agent, 'NEAREST')
     await send(grandchild.agent, 'CHILD')
@@ -115,7 +128,7 @@ test(`new-child defaults: workspaces, sessions, recursive subagents, inheritance
     const fork = await create('ordinary-fork', one.path, undefined, a.agent)
     await send(fork.agent, 'SESSION B')
 
-    manager.setChildSettings(ws, false)
+    manager.resetChildSettings(ws)
     const inherited = await create('inherited', one.path)
     await send(inherited.agent, 'NEW WORKSPACE')
     assert.equal((await row(sessionScope(inherited.agent.id))).own, false)
@@ -127,6 +140,7 @@ test(`new-child defaults: workspaces, sessions, recursive subagents, inheritance
     await defaults(ws, 'AFTER RESTART')
     await fiber.restart()
     manager = ctx.tieredPlugins
+    await send(preconfigured.agent, 'BEFORE FIRST MESSAGE')
     await send(a.agent, 'SESSION A'); await send(child.agent, 'CHILD'); await send(off.agent, 'hello')
     const fresh = await create('after-restart', one.path)
     await send(fresh.agent, 'AFTER RESTART')
@@ -170,4 +184,16 @@ test('stored defaults migrate legacy configs and survive reload without sharing 
   assert.equal(reloaded.get(second, 'sample')!.config.text, 'NEW')
   assert.equal(reloaded.children(parent).independent, true)
   assert.deepEqual(reloaded.parent(second), parent)
+  for (const id of ['official', 'mcp:example', 'skill:example']) reloaded.set(childScope(parent), id, { enabled: false, config: {} })
+  reloaded.resetChildren(parent)
+  const reset = new ConfigStore(file)
+  assert.deepEqual(reset.keys(childScope(parent)), [])
+  assert.equal(reset.get(parent, 'sample')!.config.text, 'OLD')
+  assert.equal(reset.get(second, 'sample')!.config.text, 'NEW')
+  reset.set(childScope(parent), 'sample', { enabled: false, config: {} })
+  assert.deepEqual(reset.keys(childScope(parent)), ['sample'], 'new edits never restore discarded overrides')
+  reset.setChildren(parent, false)
+  const legacy = new ConfigStore(file)
+  legacy.set(childScope(parent), 'different', { enabled: true, config: {} })
+  assert.deepEqual(legacy.keys(childScope(parent)), ['different'], 'editing old inherited defaults does not revive dormant settings')
 })

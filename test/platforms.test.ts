@@ -91,7 +91,7 @@ test('三个界面共用核心：跨界面配置、先关闭一个、最后释�
     const manager = holders[0]!
     const menu = new MenuModel(manager, 'A')
     await menu.change('temporary', 'on')
-    assert.ok(menu.pending, '未声明自兼容性，需要二次确认')
+    assert.ok(menu.pending, '未声明兼容性，需要二次确认')
     await menu.confirm()
     await menu.save('temporary', '{"template":"MOBILE"}')
     assert.equal((await new MenuModel(holders[1]!, 'A').config('temporary')).template, 'MOBILE')

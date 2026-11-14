@@ -49,10 +49,10 @@
     }
   },
   "name": "dsh-tiered-plugin-menu",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "为每个工作区和会话独立配置 DSH 插件、MCP 和 Skill，支持逐级继承与插件实例隔离。",
   "dependencies": {
-    "dsh-tiered-plugin-core": "^1.0.0"
+    "dsh-tiered-plugin-core": "^1.1.0"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "4.1.0"

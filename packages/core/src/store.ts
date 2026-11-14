@@ -55,12 +55,35 @@ export class ConfigStore {
     return Object.keys(this.data.configs).map(key => ({ level: key.slice(0, key.indexOf(':')) as Scope['level'], id: key.slice(key.indexOf(':') + 1) }))
   }
 
+  workspaceScopes(): Scope[] {
+    const keys = new Set([...Object.keys(this.data.configs), ...Object.keys(this.data.children), ...Object.keys(this.data.parents),
+      ...Object.values(this.data.parents).map(scopeKey)])
+    return [...keys].filter(key => key.startsWith('workspace:')).map(key => ({ level: 'workspace', id: key.slice('workspace:'.length) }))
+  }
+
+  removeScope(scope: Scope, replacement: Scope): void {
+    const key = scopeKey(ownScope(scope))
+    delete this.data.configs[key]
+    delete this.data.children[key]
+    delete this.data.parents[key]
+    // Keep each child's own settings; only replace its link to the deleted workspace.
+    for (const [child, parent] of Object.entries(this.data.parents)) {
+      if (scopeKey(parent) === key) this.data.parents[child] = replacement
+    }
+    this.save()
+  }
+
   children(scope: Scope): ChildDefaults {
     return this.data.children[scopeKey(ownScope(scope))] ?? { independent: false, plugins: {} }
   }
 
   setChildren(scope: Scope, independent: boolean): void {
     this.data.children[scopeKey(ownScope(scope))] = { ...this.children(scope), independent }
+    this.save()
+  }
+
+  resetChildren(scope: Scope): void {
+    delete this.data.children[scopeKey(ownScope(scope))]
     this.save()
   }
 
@@ -94,6 +117,9 @@ export class ConfigStore {
   }
 
   set(scope: Scope, id: string, config: SavedConfig): void {
+    if (scope.children && !this.children(scope).independent) {
+      this.data.children[scopeKey(ownScope(scope))] = { independent: true, plugins: {} }
+    }
     const configs = scope.children
       ? (this.data.children[scopeKey(ownScope(scope))] ??= { independent: true, plugins: {} }).plugins
       : this.data.configs[scopeKey(scope)] ??= {}

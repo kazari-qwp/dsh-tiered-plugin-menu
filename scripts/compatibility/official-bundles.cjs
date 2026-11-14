@@ -43,7 +43,7 @@ const stopTimer = setTimeout(() => { report.timeout = true; save(); process.exit
     const fixture = path.join(dir, 'node_modules/config-fixture')
     fs.mkdirSync(fixture, { recursive: true })
     fs.writeFileSync(path.join(fixture, 'package.json'), JSON.stringify({ name: 'config-fixture', version: '1.0.0', type: 'module', main: './index.js',
-      dsh: { bundle: { patch: './cordis.patch.yml' }, tieredPluginMenu: { selfCompatible: true } } }))
+      dsh: { bundle: { patch: './cordis.patch.yml' }, tieredPluginMenu: { Compatible: true } } }))
     fs.writeFileSync(path.join(fixture, 'cordis.patch.yml'), JSON.stringify([{ insert: [{ id: 'config-fixture', name: 'config-fixture', config: { count: 10 } }] }]))
     fs.writeFileSync(path.join(fixture, 'index.js'), `import z from '@deepseek-ai/schemastery'; export const Config = z.object({count:z.number().default(10)}); export function apply(ctx, config) {ctx.provide('fixtureConfig', config);}`)
     const manifest = JSON.parse(fs.readFileSync(path.join(dir, 'package.json')))

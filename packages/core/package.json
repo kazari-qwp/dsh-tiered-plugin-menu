@@ -59,7 +59,7 @@
     }
   },
   "name": "dsh-tiered-plugin-core",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "DSH 分级配置共享核心：继承、实例隔离、MCP 与 Skill 管理。",
   "peerDependencies": {
     "@deepseek-ai/cordis": "4.1.0",

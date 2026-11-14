@@ -41,7 +41,7 @@ export function createPanel(ctx: Context, manager: PluginManager) {
       if (model.pending) {
         const plan = model.pending
         const message = [...plan.dependencies.map(item => `${item.mode === 'on' ? '启用' : '关闭'} ${item.name}`),
-          ...(plan.unverified.length ? ['尚未声明自兼容性，确认在本级启用？'] : [])].join('\n')
+          ...(plan.unverified.length ? ['尚未声明兼容性，确认在本级启用？'] : [])].join('\n')
         if (await dialogs.confirm({ title: '确认插件变更', message })) await model.confirm()
         else model.pending = undefined
       }
@@ -79,7 +79,7 @@ export function createPanel(ctx: Context, manager: PluginManager) {
           const selected = await dialogs.select({ title: '配置层级', options })
           if (selected) select(JSON.parse(selected))
         } else if (input === 'c') select({ ...ownScope(scope), children: !scope.children })
-        else if (input === 'd' && scope.children) model.children(!manager.childSettings(ownScope(scope)).independent)
+        else if (input === 'd' && scope.children) model.resetChildren()
         else if (input === 'b') select(scope, kind)
         else if (input === 'g') {
           const settings = manager.settings()
@@ -90,7 +90,6 @@ export function createPanel(ctx: Context, manager: PluginManager) {
           if (choice === 'tree') await manager.setWorkspaceTreeInheritance(!settings.inheritWorkspaceTree)
           if (choice === 'isolation') await manager.setPluginIsolation(!settings.pluginIsolation)
         } else if (input !== 'r') {
-          if (scope.children && !manager.childSettings(ownScope(scope)).independent) throw new Error('先按 d 将下级默认切为独立')
           const row = rows[cursor]
           if (input === 'a' && kind === 'mcp') {
             const json = await dialogs.input({ title: 'MCP 配置（JSON）', initial: '{"serverName":"my-server","transport":"stdio","command":"node","args":[]}' })
@@ -114,9 +113,9 @@ export function createPanel(ctx: Context, manager: PluginManager) {
       h(ui.Text, { bold: true }, `${levelLabel(scope)} · ${scope.children ? '下级默认' : '本级'}`),
       h(ui.Text, {}, `1 插件 | 2 官方插件 | 3 MCP | 4 Skill · ${model.selection.kind}`),
       h(ui.Text, { dimColor: true }, 'l 层级 · c 本级/下级 · g 菜单设置'),
-      scope.children ? h(ui.Text, {}, `下级默认：${manager.childSettings(ownScope(scope)).independent ? '独立' : '继承'}（d 切换）`) : null,
+      scope.children ? h(ui.Text, {}, 'd 全部重置为继承') : null,
       ...rows.slice(start, start + size).map((row, i) => h(ui.Text, { key: row.id, bold: cursor === start + i },
-        `${cursor === start + i ? '›' : ' '} ${row.name} [${'partial' in row && row.partial ? '部分启用' : row.own ? row.enabled ? '启用' : '关闭' : '继承'}]`)),
+        `${cursor === start + i ? '›' : ' '} ${row.name} [${!row.own ? '继承' : 'partial' in row && row.partial ? '部分启用' : row.enabled ? '启用' : '关闭'}]`)),
       !rows.length ? h(ui.Text, {}, '没有可配置的项目') : null,
       h(ui.Text, { dimColor: true }, '↑↓ 选择 · Enter 开关/组件 · e 配置'),
       h(ui.Text, { dimColor: true }, 'a 添加 MCP · b 返回列表 · r 刷新'),

@@ -13,7 +13,7 @@ import * as temporary from 'dsh-temporary-messages'
 import * as menu from '../packages/core/src/index.ts'
 import { ConfigStore } from '../packages/core/src/store.ts'
 import { childScope, clientScope, type Scope } from '../packages/core/src/shared.ts'
-import { parentWorkspace } from '../packages/core/src/workspace-tree.ts'
+import { owningWorkspace, parentWorkspace } from '../packages/core/src/workspace-tree.ts'
 import { mountWorkspaces } from './workspaces.ts'
 import { mountPluginManagement } from './plugins.ts'
 
@@ -27,6 +27,8 @@ test('workspace paths follow the native tree boundaries on Windows and POSIX', (
   ] as const) {
     const workspaces = paths.map((path, i) => ({ id: String(i), path }))
     assert.equal(parentWorkspace('2', workspaces)?.id, parent === undefined ? undefined : String(parent))
+    assert.equal(owningWorkspace(paths[2], workspaces)?.id, '2')
+    assert.equal(owningWorkspace(paths[2], workspaces.slice(0, 2))?.id, parent === undefined ? undefined : String(parent))
   }
 })
 
@@ -118,12 +120,52 @@ test('deep workspace inheritance, live toggles, defaults, reparenting and restar
     await send(agent, 'MIDDLE AGAIN')
     await ctx.workspaceRegistry.delete(middle.id)
     await send(agent, 'ROOT')
-    await send(removedWorkspaceSession, 'GLOBAL')
+    await send(removedWorkspaceSession, 'ROOT')
+    assert.equal(manager.store.get(ws(middle), id), undefined)
+    assert.deepEqual(manager.store.keys(childScope(ws(middle))), [])
+    assert.equal(manager.instance(ws(middle), id), undefined)
+    await assert.rejects(manager.configure(ws(middle), id, true, { template: 'STALE' }, true), /工作区已删除/)
+    assert.throws(() => manager.skills.configure(childScope(ws(middle)), 'deleted-skill', true, {}), /工作区已删除/)
     await send(child, 'NEW CHILD')
+    const removedSessionScope: Scope = { level: 'session', id: removedWorkspaceSession.id }
+    await manager.configure(removedSessionScope, id, false, {}, true)
+    await send(removedWorkspaceSession, 'hello')
+    await manager.configure(removedSessionScope, id, true, { template: 'SESSION OVERRIDE' }, true)
+    await send(removedWorkspaceSession, 'SESSION OVERRIDE')
+    await manager.inherit(removedSessionScope, id)
+    await send(removedWorkspaceSession, 'ROOT')
     await manager.configure(clientScope, id, false, {}, true)
     await send(agent, 'ROOT'); await send(other, 'hello')
     await fiber.restart(); manager = ctx.tieredPlugins
     await send(agent, 'ROOT'); await send(child, 'NEW CHILD')
+    await send(removedWorkspaceSession, 'ROOT')
     assert.equal(manager.settings().inheritWorkspaceTree, true)
   } finally { await ctx.fiber.dispose() }
+})
+
+test('deleted workspace cleanup removes defaults and reparents children without changing their own configs', () => {
+  mkdirSync('work', { recursive: true })
+  const file = resolve(mkdtempSync('work/workspace-cleanup-'), 'settings.json')
+  const store = new ConfigStore(file)
+  const deleted: Scope = { level: 'workspace', id: 'deleted' }
+  const parent: Scope = { level: 'workspace', id: 'parent' }
+  const session: Scope = { level: 'session', id: 'own-session' }
+  const descendant: Scope = { level: 'workspace', id: 'remaining-child' }
+  store.remember(deleted, parent)
+  for (const id of ['plugin', 'official', 'mcp:example', 'skill:example']) {
+    store.set(deleted, id, { enabled: true, config: { label: 'DELETED' } })
+    store.set(childScope(deleted), id, { enabled: false, config: { label: 'DEFAULT' } })
+    store.set(session, id, { enabled: true, config: { label: 'SESSION' } })
+  }
+  store.remember(session, deleted); store.remember(descendant, deleted)
+  store.removeScope(deleted, parent)
+  const reloaded = new ConfigStore(file)
+  assert.deepEqual(reloaded.keys(deleted), [])
+  assert.deepEqual(reloaded.keys(childScope(deleted)), [])
+  assert.equal(reloaded.parent(deleted), undefined)
+  assert.deepEqual(reloaded.parent(session), parent)
+  assert.deepEqual(reloaded.parent(descendant), parent)
+  assert.equal(reloaded.get(session, 'plugin')?.config.label, 'SESSION')
+  assert.equal(reloaded.get(session, 'skill:example')?.config.label, 'SESSION')
+  assert.equal(reloaded.workspaceScopes().some(scope => scope.id === deleted.id), false)
 })

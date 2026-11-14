@@ -38,12 +38,19 @@ export async function apply(ctx: Context): Promise<void> {
     const menu = createMenuState()
     const controllers = new Map<string, ContextClient>()
     const listeners = new Set<() => void>()
+    const stateListeners = new Set<() => void>()
     // 随选中的会话切换，打开洞察/设置等页面不卸载观察器。
     child.effect(() => child.slots.inject('shell.overlay', () => child.slots.register({
       name: 'shell.overlay', id: 'tiered-session-observers',
       children: { 'tiered-plugin-menu.active-session': { kind: 'list', scope: 'session-maybe' } },
     }, ({ renderSlot }) => renderSlot('tiered-plugin-menu.active-session', {}))))
     let discover = async () => {}
+    child.inject(['remote.pluginManager'], native => {
+      native.effect(() => remote.$on('plugin-manager/changed', () => {
+        for (const listener of stateListeners) listener()
+        void discover().catch(error => child.logger.error(error))
+      }))
+    })
     child.inject(['loader', 'configForms', 'locale'], async mounted => {
       let pending = Promise.resolve()
       const modules: any = mounted.get('modules')
@@ -113,6 +120,7 @@ export async function apply(ctx: Context): Promise<void> {
       Artwork: PluginArtworkDefault,
       Settings,
       changed() { void discover().catch(error => child.logger.error(error)) },
+      subscribe(listener: () => void) { stateListeners.add(listener); return () => { stateListeners.delete(listener) } },
       openDetails(packageName: string) { menu.close(); child.pluginNavigation.openBundle(packageName) },
     }
     child.effect(() => child.slots.inject('settings.section', () => child.slots.register({

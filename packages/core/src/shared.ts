@@ -27,6 +27,8 @@ export interface PluginRow extends SavedConfig {
   /** The installed package is the list item; components are shown in its details. */
   components?: PluginRow[]
   partial?: boolean
+  /** Native client bundle selection; component enablement is kept separately. */
+  bundleEnabled?: boolean
   configNamespace?: string
   routes?: string[]
   routePrefix?: string
@@ -62,7 +64,7 @@ export interface ChangePlan {
   signature: string
 }
 
-/** 插件作者在 package.json 中声明自兼容性：同一插件的多个独立实例能否共存。 */
+/** 插件作者在 package.json 中声明已自行测试与分级菜单兼容。 */
 export interface TieredPluginMetadata {
-  selfCompatible?: boolean
+  Compatible?: boolean
 }

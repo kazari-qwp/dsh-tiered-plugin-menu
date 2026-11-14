@@ -27,7 +27,8 @@ export class MenuModel {
     if (kind === 'skill') return this.manager.skills.rows(scope)
     const rows = (await this.manager.rows(scope)).filter(row => kind === 'mcp' ? row.kind === 'mcp'
       : row.kind !== 'mcp' && !!row.official === (kind === 'official'))
-    return component ? rows.find(row => row.id === component)?.components ?? [] : rows
+    return component ? rows.find(row => row.id === component)?.components ?? []
+      : rows.map(row => row.bundleEnabled === undefined ? row : { ...row, enabled: row.bundleEnabled, partial: false })
   }
 
   async change(id: string, mode: ChangeMode): Promise<void> {
@@ -75,4 +76,5 @@ export class MenuModel {
   }
 
   children(independent: boolean): void { this.manager.setChildSettings(ownScope(this.selection.scope), independent) }
+  resetChildren(): void { this.manager.resetChildSettings(ownScope(this.selection.scope)); this.pending = undefined }
 }

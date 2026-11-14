@@ -1,14 +1,80 @@
-# Compatibility report / 兼容性报告
+# Compatibility guide / 兼容性详细文档
+
+这里集中说明菜单的通用兼容机制、限制、作者声明及历史验证记录。每份报告的结论只对应其中注明的版本和测试范围，不等于所有插件功能或组合都已验证。
+
+This guide covers generic compatibility mechanisms, limits, author declarations and historical evidence. Each report applies to its stated versions and scenarios, not every feature or plugin combination.
+
+## 机制与范围 / Mechanisms and scope
+
+| 机制 / Mechanism | 行为及边界 / Behavior and limits |
+| --- | --- |
+| 实例、配置与生命周期 / Instances, configuration, lifecycle | 明确启用的工作区或会话创建独立实例；继承共用上级实例。离开页面不卸载后台实例，释放与恢复遵循作用域。Independent overrides create scoped instances; inherited settings share their ancestor instance. Navigation does not stop backend work. |
+| 私有服务与依赖 / Private services and dependencies | 将插件提供的私有服务隔开，显式依赖连接到当前作用域的提供者，宿主共享服务继续访问原有数据。Private plugin services are separated; explicit dependencies are routed without privatizing shared host data. |
+| 工具与技能 / Tools and skills | 先按会话筛选可见来源，保留各自的参数、执行与渲染；释放一个来源不移除其他来源。同会话重名处理需实验性隔离。Scope-aware discovery preserves independent schemas, execution and rendering; same-session name qualification is experimental. |
+| 共享注册 / Shared registrations | 转发命令、提示词、统计投影、HTTP 等注册到对应实例，并随实例释放；不修复其他插件此前遗留的原生注册。Scoped brokers own their contributions, not other plugins' pre-existing leaked registrations. |
+| 前端与配置卡 / Frontend and configuration cards | 使用真实 Loader 入口加载原前端和 CSS，支持仅下级启用、界面切换及更新重载。保留原设置卡，没有卡时使用 JSON。自定义绕过宿主接口的前端不保证兼容。Original installed frontend modules and styles are reused; custom integrations bypassing host APIs may need further work. |
+| Agent 预设 / Agent presets | 隔离不同作用域的同名声明，保留原 ID 与版本引用；使用了宿主内部声明表，宿主更新仍需验证。Scoped declarations preserve IDs and revision leases; this uses host internals rather than a stable cross-version API. |
+| 目录重定向 / Directory redirection | 插件通过受支持的 Node 文件接口创建私有目录时按作用域和包重定向；相对路径、上级路径和 realpath 保留逻辑含义。外部进程、原生扩展、未进入私有目录的全局文件不在此范围。Supported Node file access is redirected; external processes, native addons and unrelated global files are not. |
+| 包、组件与资源 / Bundles, components and resources | 一个包可含多个组件；按声明及已观察到的服务依赖安排开关。官方与第三方共用逻辑，MCP/Skill 复用继承与配置机制。Package controls and dependency plans apply equally to official and third-party plugins, with shared inheritance for MCP and skills. |
+
+这些是兼容层，不是安全沙箱。固定端口不做重定向；远端服务、外部进程及其文件存储是否独立，取决于插件本身和配置。实验性隔离默认关闭，打开后可能改善重名问题，也可能影响依赖原公开名称的代码。
+
+This is a compatibility layer, not a security sandbox. Fixed ports are not redirected. Remote services and external-process storage depend on plugin configuration. Experimental isolation is off by default and can break code that relies on original public names.
+
+<a id="author-declaration"></a>
+
+## 作者声明与测试建议 / Author declaration and testing
+
+在包的 `package.json` 中设置 `dsh.tieredPluginMenu.Compatible: true`，表示作者已自行测试与本菜单兼容。字段区分大小写，必须是布尔值；字符串 `"true"`、`false` 或未填写都不构成声明。菜单不会自动标记或替作者写入声明。
+
+Set `dsh.tieredPluginMenu.Compatible: true` after testing compatibility with this menu. The key is case-sensitive and only boolean `true` counts. The menu never writes or infers an author declaration.
+
+旧的 `selfCompatible` 和 `supportsChildInstances` 不再作为当前兼容声明读取。旧字段仅涉及更窄的多实例能力，作者应自行检查下面的行为后声明 `Compatible`；未声明仍可确认后启用，不会禁止使用或清除已有配置。
+
+Legacy `selfCompatible` and `supportsChildInstances` fields do not count as the current declaration. Authors should check the broader menu behavior before declaring `Compatible`. Unverified packages can still be enabled after confirmation; existing configuration is not cleared.
+
+建议作者至少覆盖以下行为，并注明测试使用的 Harness 与菜单版本：
+
+1. **冷启动**：客户端级关闭，从干净进程直接在工作区或会话启用，检查实际功能和原前端，而不只检查开关状态。
+2. **独立配置与继承**：两个工作区、多个会话和子 agent 使用不同配置，交叉切换继承、启用、关闭，检查数据与事件不串用。
+3. **配置保存**：关闭时保存不启动实例；启用后应用，运行中保存立即生效，保存不改变开关。
+4. **生命周期**：离开页面仍能处理后台任务；关闭、重新启用、恢复会话和重启后，注册和配置正确释放或恢复。
+5. **依赖与界面**：多组件包、服务依赖、配置卡、原前端与 CSS，以及宿主允许的插件更新流程。
+6. **目录与作用域变化**：检查私有数据、路径访问、删除工作区后的会话归属及自己的显式配置。若声称支持实验性隔离，单独测试该开关。
+
+Recommended coverage: cold starts with the native instance disabled; independent configurations and inheritance across workspaces, sessions and subagents; saving while disabled/enabled; background work, disposal and restoration; dependency/frontend/update behavior; private data and workspace ownership changes. Test experimental isolation separately when claiming support for it.
+
+声明仅表示作者测试过与本菜单配合，不是官方认证，也不表示与任意其他插件组合均兼容。
+
+## 详细报告索引 / Detailed reports
+
+| 内容 / Topic | 文档 / Document |
+| --- | --- |
+| 混装与原生对照 / Mixed plugins and native controls | [第一批（本页下方）](#first-batch)、[第二批](SECOND_BATCH.md)、[第三批](THIRD_BATCH.md) |
+| 官方组合包 / Official bundles | [OFFICIAL_PLUGINS.md](OFFICIAL_PLUGINS.md) |
+| 工具、技能与资源 / Tools, skills and resources | [TOOLS.md](TOOLS.md)、[SKILLS.md](SKILLS.md)、[RESOURCES.md](RESOURCES.md) |
+| 目录隔离与 Agent 预设 / Directories and presets | [DIRECTORY_ISOLATION.md](DIRECTORY_ISOLATION.md)、[SUPERAGENT.md](SUPERAGENT.md) |
+| 实验性隔离与会话恢复 / Experimental isolation and session restoration | [PLUGIN_ISOLATION.md](PLUGIN_ISOLATION.md) |
+| 工作区删除与配置恢复 / Workspace deletion and configuration restoration | [WORKSPACE_LIFECYCLE.md](WORKSPACE_LIFECYCLE.md) |
+| 插件前端更新 / Plugin frontend updates | [CLIENT_UPDATES.md](CLIENT_UPDATES.md) |
+| 多端架构与实际界面验证 / Platforms and live UI | [COMPONENTS.md](COMPONENTS.md)、[LIVE_UI_TESTING.md](LIVE_UI_TESTING.md) |
+| 组件升级与历史修复 / Component updates and earlier fixes | [COMPONENT_UPDATES.md](COMPONENT_UPDATES.md)、[CORE_0.8.1.md](CORE_0.8.1.md) |
+
+历史报告保留当时的术语、版本和问题记录，判断当前行为请以本页机制说明及当前代码为准。发布记录见 [GitHub Releases](https://github.com/kazari-qwp/dsh-tiered-plugin-menu/releases)。
+
+<a id="first-batch"></a>
+
+## 第一批历史报告 / First-batch historical report
 
 Test date / 测试日期: **2026-11-09**. Menu **0.2.0**, DSH **0.2.2-rc.1**, Node **24.22.2**, Ubuntu 24.04 in a disposable VMware VM.
 
-Current evidence: [compatibility-0.2.0.json](compatibility-0.2.0.json). Historical 0.1.11 reports remain in [compatibility-results.json](compatibility-results.json) and [isolated-scope-results.json](isolated-scope-results.json); they do not describe the current implementation. The old memory native-control result is corrected below.
+Evidence for this batch: [compatibility-0.2.0.json](compatibility-0.2.0.json). Earlier 0.1.11 reports remain in [compatibility-results.json](compatibility-results.json) and [isolated-scope-results.json](isolated-scope-results.json); they do not describe the current implementation. The old memory native-control result is corrected below.
 
 当前证据见新报告；旧 JSON 保留为 0.1.11 的历史记录，不代表当前兼容性。旧报告对 memory 原生开关的判断有遗漏，下文明确修正。
 
 Eight additional packages were subsequently tested: [second-batch report / 第二批新增八个样本的报告](SECOND_BATCH.md).
 
-Latest mixed regression: [third batch, menu 0.5.1 / 最新 26 样本混装回归](THIRD_BATCH.md).
+Later mixed regression: [third batch, menu 0.5.1 / 26 样本混装回归](THIRD_BATCH.md).
 
 ## Isolation / 隔离方式
 

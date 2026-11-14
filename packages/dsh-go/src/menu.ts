@@ -42,15 +42,13 @@ export function mountMenu(ctx: Context, manager: PluginManager): void {
       children.push(text('插件隔离重启 DSH 后生效；可能修复冲突，也可能带来新的兼容性问题。'))
     }
     if (target.children) {
-      const independent = manager.childSettings(ownScope(target)).independent
-      children.push(text(independent ? '下级默认：独立' : '下级默认：继承'))
-      children.push(buttons(button('继承', 'policy', { value: false }), button('独立', 'policy', { value: true })))
+      children.push(buttons(button('全部重置为继承', 'resetChildren')))
     }
     if (state.notice) children.push(text(state.notice))
     if (model.pending) {
       const plan = model.pending
       children.push(text([...plan.dependencies.map(item => `${item.mode === 'on' ? '启用' : '关闭'}依赖：${item.name}`),
-        ...(plan.unverified.length ? ['这些插件尚未声明自兼容性，确认在本级启用？'] : [])].join('\n')))
+        ...(plan.unverified.length ? ['这些插件尚未声明兼容性，确认在本级启用？'] : [])].join('\n')))
       children.push(buttons(button('确认执行', 'confirm'), button('取消', 'cancel')))
       return { v: 2, type: 'stack', children }
     }
@@ -65,17 +63,16 @@ export function mountMenu(ctx: Context, manager: PluginManager): void {
     if (component) children.push(buttons(button('返回插件列表', 'back')))
     const rows = await model.rows()
     state.page = Math.min(state.page, Math.max(0, Math.ceil(rows.length / pageSize) - 1))
-    const disabled = target.children && !manager.childSettings(ownScope(target)).independent
     for (const row of rows.slice(state.page * pageSize, (state.page + 1) * pageSize)) {
       children.push(text(`${row.name} · ${row.own ? row.enabled ? '启用' : '关闭' : '继承'}`))
-      if (!disabled) children.push(buttons(...(['inherit', 'on', 'off'] as const).filter(mode => mode !== 'inherit' || target.level !== 'client' || target.children)
+      children.push(buttons(...(['inherit', 'on', 'off'] as const).filter(mode => mode !== 'inherit' || target.level !== 'client' || target.children)
         .map((mode) => button({ inherit: '继承', on: '启用', off: '关闭' }[mode], 'change', { id: row.id, mode }))))
       if ((row as PluginRow).components) children.push(buttons(button('组件', 'components', { id: row.id })))
-      else if (!disabled && row.own) children.push(buttons(button('设置', 'edit', { id: row.id })))
+      else if (row.own) children.push(buttons(button('设置', 'edit', { id: row.id })))
     }
     if (!rows.length) children.push(text('此范围没有可配置的项目'))
     children.push(buttons(button('上一页', 'page', { value: -1 }), button(`${state.page + 1} / ${Math.max(1, Math.ceil(rows.length / pageSize))}`, 'refresh'), button('下一页', 'page', { value: 1 })))
-    if (kind === 'mcp' && !disabled) children.push(buttons(button('添加 MCP', 'add')))
+    if (kind === 'mcp') children.push(buttons(button('添加 MCP', 'add')))
     return { v: 2, type: 'stack', children }
   }
   const run = (action: (state: ReturnType<typeof menu>, value: Json) => void | Promise<void>, deferred = true) => (scope: GoScope, event: { value?: Json }) => {
@@ -100,7 +97,7 @@ export function mountMenu(ctx: Context, manager: PluginManager): void {
       scopePage: run((s, v) => { s.scopePage = Math.max(0, Math.min(Math.ceil(s.model.scopes().length / 24) - 1, s.scopePage + v.value)) }, false),
       children: run((s, v) => { s.model.select({ ...s.model.selection, scope: { ...ownScope(s.model.selection.scope), children: !!v.value } }); s.edit = undefined }),
       kind: run((s, v) => { s.model.select({ ...s.model.selection, kind: v.value as ResourceKind, component: undefined }); s.page = 0; s.edit = undefined }),
-      policy: run((s, v) => s.model.children(!!v.value)),
+      resetChildren: run(s => { s.model.resetChildren(); s.edit = undefined }),
       tree: run(() => manager.setWorkspaceTreeInheritance(!manager.settings().inheritWorkspaceTree)),
       isolation: run(() => manager.setPluginIsolation(!manager.settings().pluginIsolation)),
       change: run((s, v) => s.model.change(v.id, v.mode)), confirm: run(s => s.model.confirm()), cancel: run(s => { s.model.pending = undefined }),

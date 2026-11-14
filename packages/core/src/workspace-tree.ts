@@ -7,9 +7,14 @@ function folderPath(path: string): string {
 export function parentWorkspace<T extends { id: string; path: string }>(id: string, workspaces: T[]): T | undefined {
   const workspace = workspaces.find(item => item.id === id)
   if (!workspace) return undefined
-  const path = folderPath(workspace.path)
+  return owningWorkspace(workspace.path, workspaces.filter(item => item.id !== id))
+}
+
+/** A session keeps its cwd after workspace deletion; use the nearest remaining folder. */
+export function owningWorkspace<T extends { path: string }>(cwd: string, workspaces: T[]): T | undefined {
+  const path = folderPath(cwd)
   return workspaces.filter(item => {
     const parent = folderPath(item.path)
-    return path !== parent && path.startsWith(`${parent}/`)
+    return path === parent || path.startsWith(`${parent}/`)
   }).sort((a, b) => folderPath(b.path).length - folderPath(a.path).length)[0]
 }

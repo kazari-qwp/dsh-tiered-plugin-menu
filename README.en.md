@@ -12,8 +12,6 @@ Settings inherit through **client → parent workspace → child workspace → s
 
 ## Multi-platform components
 
-All four packages are released as **1.0.0** and remain independently updatable. This release adds official plugin management, generic instance compatibility, configuration saves while disabled, and fixed Web category navigation. Saving preserves enablement; enabled plugins apply saves immediately. Existing users should update both the core and their interface to 1.0.0.
-
 | Package | Role |
 | --- | --- |
 | `dsh-tiered-plugin-core` | Shared inheritance, instances, dependencies, MCP and Skills |
@@ -23,7 +21,7 @@ All four packages are released as **1.0.0** and remain independently updatable. 
 
 Packages have independent versions. Adapters depend on a compatible core version range; a core patch does not require publishing all adapters. Interfaces attached to **one DSH host share one core and plugin instances**. Closing one interface leaves others and background tasks running. Separate DSH processes have separate managers.
 
-All interfaces manage third-party and official plugins, MCP, Skills and child defaults. Web reuses original settings components; TUI edits fields and mobile uses JSON forms. See [TUI](packages/tui/README.md), [dsh-go](packages/dsh-go/README.md) and [architecture/testing](docs/COMPONENTS.md). Live tests cover TUI/Web in an isolated VM and the official Android APK connected to that VM, including UI operations and full cold starts. See [screenshots and coverage](docs/LIVE_UI_TESTING.md).
+All interfaces manage third-party and official plugins, MCP, Skills and child defaults. Web reuses original settings components; TUI edits fields and mobile uses JSON forms. See [TUI](packages/tui/README.md), [dsh-go](packages/dsh-go/README.md) and [component architecture](docs/COMPONENTS.md).
 
 ### Install one package for your interface
 
@@ -33,7 +31,7 @@ All interfaces manage third-party and official plugins, MCP, Skills and child de
 | dsh-TUI | `dsh-tiered-plugin-tui` |
 | dsh-go | `dsh-tiered-plugin-go` |
 
-Starting with Web 0.9.0 and TUI / dsh-go 0.2.0, each interface bundle declares a core component and an interface component. It automatically registers and enables the shared core through Harness package management. No separate core installation is required.
+Each interface bundle declares a core component and an interface component. It automatically registers and enables the shared core through Harness package management. No separate core installation is required.
 
 ```sh
 dsh plugin --profile <profile> add dsh-tiered-plugin-tui
@@ -45,22 +43,18 @@ Use the profile actually used by your interface. Restart when Harness requests i
 
 Click **Refresh** on the Plugins page, then update the package you want. Core and interface versions are managed separately. The interface's **Component versions** section links to core management.
 
-Registry-installed 0.7.1 can upgrade directly to 0.9.0. One interface update adds core management automatically and preserves existing settings, including custom `dataFile` paths. Harness may require a restart after changing package locations. Later core fixes do not require an interface release. Local `.tgz` installs remain subject to Harness's local-source update limitations. [Upgrade verification](docs/COMPONENT_UPDATES.md).
-
 ## MCP and skills
 
-The left navigation switches between **Plugins / Official plugins / MCP / Skill**. All categories reuse scope inheritance and new-child defaults. The child policy's Inherit/Independent switch covers every category; defaults are copied only when a child is created.
+The left navigation switches between **Plugins / Official plugins / MCP / Skill**. All categories reuse scope inheritance and new-child defaults. Edit each child default directly. Reset all to inherit clears child-default overrides across every category; defaults are copied only when a child is created.
 
 The official tab reads Harness bundle metadata, including locally shipped plugins that are disabled at client scope. Enable them independently for a workspace or session. Package controls affect all components; open details to configure individual components. Optional packages not present locally must first be installed through Harness. Host infrastructure is excluded.
 
-Official and third-party packages share the same dependency and instance handling, without plugin-name-specific patches. Self-compatibility still comes from package metadata. Tests cover activation, cold restoration and disposal for 12 official bundles in rc.3; see [coverage and limitations](docs/OFFICIAL_PLUGINS.md).
+Official and third-party packages share the same dependency and instance handling, without plugin-name-specific patches. Compatibility declarations come from package metadata; official packages follow the same confirmation rules.
 
 - **MCP:** discovers existing `@deepseek-ai/dsh-mcp-client` entries and supports adding servers with JSON connection settings (stdio or streamable-http). Inherited configuration shares its parent's connection. A local override starts a separate connection, including a separate process for stdio. Tools, resources and server instructions follow the selected scope. Background connections survive navigation away from a session.
 - **Skills:** lists filesystem and plugin-provided skills available in the current scope. Each can be enabled or disabled, with optional overrides for its description, body and model/user invocation flags. Overrides live in the menu's configuration; original files remain unchanged. Skill providers, scripts and resource directories remain shared. Changes affect subsequent skill discovery/loading, not text already in conversation history.
 
 MCP command arguments, environment, working directory, URL and headers can differ per scope. Remote services and external-process storage are independent only when their configuration makes them so. Disabling the menu releases its added MCP connections and restores native DSH entries; enabling it restores saved scope settings.
-
-See [resource tests and reproduction steps](docs/RESOURCES.md).
 
 ## Where to find the buttons
 
@@ -84,8 +78,6 @@ In DSH, open **Plugins → Add plugin** and enter the npm package name:
 dsh-tiered-plugin-menu
 ```
 
-If a registry mirror still serves the initial placeholder package, select the official npm registry and retry.
-
 Or install from the command line:
 
 ```sh
@@ -95,8 +87,6 @@ dsh plugin --profile desktop add dsh-tiered-plugin-menu
 Prebuilt `.tgz` packages are also available from [Releases](https://github.com/kazari-qwp/dsh-tiered-plugin-menu/releases).
 
 For Web, use your profile name (usually `web`). Restart DSH if hot reload is disabled. No companion plugin is required.
-
-The new core includes the inactive-plugin configuration fix from 0.8.1. See the [0.8.1 regression report](docs/CORE_0.8.1.md).
 
 The release includes compiled host/browser code, the bundle patch and licenses. It needs no install-time build script. A GitHub source checkout must be built first; use the release tarball for installation. This follows the [official DSH packaging guide](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/develop/basic/publish.md).
 
@@ -121,6 +111,8 @@ The menu's own Settings page includes **Inherit along workspace tree (按工作�
 
 The nearest registered ancestor directory is the parent, matching DSH's **Workspace Tree** grouping. Missing intermediate workspace registrations are skipped. Each plugin resolves its nearest explicit configuration; inheritance shares that ancestor's instance. Turning the switch off makes every workspace inherit directly from the client, while preserving explicit configurations and new-child defaults. Changing or deleting an ancestor also reconnects consumers of its services.
 
+Deleting a workspace makes its sessions inherit from their new workspace, or from the client if ungrouped. Session overrides remain intact. The deleted workspace's own settings and child defaults are removed; restarting preserves the new ownership.
+
 This describes directory hierarchy, not Agent ownership: a Superagent Worker can inherit its Router's workspace configuration when its directory is below the Router's directory, even though the Worker is not a native DSH subagent.
 
 ## Experimental plugin isolation
@@ -131,11 +123,11 @@ It gives plugins relatively independent environments. This may fix some compatib
 
 When enabled, isolation starts at client scope. It reuses the module loading, directory redirection, service routing and lifecycle handling of workspace/session instances. Tools, skills, commands, prompt sections and projection keys receive stable plugin-qualified names, so two plugins with the same tool name can both serve **the same session**. Explicit service dependencies remain connected; unrelated services stay private.
 
-Private client data starts fresh in `<config-filename>.data/`; existing plugin directories stay in place. Turning isolation off and restarting returns client entries to their original data. Fixed ports, external processes, conflicting preset IDs, and plugin code that requires another plugin's original public names are not covered. [Tested behavior and limits](docs/PLUGIN_ISOLATION.md).
+Private client data starts fresh in `<config-filename>.data/`; existing plugin directories stay in place. Turning isolation off and restarting returns client entries to their original data. Fixed ports, external processes, conflicting preset IDs, and plugin code that requires another plugin's original public names are not covered. [Isolation behavior and limits](docs/PLUGIN_ISOLATION.md).
 
 ## Defaults for new children
 
-Every menu opens on **This level (本级)** and has a **Children (下级)** tab. Children default to **Inherit (继承)**. Select **Independent (独立)** to edit plugin switches and reuse the original configuration cards for new children.
+Every menu opens on **This level (本级)** and has a **Children (下级)** tab. Edit each child's default directly, reusing the original configuration cards. **Reset all to inherit (全部重置为继承)** clears child-default overrides for plugins, official plugins, MCP and Skills at the current level. It leaves this level and existing child instances unchanged.
 
 | Parent menu | Defaults apply to |
 | --- | --- |
@@ -145,9 +137,11 @@ Every menu opens on **This level (本级)** and has a **Children (下级)** tab.
 
 Explicit on/off entries are copied into each new child; plugins left on Inherit continue to use their parent. Editing defaults starts no preview instance and changes no existing workspace, session or subagent. Resuming sessions, restarting DSH and reopening workspaces do not reapply defaults.
 
-Subagents follow their actual parent chain to the nearest independent child policy. Without their own override, they use the parent's child defaults for later descendants. Each new instance receives its own configuration copy. An ordinary conversation fork is not classified as a subagent just because it records a parent session ID.
+Overrides configured for the current session on the new-session screen take priority over child defaults. Items without a session override still use defaults or inherited settings.
 
-Nested workspaces similarly find the nearest workspace with independent child defaults. Existing children are never overwritten when a policy changes.
+Subagents follow their actual parent chain to the nearest child-default override for each item. Editing one item preserves inheritance for the others. Each new instance receives its own configuration copy. An ordinary conversation fork is not classified as a subagent just because it records a parent session ID.
+
+Nested workspaces similarly resolve each item's default through ancestor workspaces. Existing children are never overwritten when a policy changes.
 
 Scope settings live in `$DSH_HOME/plugins/tiered-plugin-menu.json`; the menu's `dataFile` option overrides that location. Client settings are persisted through DSH's native profile editor. Existing package-level settings migrate to component keys.
 
@@ -166,57 +160,43 @@ Confirmation applies to switches operated through this menu; DSH's own plugin pa
 
 When a lower instance creates or ensures a directory through Node's file APIs, the menu assigns it a private directory. Identical logical paths can hold different data in different instances. Inheritance shares the ancestor's instance and directory; explicit enablement uses an independent instance. Configured paths remain unchanged, with no field-name guesses or plugin-name adapters.
 
-Relative paths and `..` resolve in the original logical namespace before redirection. `realpath` returns logical paths, so subsequent child/parent lookups keep their meaning. Tests cover ordinary file APIs and SQLite opening paths; two Superagent instances using the same `stateDir` hold separate directory locks and databases.
+Relative paths and `..` resolve in the original logical namespace before redirection. `realpath` returns logical paths, so subsequent child/parent lookups keep their meaning.
 
-Data lives beside the menu configuration file in `<config-filename>.data/`, separated by scope and package. Menu restarts and session resumes reuse it. First use creates fresh private data; existing directories are neither moved nor deleted. See [test results and coverage](docs/DIRECTORY_ISOLATION.md).
+Data lives beside the menu configuration file in `<config-filename>.data/`, separated by scope and package. Menu restarts and session resumes reuse it. First use creates fresh private data; existing directories are neither moved nor deleted. See [directory isolation details](docs/DIRECTORY_ISOLATION.md).
 
-## Compatibility
+## Compatibility capabilities
 
-Components are published independently. Tested with **DSH 0.2.2-rc.1 / rc.2** and Node.js 24. Package/component controls and dependency confirmation use shared DSH mechanisms, without adapters named after individual plugins or changes to DSH and third-party source code.
+The menu uses generic mechanisms, without changing DSH or third-party source code or branching on individual plugin names:
 
-0.7.1 removes the exact DSH version restriction: `engines.dsh` is omitted and DSH host peer dependencies use `*`, so this plugin's manifest no longer blocks DSH upgrades solely because the version changed. When `agents.isOwnedBy` is absent, the menu uses session metadata to identify parent sessions. Development dependencies remain pinned for reproducible builds and tests.
+- **Instances and configuration:** independent workspace/session instances; inheritance shares the ancestor instance, with scope-aware configuration and lifecycle.
+- **Services and dependencies:** private services stay separate; declared dependencies connect to providers in the appropriate scope.
+- **Registrations and names:** scoped tools, skills, commands, prompt sections, projections and HTTP registrations, including same-named contributions in different sessions.
+- **Frontend and settings reuse:** original modules, CSS and configuration cards, supporting lower-scope activation while globally disabled and reloading after plugin updates.
+- **Agent presets:** scope-specific configurations for identical preset IDs, preserving subagent revision references.
+- **Private directories:** independent data directories while preserving logical relative-path, `..` and `realpath` behavior.
+- **Bundles and resources:** package/component dependency controls, with the same inheritance rules for MCP and skills.
 
-0.6.1 fixes sessions disappearing from the sidebar after opening them with experimental isolation enabled. Private helper services no longer replace host services. Existing session files remain intact; update and restart DSH. [Cause and regression checks](docs/PLUGIN_ISOLATION.md#061-session-restoration-fix).
+Experimental isolation extends this to client scope and qualifies registration names to address some same-session collisions. These mechanisms are not a security sandbox or a guarantee of arbitrary plugin compatibility. Fixed ports, external processes and access bypassing supported interfaces remain outside isolation.
 
-Installed packages are discovered automatically. Packages without declared self-compatibility appear below the **Unverified self-compatibility (未验证自兼容性)** separator at lower scopes and require confirmation. Successful startup does not mark them verified.
+See **[full compatibility documentation](docs/COMPATIBILITY.md)** for mechanisms, coverage, limits and test reports.
 
-The implementation isolates provided services per scope and routes shared DSH registries such as tools, prompts, commands, skills, projections and HTTP handlers. Lower instances are real Loader entries, so DSH can load the **installed package's original frontend and CSS**, even when its client-level instance is disabled. The menu embeds no third-party frontend copies.
+## Author compatibility declaration
 
-Different plugins can also register same-named skill providers and skills. Discovery selects contributions visible to the current session, then DSH resolves skill priorities; unloading one contribution preserves the others. [Skill isolation and 0.5.2 regression results](docs/SKILLS.md).
-
-Plugins with same-named tools can run in separate workspaces or sessions. Lower-instance tools use DSH's native per-agent registrations, keeping their own parameter schemas, executors and output renderers. The optional experimental switch extends this to same-session tool conflicts using distinct public names. [Tool isolation and 0.5.3 results](docs/TOOLS.md), [experimental isolation](docs/PLUGIN_ISOLATION.md).
-
-Agent preset declarations are also scoped: identical preset IDs can have different workspace/session configurations without duplicate registration. Native preset IDs and revision leases are preserved, including a subagent retaining its parent's revision. The adapter uses the declaration table of the pinned DSH version; this is not a cross-version API guarantee. See [Superagent validation](docs/SUPERAGENT.md) for the tested workflow and remaining upstream issues.
-
-The 0.2.1 update fix was reproduced against the released 0.2.0 menu and verified with unmodified dsh-context 0.82.2 → 0.83.0 frontend bundles, including Insights rendering, CSS replacement, retained session settings and temporary module removal/re-addition. [Update regression details](docs/CLIENT_UPDATES.md).
-
-The isolated matrix covers ten packages. Temporary messages, dsh-context and notifications pass **54 functional switch combinations** across four sessions and two workspaces. Seven other samples were checked independently for lifecycle, separate configuration and frontend module availability; Clock's actual configuration component also passes two-session save checks. [Results, versions and reproduction](docs/COMPATIBILITY.md).
-
-A second batch adds eight packages: Better Sidebar, Agent Teams, another memory plugin, Force Compact, Bill, Auto Mode, Workbench and Simplify. Their mixed lower-scope run passes **110/110 lifecycle/configuration cases**. It exposed and fixed a parse-only projection schema incompatibility in this menu. Workbench also reproduces a native route-cleanup failure without the menu. [Second-batch details](docs/SECOND_BATCH.md).
-
-The 0.5.1 third batch mixes eight new packages with the previous eighteen. Excluding a memory-tool naming conflict that also occurs natively, all 25 packages pass **341/341 lower-scope lifecycle/configuration checks**. This exposed a missing skill-registry adapter: packaged skill providers and runtime skills now follow the selected workspace/session and release with their instance. [Third-batch results and native controls](docs/THIRD_BATCH.md).
-
-`@fooxe/dsh-memory` has a reproducible native HTTP-route cleanup problem without this menu. Starting with its native instance disabled avoids that leftover registration in the tested lower-scope cases. This menu does not repair upstream native registrations.
-
-This isolates configuration, lifecycle and the file access described above; it is **not a security sandbox**. Global files outside private mounts, hardcoded TCP ports, native addons and external-process file access are outside this layer. Not every third-party tool, UI action or remote endpoint has been exercised; custom frontends that bypass the tested DSH interfaces may need further work.
-
-## Self-compatibility declaration
-
-Self-compatibility means that multiple independent instances of the same plugin can coexist, with separate configurations and runtime state. Plugin authors can declare it with a boolean in `package.json`:
+After testing compatibility with this menu, plugin authors can declare the boolean **`Compatible`** in `package.json`:
 
 ```json
 {
   "dsh": {
     "tieredPluginMenu": {
-      "selfCompatible": true
+      "Compatible": true
     }
   }
 }
 ```
 
-`true` declares self-compatibility at workspace, session and subagent scopes. `false` or an omitted field means unverified and retains the enable confirmation. It does not declare compatibility with other plugins. This is this menu's convention, not official DSH certification. Our companion plugin follows the same rule. The menu never writes declarations for another package.
+`true` means the author has tested compatibility with this menu, including independent workspace, session and subagent instances and configurations. Missing or `false` values place the plugin under **Unverified compatibility (未验证兼容性)** at lower scopes, with confirmation before enablement. Official and third-party packages follow the same rule.
 
-In 0.5.4, `selfCompatible` replaces `supportsChildInstances`. Packages declaring the old field should rename it; the old field is no longer read.
+This is an author declaration, not DSH certification or a guarantee of compatibility with all other plugins. The menu never writes declarations for another package. [Author testing guidance and field semantics](docs/COMPATIBILITY.md#author-declaration)
 
 ## Development
 
@@ -227,9 +207,7 @@ npm run pack             # All four components in dist/
 npm run pack -- core     # Only the core package
 ```
 
-The checkout is self-contained. `vendor/` holds an unchanged MIT test fixture; no private repository access is needed. `check` runs type checking, building and serial regression tests against real DSH services/plugins and React/jsdom. It uses neither browser automation nor paid models. Coverage includes inheritance, presets, lifecycle, configuration cards, MCP/Skills, shared-core leases and TUI keyboard interaction. Official dsh-go SDK/bridge checks run separately; see [component development](docs/COMPONENTS.md).
-
-The broader third-party matrix runs in a disposable offline VM; see [reproduction instructions](docs/COMPATIBILITY.md#reproduce). No sample packages are installed into a personal DSH profile by these instructions.
+The checkout is self-contained. `vendor/` holds an unchanged MIT test fixture; no private repository access is needed. See [component development](docs/COMPONENTS.md) for building and validation.
 
 Core implementation lives in `packages/core/src/`; the original Web client is in `packages/web/src/client/`. Terminal and mobile adapters live in `packages/tui/` and `packages/dsh-go/`.
 
