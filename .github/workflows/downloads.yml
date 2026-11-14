@@ -13,11 +13,28 @@ permissions:
   pages: read
 
 concurrency:
-  group: github-pages
+  # Release dispatchers must not compete with the master deployment they queue.
+  group: ${{ github.event_name == 'release' && format('pages-release-{0}', github.run_id) || 'github-pages' }}
   cancel-in-progress: false
 
 jobs:
+  dispatch:
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      # workflow_dispatch is allowed to trigger another run with GITHUB_TOKEN.
+      # Do not check out or execute code from the release tag.
+      - name: Refresh download center on master
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh workflow run downloads.yml --repo "$GH_REPO" --ref master
+
   build:
+    # Checking out master does not change a release run's tag-based GITHUB_REF.
+    if: github.event_name != 'release' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
