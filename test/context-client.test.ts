@@ -261,6 +261,7 @@ test('打包入口：第三方全局从未启用，会话面板和配置卡也�
     assert.equal(ctx.slots.entries('plugins.bundle.config').length, 0)
     fiber = await ctx.plugin(bundled)
     await ctx.loader.await()
+    await new Promise(resolve => setImmediate(resolve))
     const restarted = ctx.slots.entries('tiered-plugin-menu.active-session' as any).find(e => e.options.id === 'tiered-observer:dsh-context')!
     const restored = restarted.inject!() as any
     await restored.controller.select('A')

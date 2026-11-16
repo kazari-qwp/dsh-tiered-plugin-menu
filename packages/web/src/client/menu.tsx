@@ -146,6 +146,7 @@ export function ScopePanel({ api, scope, sessionId = null, Page, ui, disabled = 
                 onClick={() => item.components ? setDetails(item.id) : setSelected(expanded ? null : item.id)}>设置<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7" /></svg></button>
             </div>
           </div>
+          {item.error && <p className="tiered-notice" role="status">{item.error}</p>}
           {expanded && <div id={settingsId} className="tiered-inline-settings">
             {item.settings === 'registered' && ui.Settings ? <ui.Settings row={item} scope={scope} />
               : <NativeSettings api={api} row={item} scope={scope} ui={ui} onSaved={refresh} />}

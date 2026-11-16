@@ -82,6 +82,8 @@ test('native frontend replacement refreshes scoped panels, settings and CSS', as
       if (managed) {
         await ctx.plugin(load<Plugin>('packages/web/dist/client/index.js'))
         await ctx.loader.await()
+        // The menu's async discovery is not a native Loader entry.
+        await new Promise(resolve => setImmediate(resolve))
         const observer = ctx.slots.entries('tiered-plugin-menu.active-session' as any)[0]!
         const controller = (observer.inject!() as any).controller
         await controller.select('A')

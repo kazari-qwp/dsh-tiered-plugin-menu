@@ -175,6 +175,7 @@ The menu uses generic mechanisms, without changing DSH or third-party source cod
 - **Agent presets:** scope-specific configurations for identical preset IDs, preserving subagent revision references.
 - **Private directories:** independent data directories while preserving logical relative-path, `..` and `realpath` behavior.
 - **Bundles and resources:** package/component dependency controls, with the same inheritance rules for MCP and skills.
+- **Startup and error handling:** shared list reads and change-driven catalog invalidation; individual plugin loading or configuration errors are reported without blocking the menu or unrelated plugins.
 
 Experimental isolation extends this to client scope and qualifies registration names to address some same-session collisions. These mechanisms are not a security sandbox or a guarantee of arbitrary plugin compatibility. Fixed ports, external processes and access bypassing supported interfaces remain outside isolation.
 

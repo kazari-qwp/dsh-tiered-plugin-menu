@@ -8,6 +8,7 @@ import { captureRegisteredSettings } from './registered-settings.tsx'
 import { isolateProvidedServices } from 'dsh-tiered-plugin-core/isolation'
 import { scopedRemote } from './scoped-remote.ts'
 import { scopePluginFetch } from './scoped-fetch.ts'
+import { rowReader, type ReadRows } from './refresh.ts'
 
 /** 后端实例按作用域长期存活；客户端把当前会话的原生面板绑定到它的配置表。 */
 export class ContextClient {
@@ -26,7 +27,8 @@ export class ContextClient {
   private cards = new Map<string, Promise<{ Page: ComponentType; dispose(): unknown }>>()
   private fetch = scopePluginFetch()
 
-  constructor(private ctx: Context, private api: MenuRemote, private plugin: Plugin | undefined, private namespace: string, private packageName = namespace) {
+  constructor(private ctx: Context, private api: MenuRemote, private plugin: Plugin | undefined, private namespace: string, private packageName = namespace,
+    private readRows: ReadRows = rowReader(api).read) {
     ctx.on('loader/patch-context', async (entry, next) => {
       if (this.managed && !this.stopped && entry.options.name === this.packageName) {
         this.rememberNative(entry)
@@ -45,13 +47,13 @@ export class ContextClient {
 
   select(sessionId: string | null) { this.sessionId = sessionId; return this.refresh() }
 
-  refresh(): Promise<void> {
-    const run = () => this.stopped ? undefined : this.sync()
+  refresh(readRows = this.readRows): Promise<void> {
+    const run = () => this.stopped ? undefined : this.sync(readRows)
     this.pending = this.pending.then(run, run)
     return this.pending
   }
 
-  async setPlugin(plugin: Plugin | undefined): Promise<boolean> {
+  async setPlugin(plugin: Plugin | undefined, readRows = this.readRows): Promise<boolean> {
     let changed = false
     const run = async () => {
       if (this.stopped || this.plugin === plugin) return
@@ -59,7 +61,7 @@ export class ContextClient {
       this.plugin = plugin
       this.revision++
       changed = true
-      await this.sync()
+      await this.sync(readRows)
     }
     this.pending = this.pending.then(run, run)
     await this.pending
@@ -91,11 +93,10 @@ export class ContextClient {
     return form
   }
 
-  async settings(row: PluginRow, scope: Scope): Promise<ComponentType> {
+  async settings(row: PluginRow, scope: Scope, readRows = this.readRows): Promise<ComponentType> {
     if (!this.plugin) throw new Error('插件前端正在重新加载')
-    const current = await this.api.list(scope)
-    if (!current.ok) throw new Error(current.error.message)
-    row = current.value.flatMap(item => item.components ?? [item]).find(item => item.id === row.id) ?? row
+    const current = await readRows(scope)
+    row = current.flatMap(item => item.components ?? [item]).find(item => item.id === row.id) ?? row
     const form = this.form(row, scope)
     const key = `${scopeKey(scope)}/${row.id}`
     if (!this.cards.has(key)) this.cards.set(key, captureRegisteredSettings(this.ctx, this.plugin, row.configNamespace ?? this.namespace, form,
@@ -103,20 +104,20 @@ export class ContextClient {
     return (await this.cards.get(key)!).Page
   }
 
-  private async row(scope: Scope) {
-    const result = await this.api.list(scope)
-    if (!result.ok) throw new Error(result.error.message)
-    return result.value.find(row => row.id === this.namespace)
+  private async row(scope: Scope, readRows: ReadRows) {
+    return (await readRows(scope)).find(row => row.id === this.namespace)
   }
 
-  private async sync() {
+  private async sync(readRows = this.readRows) {
     if (!this.plugin) return
-    const client = await this.row(clientScope)
+    const client = await this.row(clientScope, readRows)
     if (client) {
       this.clientEnabled = client.enabled || !!client.partial
       this.form(client, clientScope)
     }
-    const row = await this.row(this.sessionId ? { level: 'session', id: this.sessionId } : clientScope)
+    // An unmanaged plugin uses its native client everywhere. Only managed
+    // plugins need a second, session-specific view.
+    const row = this.sessionId && client?.managed ? await this.row({ level: 'session', id: this.sessionId }, readRows) : client
     if (row) this.fetch.select(row)
     if (!row?.managed) return
     this.managed = true
@@ -130,7 +131,7 @@ export class ContextClient {
     if (entry && client && !this.removeCard) {
       const row = client.components?.[0] ?? client
       try {
-        const Page = await this.settings(row, clientScope)
+        const Page = await this.settings(row, clientScope, readRows)
         this.removeCard = this.ctx.slots.inject('plugins.bundle.config', () => this.ctx.slots.register({
           name: 'plugins.bundle.config', key: row.configNamespace ?? row.id,
         } as any, () => createElement(Page)))

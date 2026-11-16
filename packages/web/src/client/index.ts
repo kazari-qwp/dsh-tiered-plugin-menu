@@ -14,6 +14,7 @@ import { createElement, useEffect, useState, type ReactElement } from 'react'
 import { ContextClient, ActiveSession, RegisteredSettings } from './context-client.tsx'
 import type { PluginRow, Scope } from 'dsh-tiered-plugin-core/shared'
 import { ComponentVersions } from './component-versions.tsx'
+import { coalesce, rowReader } from './refresh.ts'
 
 export const inject = ['slots', 'remote']
 
@@ -37,6 +38,7 @@ export async function apply(ctx: Context): Promise<void> {
     const api = (child.get('remote') as TypertClientRemote).tieredPluginMenu
     const menu = createMenuState()
     const controllers = new Map<string, ContextClient>()
+    const rows = rowReader(api)
     const listeners = new Set<() => void>()
     const stateListeners = new Set<() => void>()
     // 随选中的会话切换，打开洞察/设置等页面不卸载观察器。
@@ -47,24 +49,24 @@ export async function apply(ctx: Context): Promise<void> {
     let discover = async () => {}
     child.inject(['remote.pluginManager'], native => {
       native.effect(() => remote.$on('plugin-manager/changed', () => {
+        rows.invalidate()
         for (const listener of stateListeners) listener()
         void discover().catch(error => child.logger.error(error))
       }))
     })
     child.inject(['loader', 'configForms', 'locale'], async mounted => {
-      let pending = Promise.resolve()
       const modules: any = mounted.get('modules')
       const sync = async () => {
         // 模块更新会先回收旧样式，再加载新工厂；等这一步结束后再接管前端。
         if (modules?.entries.state.getSnapshot().syncing) return
-        const result = await api.list({ level: 'client', id: '' })
-        if (!result.ok) throw new Error(result.error.message)
+        const readRows = rows.snapshot()
+        const result = await readRows({ level: 'client', id: '' })
         const entries = [...mounted.loader.entries()]
         for (const [name, controller] of controllers) {
           if (entries.some(entry => entry.options.name === name)) continue
-          if (await controller.setPlugin(undefined)) for (const listener of listeners) listener()
+          if (await controller.setPlugin(undefined, readRows)) for (const listener of listeners) listener()
         }
-        for (const row of result.value.filter(row => row.settings === 'registered')) {
+        for (const row of result.filter(row => row.settings === 'registered')) {
           if (row.package === remoteContribution.package) continue
           const entry = entries.find(entry => entry.options.name === row.package)
           if (!entry) continue
@@ -74,11 +76,11 @@ export async function apply(ctx: Context): Promise<void> {
           const original = mounted.loader.unwrapExports(namespace)
           const existing = controllers.get(row.package)
           if (existing) {
-            if (await existing.setPlugin(original)) for (const listener of listeners) listener()
-            await existing.refresh()
+            if (await existing.setPlugin(original, readRows)) for (const listener of listeners) listener()
+            await existing.refresh(readRows)
             continue
           }
-          const controller = new ContextClient(mounted, api, original, row.id, row.package)
+          const controller = new ContextClient(mounted, api, original, row.id, row.package, rows.read)
           controllers.set(row.package, controller)
           for (const listener of listeners) listener()
           mounted.effect(() => () => controller.dispose())
@@ -86,11 +88,13 @@ export async function apply(ctx: Context): Promise<void> {
             name: 'tiered-plugin-menu.active-session', id: `tiered-observer:${row.id}`, order: -100,
             inject: () => ({ controller }),
           }, ActiveSession)))
-          await controller.refresh()
+          await controller.refresh(readRows)
           mounted.effect(() => mounted.configForms.get(row.configNamespace ?? row.id).subscribe(() => { void controller.refresh().catch(error => mounted.logger.error(error)) }))
         }
       }
-      discover = () => pending = pending.then(sync, sync)
+      let live = true
+      mounted.effect(() => () => { live = false })
+      discover = coalesce(async () => { if (live) await sync() })
       if (modules) mounted.effect(() => modules.entries.state.subscribe(() => {
         if (!modules.entries.state.getSnapshot().syncing) void discover().catch(error => mounted.logger.error(error))
       }))
@@ -119,7 +123,7 @@ export async function apply(ctx: Context): Promise<void> {
     const ui = {
       Artwork: PluginArtworkDefault,
       Settings,
-      changed() { void discover().catch(error => child.logger.error(error)) },
+      changed() { rows.invalidate(); void discover().catch(error => child.logger.error(error)) },
       subscribe(listener: () => void) { stateListeners.add(listener); return () => { stateListeners.delete(listener) } },
       openDetails(packageName: string) { menu.close(); child.pluginNavigation.openBundle(packageName) },
     }

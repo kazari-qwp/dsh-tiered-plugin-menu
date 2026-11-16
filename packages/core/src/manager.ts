@@ -63,6 +63,8 @@ export class PluginManager {
   private stopped = false
   private syncing = Promise.resolve()
   private plugins = new Map<string, InstalledPlugin>()
+  private catalog?: Promise<InstalledPlugin[]>
+  private failures = new Map<string, Error>()
   private managed = new Set<string>()
   private services = new Map<string, ScopedServices>()
   private runtime: RuntimeTree
@@ -81,11 +83,25 @@ export class PluginManager {
     this.modules = new ScopedModules(`${store.filename}.data`)
     this.pluginIsolation = store.settings().pluginIsolation
     this.skills = new SkillPolicies(ctx, store, scope => this.chain(scope), (scope, read) => this.withSkillLookup(scope, read), options => this.lookupView(options))
+    // Cache discovery, never effective configuration or running state. Native
+    // package operations and profile edits invalidate the snapshot for all callers.
+    ctx.on('plugin-manager/changed', () => { this.catalog = undefined })
+    ctx.on('loader/config-update', () => { this.catalog = undefined })
+    ctx.on('loader/entry-init', () => { this.catalog = undefined })
+    ctx.on('loader/partial-dispose', entry => { if (entry.parent.tree !== this.runtime) this.catalog = undefined })
   }
 
   private async refresh(): Promise<void> {
     const infrastructure = ['dsh-tiered-plugin-core', 'dsh-tiered-plugin-menu', 'dsh-tiered-plugin-tui', 'dsh-tiered-plugin-go']
-    const plugins = (await installedPlugins(this.ctx)).filter(item => item.options.name !== mcpModule && !infrastructure.includes(item.package))
+    let catalog: Promise<InstalledPlugin[]>
+    let installed: InstalledPlugin[]
+    do {
+      catalog = this.catalog ??= installedPlugins(this.ctx)
+      try { installed = await catalog }
+      catch (error) { if (this.catalog === catalog) this.catalog = undefined; throw error }
+      // An install or native toggle may have completed during enumeration.
+    } while (catalog !== this.catalog)
+    const plugins = installed.filter(item => item.options.name !== mcpModule && !infrastructure.includes(item.package))
     for (const entry of this.ctx.loader.entries()) if (entry.parent.tree !== this.runtime && entry.options.name === mcpModule) {
       plugins.push(mcpAdapter(`mcp:${entry.id}`, entry.options, !entry.disabled))
     }
@@ -143,7 +159,9 @@ export class PluginManager {
     for (const item of this.plugins.values()) {
       const source = this.source(scope, item.id)
       const enabled = isClientScope(source) ? this.clientEnabled(item.id) : this.store.get(source, item.id)!.enabled
-      const definition = await this.inspectDefinition(item.id, enabled)
+      let definition: Plugin | undefined
+      try { definition = await this.inspectDefinition(item.id, enabled) }
+      catch (error) { this.recordFailure(source, item.id, error) }
       const plugin = definition as Plugin.Object | undefined
       const declared = this.declarations.get(item.id) ?? { provides: new Set<string>(), requires: new Set<string>() }
       for (const name of [plugin?.provide ?? []].flat()) declared.provides.add(name)
@@ -492,6 +510,15 @@ export class PluginManager {
     return this.instances.get(scopeKey(scope))?.get(id)
   }
 
+  private failureKey(scope: Scope, id: string) { return `${scopeKey(scope)}/${id}` }
+
+  private recordFailure(scope: Scope, id: string, error: unknown): void {
+    const key = this.failureKey(scope, id)
+    const failure = error instanceof Error ? error : new Error(String(error))
+    if (this.failures.get(key)?.message !== failure.message) this.ctx.logger.error(`插件 ${id}（${scopeKey(scope)}）：${failure.message}`)
+    this.failures.set(key, failure)
+  }
+
   async rows(scope: Scope): Promise<PluginRow[]> {
     await this.refresh()
     const components = await Promise.all([...this.plugins.values()].map(async adapter => {
@@ -501,11 +528,15 @@ export class PluginManager {
         ? adapter.owned ? this.store.get(clientScope, adapter.id) ?? { enabled: false, config: adapter.options.config ?? {} }
           : { enabled: this.clientEnabled(adapter.id), config: entry?.options.config ?? profileConfig(this.ctx, adapter.options) }
         : this.store.get(source, adapter.id)!
+      let error = (this.failures.get(this.failureKey(source, adapter.id)) ?? this.failures.get(this.failureKey(clientScope, adapter.id)))?.message
+      let config = saved.config
+      try { if (adapter.kind !== 'mcp' || saved.enabled) config = await this.normalize(adapter.id, saved.config, saved.enabled) }
+      catch (cause) { error = cause instanceof Error ? cause.message : String(cause) }
       return {
         official: !adapter.kind && adapter.bundle.official,
         bundleEnabled: !adapter.kind && isClientScope(scope) ? adapter.bundle.enabled : undefined,
         id: adapter.id, kind: adapter.kind, name: adapter.kind === 'mcp' ? String(saved.config.serverName ?? adapter.options.id) : adapter.parentId === adapter.id ? adapter.title ?? adapter.package : adapter.options.id, package: adapter.package, description: adapter.description, ...saved,
-        config: adapter.kind === 'mcp' && !saved.enabled ? saved.config : await this.normalize(adapter.id, saved.config, saved.enabled),
+        config, error,
         configNamespace: adapter.options.id,
         routes: this.services.get(adapter.id)?.paths() ?? [],
         routePrefix: this.services.get(adapter.id)?.routePrefix || undefined,
@@ -526,6 +557,7 @@ export class PluginManager {
       group.components!.push(row)
     }
     for (const group of result) if (group.components) {
+      group.error = group.components.filter(row => row.error).map(row => `${row.name}：${row.error}`).join('\n') || undefined
       group.enabled = group.components.every(row => row.enabled)
       group.active = group.components.every(row => row.active)
       group.own = group.components.some(row => row.own)
@@ -554,43 +586,73 @@ export class PluginManager {
     this.managed.add(id)
     const adapter = this.adapter(id)
     this.services.set(id, new ScopedServices(this.ctx, this.pluginIsolation ? id : undefined))
-    for (const entry of this.entries(id)) {
-      this.markEntry(entry)
-      const broker = this.services.get(id)
-      const running = !!entry.fiber?.uid
-      const disabled = entry.options.disabled ?? null
-      if (broker) {
-        if (running) await entry.update({ disabled: true })
-        const realm = this.pluginIsolation ? this.realm(clientScope, adapter.package) : undefined
-        let isolated = realm ? isolateProvidedServices(this.ctx, realm) : this.ctx
-        const isolation = entry.ctx[Context.isolate]
-        const labels: Record<string, symbol> = {}
-        for (const name of [...scopedServiceNames, 'agentPresets', ...(realm ? ['typert'] : [])]) { labels[name] = Symbol(name); isolated = isolated.isolate(name, labels[name]) }
-        const owner = await isolated.plugin(async child => { if (realm) await child.plugin(TypertRegistry) })
-        await broker.mount(owner.ctx, { scope: clientScope,
-          applies: view => this.applies(clientScope, id, view),
-          accepts: sessionId => this.accepts(clientScope, id, sessionId), configKey: () => JSON.stringify(entry.options.config ?? {}) })
-        this.mountPresets(owner.ctx, clientScope, id)
-        entry.ctx[Context.isolate] = Object.assign(Object.create(realm ?? isolation), labels)
-        let restore: (() => void) | undefined
-        if (realm) {
-          const reflect = Object.getOwnPropertyDescriptor(entry.ctx, 'reflect')
-          Object.defineProperty(entry.ctx, 'reflect', Object.getOwnPropertyDescriptor(isolateProvidedServices(this.ctx, realm), 'reflect')!)
-          const unbind = this.modules.bind(entry, `${scopeKey(clientScope)}/${adapter.package}`, adapter.peers)
-          restore = () => {
-            unbind()
-            if (reflect) Object.defineProperty(entry.ctx, 'reflect', reflect)
-            else delete (entry.ctx as any).reflect
+    const attempts: { entry: NonNullable<ReturnType<PluginManager['entry']>>; isolation: Record<string, symbol>;
+      disabled: boolean | null; running: boolean; owner?: Fiber; restore?: () => void }[] = []
+    try {
+      for (const entry of this.entries(id)) {
+        const attempt = { entry, isolation: entry.ctx[Context.isolate], disabled: entry.options.disabled ?? null,
+          running: !!entry.fiber?.uid } as (typeof attempts)[number]
+        attempts.push(attempt)
+        this.markEntry(entry)
+        const broker = this.services.get(id)
+        const running = !!entry.fiber?.uid
+        const disabled = entry.options.disabled ?? null
+        if (broker) {
+          if (running) await entry.update({ disabled: true })
+          const realm = this.pluginIsolation ? this.realm(clientScope, adapter.package) : undefined
+          let isolated = realm ? isolateProvidedServices(this.ctx, realm) : this.ctx
+          const isolation = entry.ctx[Context.isolate]
+          const labels: Record<string, symbol> = {}
+          for (const name of [...scopedServiceNames, 'agentPresets', ...(realm ? ['typert'] : [])]) { labels[name] = Symbol(name); isolated = isolated.isolate(name, labels[name]) }
+          const owner = await isolated.plugin(async child => { if (realm) await child.plugin(TypertRegistry) })
+          attempt.owner = owner
+          await broker.mount(owner.ctx, { scope: clientScope,
+            applies: view => this.applies(clientScope, id, view),
+            accepts: sessionId => this.accepts(clientScope, id, sessionId), configKey: () => JSON.stringify(entry.options.config ?? {}) })
+          this.mountPresets(owner.ctx, clientScope, id)
+          entry.ctx[Context.isolate] = Object.assign(Object.create(realm ?? isolation), labels)
+          let restore: (() => void) | undefined
+          if (realm) {
+            const reflect = Object.getOwnPropertyDescriptor(entry.ctx, 'reflect')
+            Object.defineProperty(entry.ctx, 'reflect', Object.getOwnPropertyDescriptor(isolateProvidedServices(this.ctx, realm), 'reflect')!)
+            const unbind = this.modules.bind(entry, `${scopeKey(clientScope)}/${adapter.package}`, adapter.peers)
+            restore = () => {
+              unbind()
+              if (reflect) Object.defineProperty(entry.ctx, 'reflect', reflect)
+              else delete (entry.ctx as any).reflect
+            }
+            attempt.restore = restore
           }
+          this.clientOwners.push({ entry, owner, isolation, labels, restore, realm })
         }
-        this.clientOwners.push({ entry, owner, isolation, labels, restore, realm })
+        if (running) {
+          if (broker) await entry.update({ disabled })
+          else await entry.fiber!.restart()
+          await entry.fiber?.await()
+        }
       }
-      if (running) {
-        if (broker) await entry.update({ disabled })
-        else await entry.fiber!.restart()
-        await entry.fiber?.await()
+    } catch (error) {
+      this.managed.delete(id)
+      this.services.delete(id)
+      this.clientOwners = this.clientOwners.filter(client => !attempts.some(attempt => attempt.entry === client.entry))
+      // Do not leave half-installed facades behind. A plugin that leaks its
+      // native registrations may also fail restoration; report the original
+      // failure without taking down unrelated plugins or the menu service.
+      for (const attempt of attempts.reverse()) {
+        try { await attempt.entry.update({ disabled: true }) } catch (cause) { this.ctx.logger.error(cause) }
+        try { attempt.restore?.() } catch (cause) { this.ctx.logger.error(cause) }
+        attempt.entry.ctx[Context.isolate] = attempt.isolation
+        delete (attempt.entry.ctx as Context & { [routing]?: unknown })[routing]
+        try { if (attempt.owner) await disposeFiber(attempt.owner) } catch (cause) { this.ctx.logger.error(cause) }
+        try {
+          if (attempt.running) await attempt.entry.update({ disabled: attempt.disabled })
+          else attempt.entry.options.disabled = attempt.disabled ?? undefined
+        } catch (cause) { this.ctx.logger.error(cause) }
       }
+      this.recordFailure(clientScope, id, error)
+      throw error
     }
+    this.failures.delete(this.failureKey(clientScope, id))
   }
 
   async start(): Promise<void> {
@@ -646,16 +708,27 @@ export class PluginManager {
     const targets: InstalledPlugin[] = []
     for (const adapter of this.plugins.values()) {
       if (!adapter.owned && !this.pluginIsolation && !this.store.hasScoped(adapter.id)) continue
-      const definition = await this.definition(adapter.id) as Plugin.Object
-      if (definition.apply === this.ctx.fiber.runtime?.callback || (definition as Plugin.Object & { tieredManagerFrontend?: boolean }).tieredManagerFrontend) continue
-      targets.push(adapter)
+      try {
+        const definition = await this.definition(adapter.id) as Plugin.Object
+        if (definition.apply === this.ctx.fiber.runtime?.callback || (definition as Plugin.Object & { tieredManagerFrontend?: boolean }).tieredManagerFrontend) continue
+        targets.push(adapter)
+      } catch (error) { this.recordFailure(clientScope, adapter.id, error) }
     }
     // Release the old client registrations together before mounting private ones.
     const clients = this.pluginIsolation ? targets.flatMap(adapter => this.entries(adapter.id)).map(entry => ({ entry, disabled: entry.options.disabled ?? null })) : []
-    for (const { entry } of clients) await entry.update({ disabled: true })
-    for (const adapter of targets) await this.manage(adapter.id)
+    for (const { entry } of clients) {
+      try { await entry.update({ disabled: true }) } catch (error) { this.ctx.logger.error(error) }
+    }
+    for (const adapter of targets) {
+      try { await this.manage(adapter.id) } catch { /* manage records the individual failure. */ }
+    }
     if (this.pluginIsolation) this.connectDependencies([clientScope])
-    for (const { entry, disabled } of clients) await entry.update({ disabled })
+    for (const { entry, disabled } of clients) {
+      try { await entry.update({ disabled }) } catch (error) {
+        const adapter = targets.find(adapter => this.entries(adapter.id).includes(entry))
+        if (adapter) this.recordFailure(clientScope, adapter.id, error)
+      }
+    }
     if (this.pluginIsolation) await this.dependencyNodes(clientScope)
     await this.sync()
     if (this.pluginIsolation) this.ctx.on('loader/entry-init', entry => {
@@ -681,6 +754,7 @@ export class PluginManager {
   }
 
   private checkChange(result: ChangeResult): void {
+    this.catalog = undefined
     if (result.error) throw new Error(result.error.diagnostic ?? result.error.code)
   }
 
@@ -760,13 +834,17 @@ export class PluginManager {
       return
     }
     await this.manage(id)
+    this.failures.delete(this.failureKey(scope, id))
     this.checkScope(scope)
     this.store.set(scope, id, { enabled, config })
     try {
       if (enabled) await this.instance(scope, id)?.plugin.update(config)
       await this.sync()
+      const failure = this.failures.get(this.failureKey(scope, id))
+      if (enabled && failure) throw failure
       await this.services.get(id)?.refresh()
     } catch (error) {
+      this.failures.delete(this.failureKey(scope, id))
       if (previous) this.store.set(scope, id, previous)
       else this.store.remove(scope, id)
       const failed = this.instance(scope, id)
@@ -819,7 +897,13 @@ export class PluginManager {
       const saved = this.store.get(scope, adapter.id)
       if (!saved?.enabled) continue
       wanted.add(`${scopeKey(scope)}/${adapter.id}`)
-      if (!this.instance(scope, adapter.id)) await this.mount(scope, adapter, saved.config)
+      if (!this.managed.has(adapter.id) && this.failures.has(this.failureKey(clientScope, adapter.id))) continue
+      if (!this.instance(scope, adapter.id)) {
+        try {
+          await this.mount(scope, adapter, saved.config)
+          this.failures.delete(this.failureKey(scope, adapter.id))
+        } catch (error) { this.recordFailure(scope, adapter.id, error) }
+      }
     }
     for (const [key, instances] of this.instances) for (const [id, instance] of instances) {
       if (wanted.has(`${key}/${id}`)) continue

@@ -52,7 +52,12 @@ test('未加载插件读取包内声明配置，运行配置和分级覆盖仍�
     ctx.tieredPlugins.store.set(workspace, options.id, { enabled: false, config: { id: 'saved' } })
     assert.deepEqual((await ctx.tieredPlugins.rows(workspace))[0]!.config, { id: 'saved' })
     ctx.tieredPlugins.store.set(workspace, options.id, { enabled: false, config: {} })
-    await assert.rejects(ctx.tieredPlugins.rows(workspace), /id missing required value/)
+    const [invalid] = await ctx.tieredPlugins.rows(workspace)
+    assert.match(invalid!.error!, /id missing required value/)
+    assert.deepEqual(invalid!.config, {}, '无效配置仍可打开修正，不阻断整个列表')
+    await assert.rejects(ctx.tieredPlugins.saveConfig(workspace, options.id, {}), /id missing required value/)
+    await ctx.tieredPlugins.saveConfig(workspace, options.id, { id: 'repaired' })
+    assert.equal((await ctx.tieredPlugins.rows(workspace))[0]!.error, undefined)
   } finally { await ctx.fiber.dispose() }
 })
 

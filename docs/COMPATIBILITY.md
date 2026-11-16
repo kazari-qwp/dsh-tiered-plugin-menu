@@ -57,6 +57,7 @@ Recommended coverage: cold starts with the native instance disabled; independent
 | 实验性隔离与会话恢复 / Experimental isolation and session restoration | [PLUGIN_ISOLATION.md](PLUGIN_ISOLATION.md) |
 | 工作区删除与配置恢复 / Workspace deletion and configuration restoration | [WORKSPACE_LIFECYCLE.md](WORKSPACE_LIFECYCLE.md) |
 | 插件前端更新 / Plugin frontend updates | [CLIENT_UPDATES.md](CLIENT_UPDATES.md) |
+| 冷启动性能与单插件启动失败 / Cold startup and individual plugin failures | [STARTUP_PERFORMANCE.md](STARTUP_PERFORMANCE.md) |
 | 多端架构与实际界面验证 / Platforms and live UI | [COMPONENTS.md](COMPONENTS.md)、[LIVE_UI_TESTING.md](LIVE_UI_TESTING.md) |
 | 组件升级与历史修复 / Component updates and earlier fixes | [COMPONENT_UPDATES.md](COMPONENT_UPDATES.md)、[CORE_0.8.1.md](CORE_0.8.1.md) |
 

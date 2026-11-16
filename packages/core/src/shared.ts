@@ -22,6 +22,8 @@ export interface PluginRow extends SavedConfig {
   source: Scope
   active: boolean
   managed?: boolean
+  /** Failure of this plugin only; other menu rows remain usable. */
+  error?: string
   verified: boolean
   settings: 'native' | 'registered'
   /** The installed package is the list item; components are shown in its details. */
