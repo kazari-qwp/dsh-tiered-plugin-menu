@@ -1,5 +1,5 @@
 import { Context, Service, type Fiber, type Plugin } from '@deepseek-ai/cordis'
-import type {} from '@deepseek-ai/cordis-plugin-loader'
+import type { Entry } from '@deepseek-ai/cordis-plugin-loader'
 import { createElement, useEffect, useState, type ComponentType, type ReactNode } from 'react'
 import type { MenuRemote } from 'dsh-tiered-plugin-core/remote-contract'
 import { clientScope, scopeKey, type PluginRow, type Scope } from 'dsh-tiered-plugin-core/shared'
@@ -15,8 +15,7 @@ export class ContextClient {
   revision = 0
   private sessionId: string | null = null
   private mounted?: Fiber
-  private native?: { entry: any; isolation: Record<string, symbol>; disabled: boolean | null }
-  private mutedSlots = Symbol('tiered-managed-client')
+  private native?: { entry: Entry; disabled: Entry['options']['disabled'] | null; restore(): void }
   private current = ''
   private removeCard?: () => void
   private pending = Promise.resolve()
@@ -32,17 +31,32 @@ export class ContextClient {
     ctx.on('loader/patch-context', async (entry, next) => {
       if (this.managed && !this.stopped && entry.options.name === this.packageName) {
         this.rememberNative(entry)
-        // 原入口等待私有 slots；重新开启全局时创建的新入口也一样处理。
-        entry.ctx[Context.isolate].slots = this.mutedSlots
       }
       await next()
     })
   }
 
-  private rememberNative(entry: any) {
+  private rememberNative(entry: Entry) {
     if (this.native?.entry === entry) return
-    const isolation = Object.assign(Object.create(Object.getPrototypeOf(entry.ctx[Context.isolate])), entry.ctx[Context.isolate])
-    this.native = { entry, isolation, disabled: entry.options.disabled ?? null }
+    this.native?.restore()
+    const ctx = entry.ctx
+    const registry = ctx.registry
+    const descriptor = Object.getOwnPropertyDescriptor(ctx, 'registry')
+    // The Loader entry keeps ownership of the module and its styles. Only the
+    // controller runs the real UI, with the selected scope's configuration.
+    const managedEntry = { name: this.packageName, apply() {} }
+    const registryView = Object.create(registry, {
+      plugin: { value: (plugin: Plugin, config: unknown, getOuterStack?: () => string[]) =>
+        registry.plugin(registry.resolve(plugin) ? managedEntry : plugin, config, getOuterStack) },
+    })
+    Object.defineProperty(ctx, 'registry', { configurable: true, value: registryView })
+    this.native = {
+      entry, disabled: entry.options.disabled ?? null,
+      restore() {
+        if (descriptor) Object.defineProperty(ctx, 'registry', descriptor)
+        else Reflect.deleteProperty(ctx, 'registry')
+      },
+    }
   }
 
   select(sessionId: string | null) { this.sessionId = sessionId; return this.refresh() }
@@ -127,6 +141,7 @@ export class ContextClient {
       const { disabled } = this.native!
       await entry.update({ disabled: true })
       await entry.update({ disabled })
+      await entry.fiber?.await()
     }
     if (entry && client && !this.removeCard) {
       const row = client.components?.[0] ?? client
@@ -164,15 +179,16 @@ export class ContextClient {
     this.fetch.dispose()
     await this.pending.catch(() => {})
     await this.clearClient()
-    if (this.native && [...this.ctx.loader.entries()].includes(this.native.entry)) {
-      const { entry, isolation } = this.native
+    const native = this.native
+    if (native && [...this.ctx.loader.entries()].includes(native.entry)) {
+      const { entry } = native
       // 下级实例也会让原前端进入模块图；卸载菜单时只恢复实际启用的客户端插件。
-      const disabled = this.clientEnabled ? this.native.disabled : true
-      await entry.update({ disabled: true })
-      entry.ctx[Context.isolate] = isolation
+      const disabled = this.clientEnabled ? native.disabled : true
+      try { await entry.update({ disabled: true }) }
+      finally { native.restore() }
       if (this.ctx.root.fiber.state === 2) { await entry.update({ disabled }); await entry.fiber?.await() }
       else entry.options.disabled = disabled
-    }
+    } else native?.restore()
   }
 }
 

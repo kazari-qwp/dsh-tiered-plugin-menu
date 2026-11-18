@@ -87,6 +87,8 @@ test('native frontend replacement refreshes scoped panels, settings and CSS', as
         const observer = ctx.slots.entries('tiered-plugin-menu.active-session' as any)[0]!
         const controller = (observer.inject!() as any).controller
         await controller.select('A')
+        const entry = [...ctx.loader.entries()].find(entry => entry.options.name === id)
+        assert.equal(entry?.fiber?.state, 2, 'web boot sees the managed module as active')
         const ui = (ctx.slots.entries('shell.overlay').find(e => e.options.id === 'tiered-plugin-menu')!.inject!() as any).ui
         await act(async () => { settings = create(createElement(ui.Settings, { row: row({ level: 'session', id: 'A' }), scope: { level: 'session', id: 'A' } })) })
         assert.equal(settings!.root.findByProps({ 'data-settings-version': 1 }).children[0], 'SESSION A')
@@ -99,6 +101,7 @@ test('native frontend replacement refreshes scoped panels, settings and CSS', as
         for (let i = 0; i < 4; i++) await new Promise(resolve => setImmediate(resolve))
       })
       assert.match(document.querySelector('style')!.textContent!, /--version: 2/, `managed=${managed}: new stylesheet`)
+      assert.deepEqual(system.entries.state.getSnapshot().failures, [], 'native module diagnostics remain clean after replacement')
       const panels = ctx.slots.entries('conversation.view').filter(entry => entry.options.id === id)
       assert.equal(panels.length, 1, `managed=${managed}: exactly one current panel`)
       assert.equal(ctx.slots.entries('conversation.view').filter(entry => entry.options.id === 'tiered-plugin-menu.settings').length, Number(managed), 'menu tab remains independent of package reload')
@@ -120,6 +123,7 @@ test('native frontend replacement refreshes scoped panels, settings and CSS', as
         for (let i = 0; i < 4; i++) await new Promise(resolve => setImmediate(resolve))
       })
       assert.match(document.querySelector('style')!.textContent!, /--version: 3/)
+      assert.deepEqual(system.entries.state.getSnapshot().failures, [], 'native module diagnostics remain clean after reinsertion')
       const restored = ctx.slots.entries('conversation.view').filter(entry => entry.options.id === id)
       assert.equal(restored.length, 1)
       await act(async () => { panel = create(createElement(restored[0]!.component as any)) })
