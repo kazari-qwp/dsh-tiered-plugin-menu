@@ -21,7 +21,11 @@ function load<T>(filename: string): T {
 }
 
 test('native frontend replacement refreshes scoped panels, settings and CSS', async () => {
-  for (const managed of [false, true]) {
+  for (const { managed, hasSettings } of [
+    { managed: false, hasSettings: true },
+    { managed: true, hasSettings: true },
+    { managed: true, hasSettings: false },
+  ]) {
     const dom = new JSDOM('<!doctype html><html><head></head><body></body></html>', { url: 'http://localhost/' })
     Object.assign(globalThis, { window: dom.window, document: dom.window.document, location: dom.window.location })
     const modules = load<typeof Modules>(require.resolve('@deepseek-ai/dsh-client-modules/client'))
@@ -43,7 +47,7 @@ test('native frontend replacement refreshes scoped panels, settings and CSS', as
           const form = ctx.configForms.get<{ text: string }>(id)
           ctx.slots.inject('conversation.view', () => ctx.slots.register({ name: 'conversation.view', id },
             () => createElement('span', { 'data-panel-version': revision }, String(form.getSnapshot().value?.text))))
-          ctx.slots.inject('plugins.bundle.config', () => ctx.slots.register({ name: 'plugins.bundle.config', key: id },
+          if (hasSettings) ctx.slots.inject('plugins.bundle.config', () => ctx.slots.register({ name: 'plugins.bundle.config', key: id },
             () => createElement('span', { 'data-settings-version': revision }, String(form.getSnapshot().value?.text))))
         } }
       } })
@@ -89,9 +93,11 @@ test('native frontend replacement refreshes scoped panels, settings and CSS', as
         await controller.select('A')
         const entry = [...ctx.loader.entries()].find(entry => entry.options.name === id)
         assert.equal(entry?.fiber?.state, 2, 'web boot sees the managed module as active')
-        const ui = (ctx.slots.entries('shell.overlay').find(e => e.options.id === 'tiered-plugin-menu')!.inject!() as any).ui
-        await act(async () => { settings = create(createElement(ui.Settings, { row: row({ level: 'session', id: 'A' }), scope: { level: 'session', id: 'A' } })) })
-        assert.equal(settings!.root.findByProps({ 'data-settings-version': 1 }).children[0], 'SESSION A')
+        if (hasSettings) {
+          const ui = (ctx.slots.entries('shell.overlay').find(e => e.options.id === 'tiered-plugin-menu')!.inject!() as any).ui
+          await act(async () => { settings = create(createElement(ui.Settings, { row: row({ level: 'session', id: 'A' }), scope: { level: 'session', id: 'A' } })) })
+          assert.equal(settings!.root.findByProps({ 'data-settings-version': 1 }).children[0], 'SESSION A')
+        }
       }
       assert.match(document.querySelector('style')!.textContent!, /--version: 1/)
       version = 2
@@ -103,13 +109,13 @@ test('native frontend replacement refreshes scoped panels, settings and CSS', as
       assert.match(document.querySelector('style')!.textContent!, /--version: 2/, `managed=${managed}: new stylesheet`)
       assert.deepEqual(system.entries.state.getSnapshot().failures, [], 'native module diagnostics remain clean after replacement')
       const panels = ctx.slots.entries('conversation.view').filter(entry => entry.options.id === id)
-      assert.equal(panels.length, 1, `managed=${managed}: exactly one current panel`)
+      assert.equal(panels.length, 1, `managed=${managed}, hasSettings=${hasSettings}: exactly one current panel`)
       assert.equal(ctx.slots.entries('conversation.view').filter(entry => entry.options.id === 'tiered-plugin-menu.settings').length, Number(managed), 'menu tab remains independent of package reload')
       let panel!: ReactTestRenderer
       await act(async () => { panel = create(createElement(panels[0]!.component as any)) })
       assert.equal(panel.root.findByProps({ 'data-panel-version': 2 }).children[0], managed ? 'SESSION A' : 'CLIENT')
       await act(async () => panel.unmount())
-      if (managed) assert.equal(settings!.root.findByProps({ 'data-settings-version': 2 }).children[0], 'SESSION A')
+      if (settings) assert.equal(settings.root.findByProps({ 'data-settings-version': 2 }).children[0], 'SESSION A')
       // An install can briefly remove the package from the host graph before adding the replacement.
       await act(async () => {
         await system.entries.sync(graph('removed', false))
@@ -129,7 +135,7 @@ test('native frontend replacement refreshes scoped panels, settings and CSS', as
       await act(async () => { panel = create(createElement(restored[0]!.component as any)) })
       assert.equal(panel.root.findByProps({ 'data-panel-version': 3 }).children[0], managed ? 'SESSION A' : 'CLIENT')
       await act(async () => panel.unmount())
-      if (managed) assert.equal(settings!.root.findByProps({ 'data-settings-version': 3 }).children[0], 'SESSION A')
+      if (settings) assert.equal(settings.root.findByProps({ 'data-settings-version': 3 }).children[0], 'SESSION A')
     } finally {
       await act(async () => settings?.unmount())
       await ctx.fiber.dispose()

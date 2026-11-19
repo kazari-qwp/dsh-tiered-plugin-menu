@@ -71,6 +71,7 @@ export class ContextClient {
     let changed = false
     const run = async () => {
       if (this.stopped || this.plugin === plugin) return
+      this.plugin = undefined
       await this.clearClient()
       this.plugin = plugin
       this.revision++
@@ -87,9 +88,14 @@ export class ContextClient {
     this.mounted = undefined
     this.removeCard?.()
     this.removeCard = undefined
-    for (const card of this.cards.values()) await (await card).dispose()
+    const cards = [...this.cards.values()]
     this.cards.clear()
     this.current = ''
+    for (const pending of cards) {
+      // A frontend may have no settings card. A failed capture owns no card
+      // to dispose and must not prevent the replacement UI from mounting.
+      await pending.then(card => card.dispose(), () => {}).catch(error => this.ctx.logger.error(error))
+    }
   }
 
   private form(row: PluginRow, scope: Scope) {
@@ -108,12 +114,14 @@ export class ContextClient {
   }
 
   async settings(row: PluginRow, scope: Scope, readRows = this.readRows): Promise<ComponentType> {
-    if (!this.plugin) throw new Error('插件前端正在重新加载')
+    const plugin = this.plugin
+    if (!plugin || this.stopped) throw new Error('插件前端正在重新加载')
     const current = await readRows(scope)
+    if (this.plugin !== plugin || this.stopped) throw new Error('插件前端正在重新加载')
     row = current.flatMap(item => item.components ?? [item]).find(item => item.id === row.id) ?? row
     const form = this.form(row, scope)
     const key = `${scopeKey(scope)}/${row.id}`
-    if (!this.cards.has(key)) this.cards.set(key, captureRegisteredSettings(this.ctx, this.plugin, row.configNamespace ?? this.namespace, form,
+    if (!this.cards.has(key)) this.cards.set(key, captureRegisteredSettings(this.ctx, plugin, row.configNamespace ?? this.namespace, form,
       ctx => scopedRemote(ctx, this.api, row, scope), this.packageName))
     return (await this.cards.get(key)!).Page
   }
