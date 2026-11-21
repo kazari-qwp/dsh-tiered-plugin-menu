@@ -1,4 +1,5 @@
 import type { RemoteResult, TypertCodec, TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
+import type { ChangeResult, PluginInstallProgress } from '@deepseek-ai/dsh-plugin-manager/types'
 import type { ChildSettings, MenuContext, MenuSettings, Scope, PluginConfig, PluginRow, ChangeMode, ChangePlan, SkillRow } from './shared.ts'
 
 export interface MenuRemote {
@@ -23,8 +24,22 @@ export interface MenuRemote {
   configure(scope: Scope, id: string, enabled: boolean, config: PluginConfig, confirmed: boolean): Promise<RemoteResult<void>>
 }
 
+export const coreRegistrationRequestPrefix = 'dsh-tiered-plugin-core:'
+
+export type CoreRegistrationStatus =
+  | { state: 'working'; phase: 'waiting' | 'enabling' | PluginInstallProgress['phase']; attempt?: { index: number; total: number } }
+  | { state: 'finished'; application: ChangeResult['application']; reason?: string }
+
+export interface CoreRegistrationRemote {
+  status(): Promise<RemoteResult<CoreRegistrationStatus | null>>
+  retry(): Promise<RemoteResult<CoreRegistrationStatus | null>>
+}
+
 declare module '@deepseek-ai/dsh-typert-protocol' {
-  interface TypertRemoteNamespaceMap { tieredPluginMenu: MenuRemote }
+  interface TypertRemoteNamespaceMap {
+    tieredPluginMenu: MenuRemote
+    tieredCoreRegistration: CoreRegistrationRemote
+  }
 }
 
 const codec = (kind: string): TypertCodec => ({ mode: 'strict', typeSymbol: kind, create: () => ({
@@ -66,5 +81,14 @@ export const remoteContribution: TypertRemoteContribution = {
     invocation: { kind: 'direct' as const },
     parameters: (parameters as string[][]).map(([name, kind]) => ({ name, wire: name, source: 'json' as const, codec: codec(kind!) })),
     cancellation: { parameter: 'signal' }, result: { mode: 'src-json' as const },
+  })),
+}
+
+// The version page can query this before the main Core service is mounted.
+export const coreRegistrationContribution: TypertRemoteContribution = {
+  package: 'dsh-tiered-plugin-core',
+  descriptors: ['status', 'retry'].map(method => ({
+    id: `tieredCoreRegistration/${method}`, service: 'tieredCoreRegistration', namespace: 'tieredCoreRegistration', method,
+    invocation: { kind: 'direct' }, parameters: [], cancellation: { parameter: 'signal' }, result: { mode: 'src-json' },
   })),
 }

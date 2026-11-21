@@ -7,7 +7,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { PluginArtworkDefault } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TypertClientRemote } from '@deepseek-ai/dsh-typert-protocol'
-import { remoteContribution } from 'dsh-tiered-plugin-core/remote-contract'
+import { coreRegistrationContribution, remoteContribution } from 'dsh-tiered-plugin-core/remote-contract'
 import { ConversationSettings, LevelSettings, NativeSettings } from './menu.tsx'
 import { createMenuState, MenuOverlay, NewSessionButton, SessionButton } from './sidebar.tsx'
 import { createElement, useEffect, useState, type ReactElement } from 'react'
@@ -28,7 +28,11 @@ export async function apply(ctx: Context): Promise<void> {
   const remote = ctx.get('remote') as TypertClientRemote
   const unmount = await remote.$mount(remoteContribution)
   ctx.effect(() => unmount)
-  ctx.inject(['remote.pluginManager', 'pluginNavigation'], child => {
+  ctx.inject(['remote.pluginManager', 'pluginNavigation'], async child => {
+    try {
+      const stop = await remote.$mount(coreRegistrationContribution)
+      child.effect(() => stop)
+    } catch (error) { child.logger.debug('共享核心登记状态接口暂不可用：%s', error) }
     child.effect(() => child.slots.inject('plugins.detail.section', () => child.slots.register({
       name: 'plugins.detail.section', id: 'tiered-plugin-menu.component-versions',
       inject: () => ({ remote, open: (name: string) => child.pluginNavigation.openBundle(name) }),

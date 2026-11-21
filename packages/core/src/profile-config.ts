@@ -4,6 +4,7 @@ import { loadOptionalPatches, readProfilePatches, reconcileProfilePatches } from
 import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { setTimeout as delay } from 'node:timers/promises'
 import { Scalar, isMap, isSeq, parseDocument, visit } from 'yaml'
 import type { PluginConfig } from './shared.ts'
 
@@ -18,7 +19,8 @@ export function profileConfig(ctx: Context, options: EntryOptions): PluginConfig
 /** ConfigEditor only edits running plugins. Persist an inactive entry without activating it. */
 export async function saveInactiveConfig(ctx: Context, options: EntryOptions, config: PluginConfig): Promise<void> {
   const profile = ctx.profileContext
-  const run = () => withFileLock(join(profile.dir, 'package.json'), async () => {
+  const manifest = join(profile.dir, 'package.json')
+  const save = async () => {
     let before: string
     try { before = await readFile(profile.patchPath, 'utf8') }
     catch (error) {
@@ -47,7 +49,26 @@ export async function saveInactiveConfig(ctx: Context, options: EntryOptions, co
       await reconcileProfilePatches(ctx.root, readProfilePatches('dsh', profile), 'dsh')
       throw error
     }
-  })
+  }
   const hmr = ctx.get('hmr')
-  await (hmr ? hmr.runExclusive(run) : run())
+  if (!hmr) return withFileLock(manifest, save)
+
+  // Native package operations may hold the writer lock while waiting for HMR.
+  // Yield the HMR queue on contention so those operations can finish first.
+  const deadline = Date.now() + 2000
+  const lockTimeout = `atomic-write: timed out waiting for the writer lock at ${manifest}.lock`
+  for (;;) {
+    let acquired = false
+    try {
+      await hmr.runExclusive(() => withFileLock(manifest, async () => {
+        acquired = true
+        await save()
+      }, { waitMs: 0 }))
+      return
+    } catch (error) {
+      if (acquired || !(error instanceof Error) || error.message !== lockTimeout) throw error
+      if (Date.now() >= deadline) throw new Error('其他插件操作正在使用配置，请稍后再保存。', { cause: error })
+    }
+    await delay(75)
+  }
 }

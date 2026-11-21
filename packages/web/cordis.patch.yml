@@ -3,5 +3,6 @@
       name: dsh-tiered-plugin-core/component
       config:
         service: tieredWeb
+        reportRegistration: true
     - id: tiered-plugin-menu
       name: dsh-tiered-plugin-menu
