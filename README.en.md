@@ -145,6 +145,12 @@ Nested workspaces similarly resolve each item's default through ancestor workspa
 
 Scope settings live in `$DSH_HOME/plugins/tiered-plugin-menu.json`; the menu's `dataFile` option overrides that location. Client settings are persisted through DSH's native profile editor. Existing package-level settings migrate to component keys.
 
+## Copy and import configuration
+
+In Desktop / Web, use **复制配置到剪贴板** (Copy configuration) beside the scope tabs. One copy includes this level's overrides and child defaults for plugins, official plugins, MCP and Skills. In the target workspace or session, open **导入配置** (Import configuration), paste the text, and confirm to replace both sets of settings.
+
+Import checks that the required plugins and dependencies are available. Clipboard data may include secrets or local paths, so share it carefully.
+
 ## Dependencies
 
 Before changing switches, the menu calculates the complete affected set:

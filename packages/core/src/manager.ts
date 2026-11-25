@@ -10,9 +10,11 @@ import { ConfigStore } from './store.ts'
 import { profileConfig, saveInactiveConfig } from './profile-config.ts'
 import { installedPlugins, mcpAdapter, mcpModule, type InstalledPlugin } from './catalog.ts'
 import { randomUUID } from 'node:crypto'
+import { isDeepStrictEqual } from 'node:util'
 import type { SkillViewOptions } from '@deepseek-ai/dsh-skill'
 import { bindScopeParent } from '@deepseek-ai/dsh-scope'
-import { SkillPolicies } from './skill-policies.ts'
+import { SkillPolicies, validateSkillConfig } from './skill-policies.ts'
+import { parsePreset, type ScopePreset } from './preset.ts'
 import { attachRoute, installRouting, routing } from './routing.ts'
 import { catalogScope, childScope, clientScope, isClientScope, ownScope, scopeKey, type ChildSettings, type MenuContext, type PluginConfig, type PluginRow, type Scope } from './shared.ts'
 import type { ChangeResult } from '@deepseek-ai/dsh-plugin-manager'
@@ -23,7 +25,7 @@ import { owningWorkspace, parentWorkspace } from './workspace-tree.ts'
 import { ScopedPresets } from './scoped-presets.ts'
 import { ScopedModules } from './scoped-modules.ts'
 import { dependencyPlan, type DependencyNode } from './dependencies.ts'
-import type { ChangeMode, ChangePlan } from './shared.ts'
+import type { ChangeMode, ChangePlan, SavedConfig } from './shared.ts'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import type { PeerScope } from '@deepseek-ai/dsh-typert-protocol'
 import type {} from '@deepseek-ai/dsh-api-gateway'
@@ -62,6 +64,7 @@ export class PluginManager {
   readonly instances = new Map<string, Map<string, Instance>>()
   private stopped = false
   private syncing = Promise.resolve()
+  private importingPreset = false
   private plugins = new Map<string, InstalledPlugin>()
   private catalog?: Promise<InstalledPlugin[]>
   private failures = new Map<string, Error>()
@@ -458,6 +461,193 @@ export class PluginManager {
   setChildSettings(scope: Scope, independent: boolean): void { this.checkScope(scope); this.store.setChildren(scope, independent) }
 
   resetChildSettings(scope: Scope): void { this.checkScope(scope); this.store.resetChildren(scope) }
+
+  private nativePreset() {
+    const own: ScopePreset['own'] = Object.create(null)
+    const bundles: NonNullable<ScopePreset['bundles']> = Object.create(null)
+    for (const adapter of this.plugins.values()) {
+      if (adapter.owned) continue
+      own[adapter.id] = { enabled: this.clientEnabled(adapter.id), config: this.entry(adapter.id)?.options.config ?? profileConfig(this.ctx, adapter.options) }
+      if (!adapter.kind) bundles[adapter.package] = adapter.bundle.enabled
+    }
+    return { own, bundles }
+  }
+
+  async exportPreset(scope: Scope): Promise<string> {
+    scope = ownScope(scope)
+    this.checkScope(scope)
+    await this.refresh()
+    const saved = this.store.scopeSettings(scope)
+    const native = isClientScope(scope) ? this.nativePreset() : undefined
+    return JSON.stringify({ format: 'dsh-tiered-plugin-menu', version: 1, ...saved,
+      own: { ...saved.own, ...native?.own }, bundles: native?.bundles } satisfies ScopePreset, null, 2)
+  }
+
+  async importPreset(scope: Scope, text: string): Promise<void> {
+    if (this.importingPreset) throw new Error('正在导入另一份配置，请稍后重试')
+    this.importingPreset = true
+    try { await this.applyPreset(ownScope(scope), parsePreset(text)) }
+    finally { this.importingPreset = false }
+  }
+
+  private async applyPreset(scope: Scope, preset: ScopePreset): Promise<void> {
+    this.checkScope(scope)
+    await this.refresh()
+    const client = isClientScope(scope)
+    const previous = this.store.scopeSettings(scope)
+    const nativeBefore = client ? this.nativePreset() : undefined
+    const nativeOwn: Record<string, SavedConfig> = Object.create(null)
+    const localOwn = Object.fromEntries(Object.entries(preset.own).filter(([id, saved]) => {
+      if (!client || id.startsWith('skill:') || this.plugins.get(id)?.owned) return true
+      nativeOwn[id] = saved
+      return false
+    }))
+    const nativeBundles: NonNullable<ScopePreset['bundles']> = Object.assign(Object.create(null), client ? preset.bundles : undefined)
+    for (const name of Object.keys(nativeBundles)) {
+      if (!Object.hasOwn(nativeBefore!.bundles, name)) throw new Error(`未安装的插件：${name}`)
+    }
+    for (const [id, saved] of [...Object.entries(preset.own), ...Object.entries(preset.children.plugins)]) {
+      if (id.startsWith('skill:')) { validateSkillConfig(id.slice(6), saved.config); continue }
+      const adapter = this.plugins.get(id)
+      if (!adapter) throw new Error(`未安装的插件或 MCP：${id}`)
+      if (saved.enabled || adapter.kind !== 'mcp') await this.normalize(id, saved.config, saved.enabled)
+    }
+    for (const [id, saved] of Object.entries(nativeOwn)) {
+      const adapter = this.adapter(id)
+      if (!adapter.kind && saved.enabled) {
+        if (nativeBundles[adapter.package] === false) throw new Error(`组合包已关闭，无法启用组件：${id}`)
+        nativeBundles[adapter.package] = true
+      }
+    }
+    if (nativeBefore) for (const adapter of this.plugins.values()) {
+      if (!adapter.kind && nativeBundles[adapter.package] === true && !nativeBefore.bundles[adapter.package]) {
+        nativeOwn[adapter.id] ??= nativeBefore.own[adapter.id]!
+      }
+    }
+    const after = (chain: Scope[], id: string) => {
+      const adapter = this.plugins.get(id)
+      for (const candidate of chain) {
+        if (isClientScope(candidate)) {
+          if (client && adapter?.owned) return localOwn[id]?.enabled ?? false
+          if (client && adapter && nativeBundles[adapter.package] === false) return false
+          return nativeOwn[id]?.enabled ?? this.clientEnabled(id)
+        }
+        const edited = scopeKey(ownScope(candidate)) === scopeKey(scope)
+        const saved = edited ? candidate.children ? preset.children.independent && preset.children.plugins[id] : localOwn[id]
+          : this.store.get(candidate, id)
+        if (saved) return saved.enabled
+      }
+      return false
+    }
+    const descendants = new Map<string, Scope>()
+    for (const candidate of [...this.store.scopes(),
+      ...this.ctx.workspaceRegistry.list().map(workspace => ({ level: 'workspace' as const, id: String(workspace.id) })),
+      ...this.ctx.agents.list().map(agent => ({ level: 'session' as const, id: String(agent.id) }))]) {
+      if (this.chain(candidate).some(parent => scopeKey(parent) === scopeKey(scope))) descendants.set(scopeKey(candidate), candidate)
+    }
+    let nativeOrder: string[] = []
+    let nativeCloseOrder: string[] = []
+    for (const view of [scope, childScope(scope), ...[...descendants.values()].filter(candidate => scopeKey(candidate) !== scopeKey(scope))]) {
+      const chain = this.chain(view)
+      const nodes = await this.dependencyNodes(view)
+      const provided = new Set(nodes.flatMap(node => node.provides))
+      const host = new Set(Object.keys(this.ctx.reflect.props).filter(name => this.ctx.reflect.props[name]!.type === 'service' && !provided.has(name) && this.ctx.get(name) !== undefined))
+      const issues = (state: DependencyNode[]) => {
+        const enabled = new Set(state.filter(node => node.enabled).map(node => node.id))
+        const plan = dependencyPlan(state, [...enabled], true, host)
+        return [...plan.missing, ...plan.enable.filter(id => !enabled.has(id)).map(id => `需启用 ${id}`)]
+      }
+      const desired = nodes.map(node => ({ ...node, enabled: node.id.startsWith('@entry:') ? node.enabled : after(chain, node.id) }))
+      const existing = new Set(issues(nodes))
+      const missing = issues(desired).filter(issue => !existing.has(issue))
+      if (missing.length) throw new Error(`导入的配置缺少依赖（${view.level}）：${missing.join('、')}`)
+      if (isClientScope(view)) {
+        nativeOrder = dependencyPlan(desired, desired.filter(node => node.enabled).map(node => node.id), true, host).enable
+        nativeCloseOrder = dependencyPlan(nodes, nodes.filter(node => node.enabled).map(node => node.id), false, host).disable
+      }
+    }
+    for (const id of Object.keys(localOwn)) if (!id.startsWith('skill:')) await this.manage(id)
+    const changed = [...new Set([...Object.keys(previous.own), ...Object.keys(localOwn)])]
+      .filter(id => !isDeepStrictEqual(previous.own[id], localOwn[id]))
+    const stillCurrent = () => isDeepStrictEqual(this.store.scopeSettings(scope), { own: localOwn, children: preset.children })
+    this.checkScope(scope)
+    if (!isDeepStrictEqual(this.store.scopeSettings(scope), previous)) throw new Error('当前配置已变化，请重新导入')
+    this.store.replaceScopeSettings(scope, localOwn, preset.children)
+    const updated: string[] = []
+    let nativeChanged = false
+    try {
+      if (client) {
+        nativeChanged = true
+        await this.applyNativePreset(nativeOwn, nativeBundles, nativeOrder, nativeCloseOrder)
+      }
+      for (const id of changed) {
+        if (id.startsWith('skill:')) continue
+        this.failures.delete(this.failureKey(scope, id))
+        const instance = this.instance(scope, id)
+        const saved = localOwn[id]
+        if (instance && saved?.enabled && !isDeepStrictEqual(previous.own[id]?.config, saved.config)) {
+          updated.push(id)
+          await instance.plugin.update(saved.config)
+        }
+      }
+      await this.sync()
+      for (const id of changed) {
+        const failure = this.failures.get(this.failureKey(scope, id))
+        if (localOwn[id]?.enabled && failure) throw failure
+      }
+      for (const services of this.services.values()) await services.refresh()
+      this.ctx.emit('skills/change')
+    } catch (error) {
+      if (stillCurrent()) this.store.replaceScopeSettings(scope, previous.own, previous.children)
+      try {
+        if (nativeChanged && nativeBefore) {
+          await this.refresh()
+          await this.applyNativePreset(Object.fromEntries(Object.keys(nativeOwn).map(id => [id, nativeBefore.own[id]!])),
+            Object.fromEntries(Object.keys(nativeBundles).map(name => [name, nativeBefore.bundles[name]!])), nativeCloseOrder.slice().reverse(), nativeOrder.slice().reverse())
+        }
+        for (const id of updated) {
+          const instance = this.instance(scope, id)
+          if (!instance) continue
+          this.instances.get(scopeKey(scope))!.delete(id)
+          await disposeFiber(instance.owner)
+        }
+        await this.sync()
+      } catch (rollbackError) { throw new AggregateError([error, rollbackError], `导入失败，恢复配置时也出错：${String(error)}；${String(rollbackError)}`) }
+      throw error
+    }
+  }
+
+  private async applyNativePreset(own: ScopePreset['own'], bundles: NonNullable<ScopePreset['bundles']>, order: string[], closeOrder: string[]): Promise<void> {
+    const done = new Set<string>()
+    for (const id of new Set([...closeOrder, ...Object.keys(own), ...this.plugins.keys()])) {
+      const adapter = this.plugins.get(id)
+      if (!adapter || adapter.owned) continue
+      if (!adapter.kind && bundles[adapter.package] === false && !done.has(adapter.package)) {
+        if (adapter.bundle.enabled) this.checkChange(await this.ctx.pluginManager.setBundleEnabled(adapter.package, false))
+        done.add(adapter.package)
+        await this.refresh()
+      }
+      if (own[id]?.enabled === false && this.clientEnabled(id)) for (const entry of this.entries(id)) {
+        this.checkChange(await this.ctx.pluginManager.setPluginEnabled(entry.id as never, false))
+      }
+    }
+    for (const [id, saved] of Object.entries(own)) {
+      const current = this.entry(id)?.options.config ?? profileConfig(this.ctx, this.adapter(id).options)
+      if (!isDeepStrictEqual(current, saved.config)) await this.saveConfig(clientScope, id, saved.config)
+    }
+    for (const id of new Set([...order, ...this.plugins.keys()])) {
+      const adapter = this.plugins.get(id)
+      if (!adapter || adapter.owned) continue
+      if (!adapter.kind && bundles[adapter.package] === true && !done.has(adapter.package)) {
+        if (!adapter.bundle.enabled) this.checkChange(await this.ctx.pluginManager.setBundleEnabled(adapter.package, true))
+        done.add(adapter.package)
+        await this.refresh()
+      }
+      const saved = own[id]
+      if (!saved || saved.enabled === this.clientEnabled(id)) continue
+      for (const entry of this.entries(id)) this.checkChange(await this.ctx.pluginManager.setPluginEnabled(entry.id as never, saved.enabled))
+    }
+  }
 
   private async initialize(scope: Scope, parent: Scope): Promise<void> {
     const policies = this.chain(parent).filter(candidate => candidate.level === parent.level)

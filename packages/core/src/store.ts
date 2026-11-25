@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import { dirname } from 'node:path'
 import { ownScope, scopeKey, type ChildDefaults, type MenuSettings, type SavedConfig, type Scope } from './shared.ts'
 
@@ -33,6 +34,22 @@ export class ConfigStore {
   removeMcp(id: string): void { delete this.data.mcp?.[id]; this.save() }
   keys(scope: Scope): string[] {
     return Object.keys(scope.children ? this.children(scope).plugins : this.data.configs[scopeKey(scope)] ?? {})
+  }
+
+  scopeSettings(scope: Scope): { own: Record<string, SavedConfig>; children: ChildDefaults } {
+    return structuredClone({ own: this.data.configs[scopeKey(ownScope(scope))] ?? {}, children: this.children(scope) })
+  }
+
+  replaceScopeSettings(scope: Scope, own: Record<string, SavedConfig>, children: ChildDefaults): void {
+    const key = scopeKey(ownScope(scope))
+    const next = { ...this.data, configs: { ...this.data.configs, [key]: own }, children: { ...this.data.children, [key]: children } }
+    const temporary = `${this.filename}.${randomUUID()}.tmp`
+    mkdirSync(dirname(this.filename), { recursive: true })
+    try {
+      writeFileSync(temporary, JSON.stringify(next, null, 2) + '\n', { encoding: 'utf8', mode: 0o600, flag: 'wx' })
+      renameSync(temporary, this.filename)
+    } catch (error) { rmSync(temporary, { force: true }); throw error }
+    this.data = next
   }
 
   settings(): MenuSettings { return { inheritWorkspaceTree: true, pluginIsolation: false, ...this.data.settings } }

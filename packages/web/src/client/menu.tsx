@@ -16,6 +16,7 @@ export interface MenuUi {
   Settings?: ComponentType<{ row: PluginRow; scope: Scope }>
   changed?(): void
   subscribe?(listener: () => void): () => void
+  copyText?(text: string): Promise<boolean>
 }
 type MenuProps = { api: MenuRemote; Page: PageType; ui: MenuUi }
 export const modes = [{ value: 'inherit', label: '继承' }, { value: 'on', label: '启用' }, { value: 'off', label: '关闭' }] as const
@@ -185,16 +186,80 @@ function ChildPanel({ api, scope, Page, ui, kind = 'plugin' }: MenuProps & { sco
 
 export function ScopeTabs(props: MenuProps & { scope: Scope; sessionId?: string | null; kind?: ResourceKind }) {
   const [tab, setTab] = useState<'own' | 'children'>('own')
+  const [revision, setRevision] = useState(0)
+  const [editor, setEditor] = useState<{ mode: 'import' | 'copy'; text: string } | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [notice, setNotice] = useState('')
+  const [error, setError] = useState('')
+  const { api, scope, ui } = props
   const id = useId()
+  const copy = async () => {
+    setBusy(true); setNotice('')
+    try {
+      const text = value(await api.exportPreset(scope))
+      if (await ui.copyText?.(text)) setNotice('已复制本级和下级配置')
+      else setEditor({ mode: 'copy', text })
+    } catch (cause) { setNotice(`复制失败。${String(cause)}`) }
+    finally { setBusy(false) }
+  }
+  const openImport = () => {
+    setNotice(''); setError('')
+    const draft = { mode: 'import' as const, text: '' }
+    setEditor(draft)
+    void globalThis.navigator?.clipboard?.readText?.().then(text => {
+      setEditor(current => current === draft ? { ...draft, text } : current)
+    }).catch(() => { /* 用户仍可手动粘贴。 */ })
+  }
+  const apply = async () => {
+    if (!editor?.text.trim() || busy) return
+    setBusy(true); setError('')
+    try {
+      value(await api.importPreset(scope, editor.text))
+      setEditor(null)
+      ui.changed?.()
+      setRevision(value => value + 1)
+      setNotice('已导入本级和下级配置')
+    } catch (cause) { setError(String(cause)) }
+    finally { setBusy(false) }
+  }
   return <>
-    <div className="tiered-tabs" role="tablist" aria-label="配置范围">
+    <div className="tiered-scope-toolbar">
+      <div className="tiered-tabs" role="tablist" aria-label="配置范围">
       {([{ value: 'own', label: '本级' }, { value: 'children', label: '下级' }] as const).map(option => <button type="button" key={option.value}
         role="tab" id={`${id}-${option.value}`} aria-selected={tab === option.value} aria-controls={`${id}-panel`}
         onClick={() => setTab(option.value)}>{option.label}</button>)}
+      </div>
+      <div className="tiered-preset-actions">
+        <button type="button" className="tiered-action" title="配置可能包含密钥，请谨慎分享" disabled={busy} onClick={() => void copy()}>复制配置到剪贴板</button>
+        <button type="button" className="tiered-action" disabled={busy} onClick={openImport}>导入配置</button>
+      </div>
     </div>
-    <div role="tabpanel" id={`${id}-panel`} aria-labelledby={`${id}-${tab}`}>
+    {notice && <p className="tiered-notice" role="status">{notice}</p>}
+    <div key={revision} role="tabpanel" id={`${id}-panel`} aria-labelledby={`${id}-${tab}`}>
       {tab === 'own' ? props.kind === 'mcp' || props.kind === 'skill' ? <ResourcePanel key={props.kind} api={props.api} scope={props.scope} kind={props.kind} /> : <ScopePanel {...props} key={props.kind} kind={props.kind} /> : <ChildPanel key={props.kind} {...props} />}
     </div>
+    {editor && <div className="tiered-confirm-backdrop" onKeyDown={event => {
+      if (event.key === 'Escape') { event.stopPropagation(); if (!busy) setEditor(null) }
+      if (event.key === 'Tab') {
+        const controls = event.currentTarget.querySelectorAll<HTMLElement>('textarea, button:enabled')
+        const edge = event.shiftKey ? controls[0] : controls[controls.length - 1]
+        if (event.target === edge) { event.preventDefault(); (event.shiftKey ? controls[controls.length - 1] : controls[0])?.focus() }
+      }
+    }}>
+      <section className="tiered-confirm" role="dialog" aria-modal="true" aria-labelledby={`${id}-preset`}>
+        <h3 id={`${id}-preset`}>{editor.mode === 'import' ? '导入配置' : '手动复制配置'}</h3>
+        <p>{editor.mode === 'import' ? `在下方粘贴配置。导入会覆盖当前${labels[scope.level]}的本级独立设置和下级默认设置，请确认来源可信。`
+          : '选中文本后复制。配置可能包含密钥，请谨慎分享。'}</p>
+        <textarea className="tiered-config-json tiered-preset-text" aria-label="配置内容" autoFocus value={editor.text} readOnly={editor.mode === 'copy' || busy}
+          onFocus={event => { if (editor.mode === 'copy') event.currentTarget.select() }}
+          onChange={event => setEditor({ ...editor, text: event.target.value })} />
+        {error && <p role="alert">{error}</p>}
+        <div className="tiered-confirm-actions">
+          <button type="button" className="tiered-action" disabled={busy} onClick={() => setEditor(null)}>{editor.mode === 'copy' ? '关闭' : '取消'}</button>
+          {editor.mode === 'import' && <button type="button" className="tiered-action tiered-confirm-enable" disabled={busy || !editor.text.trim()} onClick={() => void apply()}>{busy ? '正在导入…' : '确认导入'}</button>}
+        </div>
+      </section>
+    </div>}
   </>
 }
 
@@ -312,7 +377,9 @@ const styles = `
 .tiered-menu .tiered-close { border-color: transparent; color: var(--dsw-alias-label-secondary, #bfc0c5); }
 .tiered-menu .tiered-close:hover, .tiered-menu .tiered-tabs button:hover { background: var(--dsw-alias-interactive-bg-hover, #ffffff09); }
 .tiered-menu select option { color: var(--dsw-alias-label-primary, #ededee); background: var(--dsw-alias-bg-layer-2, #252527); }
-.tiered-menu .tiered-tabs { display: flex; gap: 6px; padding-bottom: 14px; margin: 0 0 14px; border-bottom: 1px solid var(--dsw-alias-border-l3, #ffffff15); }
+.tiered-menu .tiered-scope-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding-bottom: 14px; margin: 0 0 14px; border-bottom: 1px solid var(--dsw-alias-border-l3, #ffffff15); }
+.tiered-menu .tiered-tabs, .tiered-menu .tiered-preset-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.tiered-menu .tiered-preset-text { margin-top: 12px; min-height: 140px; }
 .tiered-menu .tiered-tabs [aria-selected="true"] { background: var(--dsw-alias-interactive-bg-active, #ffffff12); }
 .tiered-menu .tiered-child-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
 .tiered-menu .tiered-child-heading .tiered-hint { margin: 0; }

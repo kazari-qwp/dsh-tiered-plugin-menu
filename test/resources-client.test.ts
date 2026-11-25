@@ -6,6 +6,36 @@ import { ConversationSettings, MenuDialog } from '../packages/web/src/client/men
 import { childScope, clientScope, isClientScope, scopeKey, type PluginRow, type SkillRow, type Scope } from '../packages/core/src/shared.ts'
 import { withChangePlans } from './menu-api.ts'
 
+test('configuration transfer uses the complete scope from either tab and only imports on confirmation', async () => {
+  const scope: Scope = { level: 'workspace', id: 'target' }
+  const copied: Scope[] = []
+  const imported: [Scope, string][] = []
+  const api = withChangePlans({
+    context: async () => ({ ok: true, value: { workspaces: [], workspaceId: null } }),
+    list: async () => ({ ok: true, value: [] }),
+    configure: async () => ({ ok: true, value: undefined }),
+    inherit: async () => ({ ok: true, value: undefined }),
+  })
+  api.exportPreset = async s => { copied.push(s); return { ok: true, value: 'preset draft' } }
+  api.importPreset = async (s, text) => { imported.push([s, text]); return { ok: true, value: undefined } }
+  let view!: ReactTestRenderer
+  try {
+    await act(async () => { view = create(createElement(MenuDialog, { api, Page: () => null, ui: { Artwork: () => null, openDetails() {} }, target: { scope }, onClose() {} })) })
+    const click = async (name: string) => act(async () => { view.root.findAllByType('button').find(node => node.children.includes(name))!.props.onClick() })
+    await click('下级')
+    await click('复制配置到剪贴板')
+    assert.deepEqual(copied, [scope])
+    assert.equal(view.root.findByProps({ 'aria-label': '配置内容' }).props.value, 'preset draft')
+    const modal = view.root.findAllByProps({ role: 'dialog' }).find(node => node.props['aria-labelledby'])!
+    await act(async () => { modal.findAllByType('button')[0]!.props.onClick() })
+    await click('导入配置')
+    await act(async () => { view.root.findByProps({ 'aria-label': '配置内容' }).props.onChange({ target: { value: 'preset draft' } }) })
+    assert.deepEqual(imported, [])
+    await click('确认导入')
+    assert.deepEqual(imported, [[scope, 'preset draft']])
+  } finally { await act(async () => view?.unmount()) }
+})
+
 test('官方插件位于插件下一行，列表不重复，本级与下级使用相同作用域操作', async () => {
   const scope: Scope = { level: 'session', id: 'A' }
   const writes: Scope[] = []

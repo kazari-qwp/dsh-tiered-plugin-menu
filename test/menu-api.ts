@@ -1,11 +1,13 @@
 import type { MenuRemote } from '../packages/core/src/remote-contract.ts'
 import { childScope, isClientScope, scopeKey, type ChangePlan } from '../packages/core/src/shared.ts'
 
-export function withChangePlans(base: Omit<MenuRemote, 'plan' | 'change' | 'call' | 'childSettings' | 'setChildSettings' | 'resetChildSettings' | 'settings' | 'setWorkspaceTreeInheritance' | 'setPluginIsolation' | 'addMcp' | 'skills' | 'skillConfig' | 'configureSkill' | 'inheritSkill' | 'saveConfig'>): MenuRemote {
+export function withChangePlans(base: Pick<MenuRemote, 'context' | 'list' | 'configure' | 'inherit'>): MenuRemote {
   const children = new Set<string>()
   let inheritWorkspaceTree = true
   let pluginIsolation = false
   const api: MenuRemote = { ...base,
+    exportPreset: async () => ({ ok: true, value: '{}' }),
+    importPreset: async () => ({ ok: true, value: undefined }),
     saveConfig: async (scope, id, config) => {
       const result = await base.list(scope)
       if (!result.ok) throw new Error(result.error.message)

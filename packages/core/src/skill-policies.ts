@@ -5,6 +5,12 @@ import { clientScope, isClientScope, type PluginConfig, type Scope, type SkillRo
 
 const key = (name: string) => `skill:${name}`
 
+export function validateSkillConfig(name: string, config: PluginConfig): void {
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name)) throw new Error('无效的技能名称')
+  for (const field of ['description', 'content']) if (config[field] !== undefined && typeof config[field] !== 'string') throw new Error(`${field} 应为文本`)
+  for (const field of ['modelInvocable', 'userInvocable']) if (config[field] !== undefined && typeof config[field] !== 'boolean') throw new Error(`${field} 应为布尔值`)
+}
+
 /** Apply policies at the registry's read boundary, preserving providers, paths and resources. */
 export class SkillPolicies {
   private native?: Pick<Context['skills'], 'snapshot' | 'get'>
@@ -75,9 +81,7 @@ export class SkillPolicies {
 
   configure(scope: Scope, name: string, enabled: boolean, config: PluginConfig): void {
     this.chain(scope)
-    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name)) throw new Error('无效的技能名称')
-    for (const field of ['description', 'content']) if (config[field] !== undefined && typeof config[field] !== 'string') throw new Error(`${field} 应为文本`)
-    for (const field of ['modelInvocable', 'userInvocable']) if (config[field] !== undefined && typeof config[field] !== 'boolean') throw new Error(`${field} 应为布尔值`)
+    validateSkillConfig(name, config)
     this.store.set(scope, key(name), { enabled, config })
     this.ctx.emit('skills/change')
   }

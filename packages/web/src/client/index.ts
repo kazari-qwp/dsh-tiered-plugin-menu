@@ -5,7 +5,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
-import { PluginArtworkDefault } from '@deepseek-ai/dsh-client-ui-primitives'
+import { PluginArtworkDefault, writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TypertClientRemote } from '@deepseek-ai/dsh-typert-protocol'
 import { coreRegistrationContribution, remoteContribution } from 'dsh-tiered-plugin-core/remote-contract'
 import { ConversationSettings, LevelSettings, NativeSettings } from './menu.tsx'
@@ -125,6 +125,7 @@ export async function apply(ctx: Context): Promise<void> {
       return controller ? createElement(RegisteredSettings, { key: revision, controller, row, scope, fallback }) : fallback
     }
     const ui = {
+      copyText: writeClipboard,
       Artwork: PluginArtworkDefault,
       Settings,
       changed() { rows.invalidate(); void discover().catch(error => child.logger.error(error)) },

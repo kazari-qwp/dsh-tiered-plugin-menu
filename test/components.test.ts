@@ -74,6 +74,11 @@ test('package switches, component switches and dependency confirmation use the s
     const session: Scope = { level: 'session', id: handle.agent.id }
     await manager.configure(session, 'sample#consumer', true, {}, true)
     assert.equal(manager.instance(session, 'sample#consumer')!.plugin.ctx.get('sampleResult'), manager.instance(scope, 'sample#provider')!.plugin.ctx.get('sampleData'))
+    const workspacePreset = await manager.exportPreset(scope)
+    const withoutProvider = JSON.parse(workspacePreset)
+    withoutProvider.own['sample#provider'].enabled = false
+    await assert.rejects(manager.importPreset(scope, JSON.stringify(withoutProvider)), /缺少依赖/)
+    assert.equal(await manager.exportPreset(scope), workspacePreset)
     const crossScope = await manager.plan(scope, 'sample#provider', 'off')
     assert.ok(crossScope.dependencies.some(change => change.scope.id === session.id && change.id === 'sample#consumer'))
     await manager.change(scope, crossScope.id, crossScope.mode, crossScope.signature)

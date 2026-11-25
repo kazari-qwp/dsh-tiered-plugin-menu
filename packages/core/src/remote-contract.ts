@@ -16,6 +16,8 @@ export interface MenuRemote {
   childSettings(scope: Scope): Promise<RemoteResult<ChildSettings>>
   setChildSettings(scope: Scope, independent: boolean): Promise<RemoteResult<void>>
   resetChildSettings(scope: Scope): Promise<RemoteResult<void>>
+  exportPreset(scope: Scope): Promise<RemoteResult<string>>
+  importPreset(scope: Scope, text: string): Promise<RemoteResult<void>>
   plan(scope: Scope, id: string, mode: ChangeMode): Promise<RemoteResult<ChangePlan>>
   change(scope: Scope, id: string, mode: ChangeMode, signature: string): Promise<RemoteResult<void>>
   call(scope: Scope, id: string, namespace: string, method: string, args: PluginConfig): Promise<RemoteResult<unknown>>
@@ -70,6 +72,8 @@ export const remoteContribution: TypertRemoteContribution = {
     ['childSettings', [['scope', 'scope']]],
     ['setChildSettings', [['scope', 'scope'], ['independent', 'boolean']]],
     ['resetChildSettings', [['scope', 'scope']]],
+    ['exportPreset', [['scope', 'scope']]],
+    ['importPreset', [['scope', 'scope'], ['text', 'string']]],
     ['plan', [['scope', 'scope'], ['id', 'string'], ['mode', 'string']]],
     ['change', [['scope', 'scope'], ['id', 'string'], ['mode', 'string'], ['signature', 'string']]],
     ['call', [['scope', 'scope'], ['id', 'string'], ['namespace', 'string'], ['method', 'string'], ['args', 'config']]],

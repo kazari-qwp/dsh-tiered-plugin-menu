@@ -17,7 +17,7 @@ import * as plugin from '../packages/core/src/index.ts'
 import { remoteContribution } from '../packages/core/src/remote-contract.ts'
 import { mountWorkspaces } from './workspaces.ts'
 import { mountPluginManagement } from './plugins.ts'
-import { childScope, type Scope } from '../packages/core/src/shared.ts'
+import { childScope, clientScope, type Scope } from '../packages/core/src/shared.ts'
 import { ConfigStore } from '../packages/core/src/store.ts'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
 
@@ -116,5 +116,31 @@ for (const pluginIsolation of [false, true]) test(`官方 Client Remote → Host
     assert.equal(reset.value[0]!.own, false)
     assert.equal(reset.value[0]!.config.template, 'WORKSPACE RPC')
     assert.equal((await host.tieredPlugins.rows({ level: 'session', id: child.agent.id }))[0]!.config.template, 'CHILD RPC')
+    const mcpId = 'mcp:disabled-preset-fixture'
+    host.tieredPlugins.store.addMcp(mcpId, 'fixture')
+    assert.ok((await api.configure(wsScope, mcpId, false, { transport: 'stdio', serverName: 'fixture', command: 'unused' }, true)).ok)
+    assert.ok((await api.configureSkill(childScope(wsScope), 'rpc-skill', false, { description: 'Copied default' })).ok)
+    assert.ok((await api.configureSkill(scope, 'old-override', false, {})).ok)
+    const preset = await api.exportPreset(wsScope)
+    assert.ok(preset.ok)
+    assert.ok((await api.importPreset(scope, preset.value)).ok)
+    assert.equal(host.tieredPlugins.instance(scope, 'temporary-messages')?.plugin.config.template, 'WORKSPACE RPC')
+    assert.equal(host.tieredPlugins.store.get(scope, mcpId)?.enabled, false)
+    assert.equal(host.tieredPlugins.store.get(scope, 'skill:old-override'), undefined)
+    assert.equal(host.tieredPlugins.store.get(childScope(scope), 'skill:rpc-skill')?.config.description, 'Copied default')
+    assert.equal((await host.tieredPlugins.rows({ level: 'session', id: child.agent.id }))[0]!.config.template, 'CHILD RPC')
+    assert.deepEqual(await api.exportPreset(scope), preset)
+    const invalid = JSON.parse(preset.value)
+    invalid.own['not-installed'] = { enabled: false, config: {} }
+    assert.equal((await api.importPreset(scope, JSON.stringify(invalid))).ok, false)
+    assert.deepEqual(await api.exportPreset(scope), preset)
+    const native = await api.exportPreset(clientScope)
+    assert.ok(native.ok)
+    const edited = JSON.parse(native.value)
+    edited.own['temporary-messages'].config.template = 'NATIVE PRESET'
+    assert.ok((await api.importPreset(clientScope, JSON.stringify(edited))).ok)
+    assert.equal(host.loader.resolve('temporary-messages').options.config.template, 'NATIVE PRESET')
+    assert.ok((await api.importPreset(clientScope, native.value)).ok)
+    assert.deepEqual(await api.exportPreset(clientScope), native)
   } finally { await client.fiber.dispose(); await host.fiber.dispose() }
 })
